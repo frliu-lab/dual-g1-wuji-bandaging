@@ -25,6 +25,11 @@ SELECTED = [
     'bandage_v0/route_diagnostic.png',
     'bandage_v0/route_check.json',
     'bandage_v0/contact_evidence_initial.json',
+    'bandage_v0/flex_pilot.xml',
+    'bandage_v0/flex_pilot_check.json',
+    'bandage_v0/helix_flex_pilot.xml',
+    'bandage_v0/helix_flex_pilot_check.json',
+    'bandage_v0/helix_flex_pilot_preview.png',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -36,6 +41,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/check_route.py',
     'work/bandage_hierarchy/scene_evidence.py',
     'work/bandage_hierarchy/check_scene_evidence.py',
+    'work/bandage_hierarchy/flex_pilot.py',
+    'work/bandage_hierarchy/helix_flex_pilot.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
 

@@ -1,0 +1,14 @@
+<mujoco model="bandage_flex_contact_pilot">
+  <option timestep="0.0005" iterations="100"/>
+  <worldbody>
+    <geom name="forearm_proxy" type="capsule" fromto="-.16 0 .08 .16 0 .08"
+          size=".05" friction=".8 .005 .0001"/>
+    <geom name="pilot_floor" type="plane" pos="0 0 -.05" size="1 1 .01"/>
+    <flexcomp name="bandage_strip" type="grid" dim="2" count="15 3 1"
+              spacing=".02 .02 .02" mass=".03" radius=".003"
+              pos="-.14 -.02 .18" rgba=".95 .9 .75 1">
+      <edge damping=".2"/>
+      <contact solref=".005 1" friction=".8 .005 .0001"/>
+    </flexcomp>
+  </worldbody>
+</mujoco>
