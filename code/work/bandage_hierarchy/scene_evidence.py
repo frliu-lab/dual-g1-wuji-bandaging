@@ -18,10 +18,14 @@ ROLES = (
 
 
 def hand_contacts(model: mujoco.MjModel, data: mujoco.MjData,
-                  min_normal_force_n: float = .05) -> tuple[bool, bool, bool, bool]:
+                  min_normal_force_n: float = .05,
+                  max_penetration_m: float = .003) -> tuple[bool, bool, bool, bool]:
     if min_normal_force_n <= 0:
         raise ValueError('Contact force threshold must be positive')
-    hits = [False]*4
+    if max_penetration_m <= 0:
+        raise ValueError('Penetration threshold must be positive')
+    forces = [0.]*4
+    deepest = [0.]*4
     for i, contact in enumerate(data.contact):
         sides = []
         for side in range(2):
@@ -35,16 +39,16 @@ def hand_contacts(model: mujoco.MjModel, data: mujoco.MjData,
                 sides.append(('none', None, None))
         wrench = np.zeros(6)
         mujoco.mj_contactForce(model, data, i, wrench)
-        if wrench[0] < min_normal_force_n:
-            continue
         for role, (hand_prefix, target_kind, target_name) in enumerate(ROLES):
             for hand_side in (0, 1):
                 kind, name, body = sides[hand_side]
                 other_kind, other_name, _ = sides[1-hand_side]
                 if (kind == 'geom' and body and body.startswith(hand_prefix)
                         and other_kind == target_kind and other_name == target_name):
-                    hits[role] = True
-    return tuple(hits)
+                    forces[role] += max(0., float(wrench[0]))
+                    deepest[role] = max(deepest[role], max(0., -float(contact.dist)))
+    return tuple(f >= min_normal_force_n and d <= max_penetration_m
+                 for f, d in zip(forces, deepest))
 
 
 if __name__ == '__main__':

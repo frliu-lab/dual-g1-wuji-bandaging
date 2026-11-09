@@ -45,6 +45,7 @@ SELECTED = [
     'bandage_v0/reach_ik_seed_preview.png',
     'bandage_v0/four_arm_reach_50hz_0.5s.json',
     'bandage_v0/four_arm_reach_50hz_0.5s.mp4',
+    'bandage_v0/pad_touch_scan.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -68,6 +69,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/render_reach_seed.py',
     'work/bandage_hierarchy/search_guide_waypoint.py',
     'work/bandage_hierarchy/rollout_reach_wbc.py',
+    'work/bandage_hierarchy/probe_pad_touch.py',
     'work/wuji_multiagent/joint_wbc.py',
     'work/bandage_hierarchy/task_contract.json',
 ]

@@ -18,7 +18,8 @@ model = mujoco.MjModel.from_xml_string(XML)
 data = mujoco.MjData(model)
 mujoco.mj_step(model, data)
 assert data.ncon > 0
-assert hand_contacts(model, data, .01) == (True, False, False, False)
+assert hand_contacts(model, data, .01, .02) == (True, False, False, False)
+assert hand_contacts(model, data, .01) == (False, False, False, False)
 print('contact evidence fixture passed: force-bearing A-left contact only')
 
 root = ET.fromstring(make_guided_xml())
@@ -30,6 +31,6 @@ model = mujoco.MjModel.from_xml_string(ET.tostring(root, encoding='unicode'))
 data = mujoco.MjData(model)
 for _ in range(100):
     mujoco.mj_step(model, data)
-contacts = hand_contacts(model, data, .01)
+contacts = hand_contacts(model, data, .01, .02)
 assert contacts[3] and not contacts[0] and not contacts[1] and not contacts[2], contacts
 print('flex contact evidence fixture passed: force-bearing B-right flex contact only')

@@ -12,6 +12,8 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'outputs/wuji_multiagent/bandage_v0'
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
+from controller_router import HandExpertRouter, Observation, Mode
+from scene_evidence import hand_contacts
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--hz', type=int, default=50)
@@ -43,6 +45,11 @@ def robot_contact_only(m, c):
 
 wbc = JointWBC(model, data.qpos.copy(), palm_names=palms,
                contact_filter=robot_contact_only)
+finger_qadr = np.array([int(model.jnt_qposadr[model.actuator_trnid[i, 0]])
+                       for i in wbc.hand_indices], dtype=int)
+router = HandExpertRouter(len(finger_qadr))
+contact_observations = np.zeros(4, dtype=int)
+router_modes = {mode.value: 0 for mode in Mode}
 renderer = None
 video_frames = []
 if args.video:
@@ -86,6 +93,14 @@ for segment, k, count in schedule:
         ease = u*u*(3-2*u)
         wbc.qref[:] = (1-ease)*path[segment-1]+ease*path[segment]
         try:
+            evidence = hand_contacts(model, data)
+            contact_observations += np.asarray(evidence, dtype=int)
+            decision = router.step(Observation(
+                time_s=float(data.time), phase='approach', body_valid=True,
+                feet_supported=both_foot_support == steps if steps else True,
+                arm_pose_stable=False, hand_contacts=evidence,
+                hand_feedback_fresh=False), data.qpos[finger_qadr].copy(), None)
+            router_modes[decision.mode.value] += 1
             ctrl, _, _ = wbc.solve(data)
             data.ctrl[:] = ctrl
             for _ in range(interval):
@@ -131,6 +146,9 @@ report = {'scope': 'Four-arm precontact WBC reach only; no grasp, cloth or banda
           'deep_nonfloor_robot_contact_samples': deep_contact_samples,
           'worst_nonfloor_robot_penetration_m': max_penetration,
           'worst_contact': worst_contact,
+          'real_contact_observations_by_role': contact_observations.tolist(),
+          'router_observer_mode_counts': router_modes,
+          'router_output_actuated': False,
           'final_arm_joint_error_rad': float(np.max(np.abs(data.qpos[arm_qadr]-path[-1,arm_qadr]))),
           'worst_final_arm_joints': sorted(({'joint': model.joint(model.actuator_trnid[i,0]).name,
                                              'error_rad': float(abs(data.qpos[q]-path[-1,q]))}
