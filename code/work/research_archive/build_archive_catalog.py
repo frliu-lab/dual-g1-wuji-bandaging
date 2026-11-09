@@ -37,8 +37,10 @@ SELECTED = [
     'bandage_v0/guided_flex_sweep.json',
     'bandage_v0/guided_flex_sweep_baseline.json',
     'bandage_v0/four_palm_wbc_probe.json',
-    'bandage_v0/four_palm_wbc_stance_50hz.json',
-    'bandage_v0/four_palm_wbc_stance_200hz.json',
+    'bandage_v0/four_palm_wbc_stance_50hz_drop_0.3s.json',
+    'bandage_v0/four_palm_wbc_stance_200hz_drop_0.3s.json',
+    'bandage_v0/four_palm_wbc_stance_50hz_contact_2s.json',
+    'bandage_v0/four_palm_wbc_stance_200hz_contact_2s.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',

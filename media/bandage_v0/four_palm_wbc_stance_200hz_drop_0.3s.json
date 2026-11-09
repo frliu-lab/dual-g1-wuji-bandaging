@@ -1,5 +1,7 @@
 {
-  "scope": "0.3 s closed-loop stance after 0.1 s uncontrolled settle; no cloth or bandaging motion",
+  "scope": "Closed-loop stance only; no cloth or bandaging motion",
+  "initialization": "drop",
+  "target_duration_s": 0.3,
   "wbc_hz": 200,
   "solves_completed": 44,
   "expected_solves": 60,
@@ -75,6 +77,22 @@
         "dressing_pad_contact",
         -0.00010111287598069115
       ]
-    ]
+    ],
+    "max_acc_bound_inversion": 17.163166265824742,
+    "bad_acceleration_dofs": [
+      {
+        "joint": "g1_b/left_ankle_roll_joint",
+        "inversion_m_s2_or_rad_s2": 17.163166265824742,
+        "q_rad": -0.15581311068342313,
+        "v_rad_s": -11.288092759874122,
+        "joint_range_rad": [
+          -0.2618,
+          0.2618
+        ],
+        "acc_lo": 217.16316626582474,
+        "acc_hi": 200.0
+      }
+    ],
+    "contact_constraints_in_qp": 6
   }
 }

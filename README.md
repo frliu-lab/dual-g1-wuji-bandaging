@@ -10,7 +10,7 @@
 
 动态引导代理试验：[90° 引导慢放视频](media/bandage_v0/guided_flex_pilot_4x_slow.mp4) · [数值检查](media/bandage_v0/guided_flex_pilot_check.json) · [九组参数扫描](media/bandage_v0/guided_flex_sweep.json)。视频把 0.5 s 仿真以 4 倍慢动作播成 2 s；带材起始已预绕两圈，蓝点是运动学引导点，没有机器人手部动作。9/9 只表示固定前臂材料代理试验通过预设几何门槛。
 
-四手腕 WBC：[单帧求解审计](media/bandage_v0/four_palm_wbc_probe.json) · [50 Hz 站立失败](media/bandage_v0/four_palm_wbc_stance_50hz.json) · [200 Hz 站立失败](media/bandage_v0/four_palm_wbc_stance_200hz.json)。单帧 QP 可解，短闭环尚不可行，因此带材代理试验和机器人控制仍未合并成包扎动作。
+四手腕 WBC：[单帧求解审计](media/bandage_v0/four_palm_wbc_probe.json) · [静止接地 50 Hz 站立 2 秒](media/bandage_v0/four_palm_wbc_stance_50hz_contact_2s.json) · [静止接地 200 Hz 站立 2 秒](media/bandage_v0/four_palm_wbc_stance_200hz_contact_2s.json) · [无控制落地失败对照](media/bandage_v0/four_palm_wbc_stance_200hz_drop_0.3s.json)。两机短时站立通过，但尚无包扎任务接触，也没有把柔性带材并入 WBC。
 
 当前视频是自建场景中的 MuJoCo 条件仿真，不是 CORE4D、HumanoidMimicGen、SIMPLE 或 Xp-Teleop 的 benchmark 得分，也不是实机结果。主合集中的三个任务为协同搬运、转桌、抬桌。较新的低摩擦转桌视频是额外研究候选；2 ms 延迟修正候选目前只有轨迹和审计，尚未有对应视频。
 
