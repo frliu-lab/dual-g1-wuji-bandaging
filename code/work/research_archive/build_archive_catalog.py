@@ -36,6 +36,9 @@ SELECTED = [
     'bandage_v0/guided_flex_pilot_4x_slow.mp4',
     'bandage_v0/guided_flex_sweep.json',
     'bandage_v0/guided_flex_sweep_baseline.json',
+    'bandage_v0/four_palm_wbc_probe.json',
+    'bandage_v0/four_palm_wbc_stance_50hz.json',
+    'bandage_v0/four_palm_wbc_stance_200hz.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -52,6 +55,10 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/guided_flex_pilot.py',
     'work/bandage_hierarchy/render_guided_flex_video.py',
     'work/bandage_hierarchy/sweep_guided_flex.py',
+    'work/bandage_hierarchy/check_wbc_adapter.py',
+    'work/bandage_hierarchy/probe_four_palm_wbc.py',
+    'work/bandage_hierarchy/rollout_four_palm_wbc.py',
+    'work/wuji_multiagent/joint_wbc.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
 
