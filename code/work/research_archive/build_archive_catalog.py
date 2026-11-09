@@ -30,6 +30,12 @@ SELECTED = [
     'bandage_v0/helix_flex_pilot.xml',
     'bandage_v0/helix_flex_pilot_check.json',
     'bandage_v0/helix_flex_pilot_preview.png',
+    'bandage_v0/guided_flex_pilot.xml',
+    'bandage_v0/guided_flex_pilot_check.json',
+    'bandage_v0/guided_flex_pilot_preview.png',
+    'bandage_v0/guided_flex_pilot_4x_slow.mp4',
+    'bandage_v0/guided_flex_sweep.json',
+    'bandage_v0/guided_flex_sweep_baseline.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -43,6 +49,9 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/check_scene_evidence.py',
     'work/bandage_hierarchy/flex_pilot.py',
     'work/bandage_hierarchy/helix_flex_pilot.py',
+    'work/bandage_hierarchy/guided_flex_pilot.py',
+    'work/bandage_hierarchy/render_guided_flex_video.py',
+    'work/bandage_hierarchy/sweep_guided_flex.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
 

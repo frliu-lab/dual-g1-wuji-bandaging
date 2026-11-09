@@ -31,13 +31,13 @@ def make_xml(n=33, radius=.049, width=.018, pitch=.11):
       <option timestep=".0005" iterations="100"/>
       <worldbody>
         <geom name="forearm_proxy" type="capsule" fromto="-.16 0 .12 .16 0 .12"
-              size=".048" friction=".8 .005 .0001"/>
-        <geom name="floor" type="plane" pos="0 0 -.05" size="1 1 .01"/>
+              size=".048" friction=".8 .005 .0001" rgba=".64 .71 .76 1"/>
+        <geom name="floor" type="plane" pos="0 0 -.05" size="1 1 .01" rgba=".12 .15 .19 1"/>
         <flexcomp name="bandage_strip" type="direct" dim="2" mass=".025"
                   radius=".002" rgba=".95 .9 .75 1" point="{p}" element="{e}">
           <pin id="0 1 64 65"/>
           <edge equality="true" damping=".2"/>
-          <contact solref=".005 1" friction=".8 .005 .0001" selfcollide="none"/>
+          <contact solref=".0015 1" friction=".8 .005 .0001" selfcollide="none"/>
         </flexcomp>
       </worldbody>
     </mujoco>'''
@@ -82,7 +82,7 @@ def main():
     model.vis.global_.offheight = 540
     cam = mujoco.MjvCamera()
     cam.lookat[:] = [0, 0, .12]
-    cam.distance = .68
+    cam.distance = .55
     cam.azimuth = 105
     cam.elevation = -18
     ffmpeg = Path(__file__).resolve().parents[2] / 'work/retarget_env/Lib/site-packages/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe'
