@@ -19,9 +19,11 @@ opt = mujoco.MjvOption()
 opt.geomgroup[2] = 0
 ffmpeg = ROOT / 'work/retarget_env/Lib/site-packages/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe'
 with mujoco.Renderer(m, height=720, width=1280) as renderer:
-    renderer.update_scene(d, camera=cam, scene_option=opt)
-    subprocess.run([str(ffmpeg), '-y', '-loglevel', 'error', '-f', 'rawvideo',
-                    '-pixel_format', 'rgb24', '-video_size', '1280x720', '-i', 'pipe:0',
-                    '-frames:v', '1', str(p / 'scene_preview.png')],
-                   input=renderer.render().tobytes(), check=True)
+    for filename, show_route in [('scene_preview.png', False), ('route_diagnostic.png', True)]:
+        opt.flags[mujoco.mjtVisFlag.mjVIS_TENDON] = int(show_route)
+        renderer.update_scene(d, camera=cam, scene_option=opt)
+        subprocess.run([str(ffmpeg), '-y', '-loglevel', 'error', '-f', 'rawvideo',
+                        '-pixel_format', 'rgb24', '-video_size', '1280x720', '-i', 'pipe:0',
+                        '-frames:v', '1', str(p / filename)],
+                       input=renderer.render().tobytes(), check=True)
 print(p / 'scene_preview.png')

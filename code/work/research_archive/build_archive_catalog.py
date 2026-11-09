@@ -22,6 +22,8 @@ SELECTED = [
     'four_hand_dynamic_v2/REAL_HARDWARE_READINESS.md',
     'bandage_v0/scene_preview.png',
     'bandage_v0/scene_check.json',
+    'bandage_v0/route_diagnostic.png',
+    'bandage_v0/route_check.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -30,6 +32,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/check_router.py',
     'work/bandage_hierarchy/build_scene.py',
     'work/bandage_hierarchy/render_scene_preview.py',
+    'work/bandage_hierarchy/check_route.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
 
