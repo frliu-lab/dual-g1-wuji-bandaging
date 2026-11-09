@@ -46,6 +46,10 @@ SELECTED = [
     'bandage_v0/four_arm_reach_50hz_0.5s.json',
     'bandage_v0/four_arm_reach_50hz_0.5s.mp4',
     'bandage_v0/pad_touch_scan.json',
+    'bandage_v0/pad_thumb_scan.json',
+    'bandage_v0/pad_pinch_scan.json',
+    'bandage_v0/pad_pinch_attempt_50hz_0.5s.json',
+    'bandage_v0/pad_pinch_attempt_50hz_0.5s.mp4',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -70,6 +74,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/search_guide_waypoint.py',
     'work/bandage_hierarchy/rollout_reach_wbc.py',
     'work/bandage_hierarchy/probe_pad_touch.py',
+    'work/bandage_hierarchy/probe_pad_thumb.py',
+    'work/bandage_hierarchy/probe_pad_pinch.py',
     'work/wuji_multiagent/joint_wbc.py',
     'work/bandage_hierarchy/task_contract.json',
 ]

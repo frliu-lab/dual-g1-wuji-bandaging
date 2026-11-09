@@ -13,7 +13,7 @@ ones = np.ones(80)
 def observation(t, **kwargs):
     values = dict(time_s=t, phase='wrap', body_valid=True, feet_supported=True,
                   arm_pose_stable=True, hand_contacts=(True, True, True, True),
-                  hand_feedback_fresh=True)
+                  hand_feedback_fresh=True, dressing_grasp_valid=True)
     values.update(kwargs)
     return Observation(**values)
 
@@ -41,4 +41,9 @@ for t in (.0, .05, .10, .15, .20, .25, .30):
                              hand_contacts=(True, True, False, False)),
                  zeros, HandProposal(t, ones, .95))
 assert d3.mode == Mode.HAND
+r4 = HandExpertRouter(80)
+for t in (.0, .05, .10, .15, .20, .25, .30):
+    d4 = r4.step(observation(t, phase='place_dressing', dressing_grasp_valid=False),
+                 zeros, HandProposal(t, ones, .95))
+assert d4.mode == Mode.BODY
 print('router checks passed: phase-specific four-hand contact gates, handover rate limit, stale fallback, support and contact-loss guards')

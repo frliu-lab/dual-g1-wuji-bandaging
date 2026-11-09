@@ -24,6 +24,7 @@ class Observation:
     arm_pose_stable: bool
     hand_contacts: tuple[bool, bool, bool, bool]
     hand_feedback_fresh: bool
+    dressing_grasp_valid: bool = False
 
 
 @dataclass(frozen=True)
@@ -80,7 +81,8 @@ class HandExpertRouter:
             raise ValueError('Four per-hand contact booleans are required')
         required = self.REQUIRED_CONTACTS.get(obs.phase, ())
         contact_ready = all(obs.hand_contacts[i] for i in required)
-        stable = obs.body_valid and obs.feet_supported and obs.arm_pose_stable and contact_ready
+        grasp_ready = obs.dressing_grasp_valid if obs.phase in self.FINE_PHASES else True
+        stable = obs.body_valid and obs.feet_supported and obs.arm_pose_stable and contact_ready and grasp_ready
         if stable:
             if self.stable_since is None:
                 self.stable_since = obs.time_s

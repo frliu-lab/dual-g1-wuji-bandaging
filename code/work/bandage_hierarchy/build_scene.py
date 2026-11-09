@@ -81,6 +81,8 @@ def main():
     geom(world, 'care_station_cross_v', 'box', pos='-.62 1.315 1.28', size='.035 .004 .13', rgba='.14 .55 .37 1', contype='0', conaffinity='0')
     geom(world, 'care_station_cross_h', 'box', pos='-.62 1.31 1.28', size='.13 .004 .035', rgba='.14 .55 .37 1', contype='0', conaffinity='0')
     geom(world, 'equipment_tray', 'box', pos='0 -.48 .65', size='.50 .20 .025', rgba='.55 .57 .62 1')
+    geom(world, 'dressing_stage', 'box', pos='-.38 -.44 .681', size='.08 .07 .006',
+         rgba='.70 .73 .75 1')
     for sx in ('-.45', '.45'):
         geom(world, f'tray_leg_{sx}', 'box', pos=f'{sx} -.48 .32', size='.025 .025 .30', rgba='.35 .37 .42 1')
     pad = ET.SubElement(world, 'body', {'name': 'dressing_pad', 'pos': '-.38 -.44 .695'})
@@ -129,13 +131,17 @@ def main():
         'dressing_pad_initial_z_m': pad_initial_z,
         'dressing_pad_after_half_second_z_m': pad_settled_z,
         'dressing_pad_settled_on_tray': .67 < pad_settled_z < .70,
+        'dressing_pad_initial_settle_shift_m': abs(pad_settled_z-pad_initial_z),
+        'dressing_pad_stage_height_stable': abs(pad_settled_z-pad_initial_z) < .002,
         'bandage_centerline_two_turns': len(wrap_points) == 33,
         'bandage_route_initial_length_m': route_length,
         'bandage_route_after_half_second_length_m': route_length_after,
         'bandage_route_after_half_second_extension_m': route_length_after-route_length,
         'initial_deep_robot_contacts': initial_robot_contacts[:20],
         'after_uncontrolled_half_second_deep_robot_contacts': robot_contacts[:20],
-        'passed_initial_geometry': bool(not initial_robot_contacts and .67 < pad_settled_z < .70 and np.isfinite(route_length_after)),
+        'passed_initial_geometry': bool(not initial_robot_contacts and .67 < pad_settled_z < .70
+                                        and abs(pad_settled_z-pad_initial_z) < .002
+                                        and np.isfinite(route_length_after)),
     }
     (DEST / 'scene_check.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))

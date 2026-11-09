@@ -1,13 +1,14 @@
 {
-  "scope": "Four-arm precontact WBC reach only; no grasp, cloth or bandaging",
+  "scope": "Four-arm reach with optional dressing contact attempt; no proven grasp, cloth or bandaging",
+  "pinch_seed_attempted": false,
   "wbc_hz": 50,
   "segment_s": 0.5,
   "hold_s": 1.0,
   "segments_completed": 4,
   "simulated_time_s": 2.9999999999997806,
   "both_robot_foot_support_fraction": 1.0,
-  "max_pelvis_shift_m": 0.0029997560130513887,
-  "max_arm_joint_tracking_error_rad": 0.3772803992166096,
+  "max_pelvis_shift_m": 0.0029997560130513123,
+  "max_arm_joint_tracking_error_rad": 0.3772803992166088,
   "deep_nonfloor_robot_contact_samples": 0,
   "worst_nonfloor_robot_penetration_m": 0.0,
   "worst_contact": null,
@@ -17,52 +18,74 @@
     0,
     0
   ],
+  "digit_contact_simulation_steps_at_0p05N": {
+    "thumb": 0,
+    "index": 0,
+    "both": 0
+  },
+  "peak_digit_normal_force_n": {
+    "thumb": 0.0,
+    "index": 0.0
+  },
+  "two_digit_contact_normal_cosine_mean": null,
+  "two_digit_opposed_fraction_cos_lt_minus_0p5": null,
+  "max_pad_center_displacement_m": 0.0011135276941922762,
   "router_observer_mode_counts": {
     "body_wbc": 150,
     "hand_specialist": 0,
     "hold_last_safe_fingers": 0
   },
   "router_output_actuated": false,
-  "final_arm_joint_error_rad": 0.08784064095661259,
+  "final_pad_center_m": [
+    -0.379316998514806,
+    -0.4391269262248532,
+    0.6948941931944207
+  ],
+  "final_thumb_tip_m": [
+    -0.4135668257422175,
+    -0.3374618231249758,
+    0.7401238235933231
+  ],
+  "final_arm_joint_error_rad": 0.08784064095660915,
   "worst_final_arm_joints": [
     {
       "joint": "g1_b/right_elbow_joint",
-      "error_rad": 0.08784064095661259
+      "error_rad": 0.08784064095660915
     },
     {
       "joint": "g1_a/left_wrist_pitch_joint",
-      "error_rad": 0.08725307981479985
+      "error_rad": 0.08725307981480102
     },
     {
       "joint": "g1_b/right_wrist_pitch_joint",
-      "error_rad": 0.08505784950528308
+      "error_rad": 0.08505784950527884
     },
     {
       "joint": "g1_a/right_wrist_pitch_joint",
-      "error_rad": 0.07633135389736584
+      "error_rad": 0.0763313538973665
     },
     {
       "joint": "g1_a/right_elbow_joint",
-      "error_rad": 0.06729089505716213
+      "error_rad": 0.06729089505716368
     },
     {
       "joint": "g1_b/left_elbow_joint",
-      "error_rad": 0.06588596017773085
+      "error_rad": 0.06588596017772955
     },
     {
       "joint": "g1_b/left_wrist_pitch_joint",
-      "error_rad": 0.062341743657120724
+      "error_rad": 0.062341743657121335
     },
     {
       "joint": "g1_a/left_elbow_joint",
-      "error_rad": 0.05665608333318228
+      "error_rad": 0.05665608333318267
     }
   ],
   "final_fingertip_position_error_m": {
-    "g1_a/wuji_left/l_index_finger_tip_sensor_frame": 0.00421925371888472,
-    "g1_a/wuji_right/r_index_finger_tip_sensor_frame": 0.0018539993197072427,
-    "g1_b/wuji_left/l_index_finger_tip_sensor_frame": 0.0017030691723484183,
-    "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.0029842289137889627
+    "g1_a/wuji_left/l_index_finger_tip_sensor_frame": 0.0042192537188845336,
+    "g1_a/wuji_right/r_index_finger_tip_sensor_frame": 0.001853999319707275,
+    "g1_b/wuji_left/l_index_finger_tip_sensor_frame": 0.0017030691723484658,
+    "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.0029842289137888113
   },
   "finite_state": true,
   "error": null,
