@@ -15,4 +15,3 @@
 模型选择：官方 [RPent](https://rpent.readthedocs.io/en/latest/rst_source/get_started/overview.html) 是可组合的 agent 框架，并不提供现成 Wuji 手包扎策略。[wuji-mjlab](https://github.com/wuji-technology/wuji-mjlab) 提供官方 Wuji 手强化学习训练与示例权重，适合作为手部小策略的训练入口，但公开任务是方块重定向和转笔，不能直接拿权重做包扎。[DexTaG](https://github.com/UMass-Embodied-AGI/DexTaG) 在 Wuji 手上研究触觉引导的物体操作，可借鉴训练方法，现成权重对应笔和锤子，也不能直接做绷带。下一步应先在现有 Wuji 模型上训练低张力带材引导策略，再通过本目录的路由器与 WBC 接口测试。
 
 评测线索：老师给出的 [HumanoidMimicGen](https://github.com/NVlabs/humanoidmimicgen) 可对照 G1 WBC 与任务成功判据；[SIMPLE](https://github.com/physical-superintelligence-lab/SIMPLE) 可对照完整场景、扰动和长时任务评估；[Xp-Teleop](https://ropedia.github.io/ropedia-w0/) 主要是长时灵巧手 teleoperation 数据和世界模型评测，不能当作现成的双机器人包扎控制环境。双机器人协作任务可另参考 [CoHuB](https://arxiv.org/abs/2609.34782)。以上 benchmark 均需适配才能评测本任务，目前无任何官方分数。
-
