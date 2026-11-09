@@ -8,8 +8,11 @@
 
 `task_contract.json` 规定完整七阶段任务、四手职责和持续监控项，目标演示时长至少 60 s，按实际速度播放。物体质量、包扎张力、假人前臂容许受力和目标覆盖率均保留空值，等待模型标定；目前绝不能把阶段定义当作任务已通过。
 
+`build_scene.py` 当前依赖原始项目中的双 G1/Wuji 场景和本地机器人网格资源。公开仓库保存了生成脚本、场景预览与审计结果，尚不是可以独立运行的仿真包。
+
 第一阶段用刚性卷轴和一段可弯曲、低张力的带材；只评估几何路径、敷料覆盖、双人交接和接触稳定。之后才增加可形变绷带、张力估计和真实触觉。成功判据至少包括：敷料全程覆盖目标区域、带材绕臂规定圈数、末端固定、假人手臂位移受限、绷带张力在事先选定的模型范围、四只手有可审计的实际接触、机器人平衡与无非预期接触。具体数值门槛须通过模型和实测确定，不能凭画面宣称可用于实机。
 
 模型选择：官方 [RPent](https://rpent.readthedocs.io/en/latest/rst_source/get_started/overview.html) 是可组合的 agent 框架，并不提供现成 Wuji 手包扎策略。[wuji-mjlab](https://github.com/wuji-technology/wuji-mjlab) 提供官方 Wuji 手强化学习训练与示例权重，适合作为手部小策略的训练入口，但公开任务是方块重定向和转笔，不能直接拿权重做包扎。[DexTaG](https://github.com/UMass-Embodied-AGI/DexTaG) 在 Wuji 手上研究触觉引导的物体操作，可借鉴训练方法，现成权重对应笔和锤子，也不能直接做绷带。下一步应先在现有 Wuji 模型上训练低张力带材引导策略，再通过本目录的路由器与 WBC 接口测试。
 
 评测线索：老师给出的 [HumanoidMimicGen](https://github.com/NVlabs/humanoidmimicgen) 可对照 G1 WBC 与任务成功判据；[SIMPLE](https://github.com/physical-superintelligence-lab/SIMPLE) 可对照完整场景、扰动和长时任务评估；[Xp-Teleop](https://ropedia.github.io/ropedia-w0/) 主要是长时灵巧手 teleoperation 数据和世界模型评测，不能当作现成的双机器人包扎控制环境。双机器人协作任务可另参考 [CoHuB](https://arxiv.org/abs/2609.34782)。以上 benchmark 均需适配才能评测本任务，目前无任何官方分数。
+
