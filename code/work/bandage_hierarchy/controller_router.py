@@ -22,7 +22,7 @@ class Observation:
     body_valid: bool
     feet_supported: bool
     arm_pose_stable: bool
-    contact_confirmed: bool
+    hand_contacts: tuple[bool, bool, bool, bool]
     hand_feedback_fresh: bool
 
 
@@ -45,6 +45,12 @@ class HandExpertRouter:
     """Blend a hand expert in only after contact and posture are stable."""
 
     FINE_PHASES = frozenset({'place_dressing', 'wrap', 'secure_end'})
+    # Order: A-left support, A-right dressing, B-left spool, B-right guide.
+    REQUIRED_CONTACTS = {
+        'place_dressing': (0, 1),
+        'wrap': (0, 1, 2, 3),
+        'secure_end': (0, 1, 3),
+    }
 
     def __init__(self, finger_count: int, *, blend_s: float = .20,
                  max_joint_speed_rad_s: float = .8, max_age_s: float = .04,
@@ -70,7 +76,11 @@ class HandExpertRouter:
             raise ValueError('Observation time must increase')
         dt = 0. if self.last_t is None else obs.time_s-self.last_t
         self.last_t = obs.time_s
-        stable = obs.body_valid and obs.feet_supported and obs.arm_pose_stable and obs.contact_confirmed
+        if len(obs.hand_contacts) != 4 or any(type(c) is not bool for c in obs.hand_contacts):
+            raise ValueError('Four per-hand contact booleans are required')
+        required = self.REQUIRED_CONTACTS.get(obs.phase, ())
+        contact_ready = all(obs.hand_contacts[i] for i in required)
+        stable = obs.body_valid and obs.feet_supported and obs.arm_pose_stable and contact_ready
         if stable:
             if self.stable_since is None:
                 self.stable_since = obs.time_s
