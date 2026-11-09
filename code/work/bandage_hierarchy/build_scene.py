@@ -47,7 +47,10 @@ def main():
     geom(world, 'equipment_tray', 'box', pos='.40 -.62 .65', size='.30 .20 .025', rgba='.55 .57 .62 1')
     for sx in ('.16', '.64'):
         geom(world, f'tray_leg_{sx}', 'box', pos=f'{sx} -.62 .32', size='.025 .025 .30', rgba='.35 .37 .42 1')
-    geom(world, 'dressing_pad_visual', 'box', pos='.25 -.62 .685', size='.065 .055 .008', rgba='.95 .95 .92 1', contype='0', conaffinity='0')
+    pad = ET.SubElement(world, 'body', {'name': 'dressing_pad', 'pos': '.25 -.62 .695'})
+    ET.SubElement(pad, 'freejoint', {'name': 'dressing_pad_free'})
+    geom(pad, 'dressing_pad_contact', 'box', size='.065 .055 .008', mass='.012',
+         rgba='.95 .95 .92 1', friction='1 .005 .0001')
     spool = ET.SubElement(world, 'body', {'name': 'bandage_spool', 'pos': '.52 -.62 .72'})
     ET.SubElement(spool, 'freejoint', {'name': 'bandage_spool_free'})
     geom(spool, 'bandage_roll', 'cylinder', size='.055 .025', mass='.08', rgba='.96 .94 .88 1', friction='.8 .005 .0001')
@@ -58,6 +61,11 @@ def main():
     model = mujoco.MjModel.from_xml_path(str(target))
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
+    pad_id = model.body('dressing_pad').id
+    pad_initial_z = float(data.xpos[pad_id, 2])
+    for _ in range(round(.5 / model.opt.timestep)):
+        mujoco.mj_step(model, data)
+    pad_settled_z = float(data.xpos[pad_id, 2])
     robot_contacts = []
     for c in data.contact:
         a, b = model.geom(c.geom1).name, model.geom(c.geom2).name
@@ -68,13 +76,17 @@ def main():
         'model_loaded': True, 'two_g1': all(model.body(f'{r}/pelvis').id >= 0 for r in ('g1_a', 'g1_b')),
         'four_wuji_hands': sum('/wuji_' in model.joint(i).name for i in range(model.njnt)) == 80,
         'manikin_forearm': model.geom('manikin_forearm').id >= 0,
+        'dressing_pad_dynamic': int(model.body('dressing_pad').jntnum[0]) == 1,
+        'dressing_pad_initial_z_m': pad_initial_z,
+        'dressing_pad_after_half_second_z_m': pad_settled_z,
+        'dressing_pad_settled_on_tray': .67 < pad_settled_z < .70,
         'initial_deep_robot_contacts': robot_contacts[:20],
-        'passed_initial_geometry': not robot_contacts,
+        'passed_initial_geometry': not robot_contacts and .67 < pad_settled_z < .70,
     }
     (DEST / 'scene_check.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))
-    if robot_contacts:
-        raise RuntimeError('Initial robot collision in bandage scene')
+    if not report['passed_initial_geometry']:
+        raise RuntimeError('Initial robot collision or dressing pad failed to settle on tray')
 
 
 if __name__ == '__main__':
