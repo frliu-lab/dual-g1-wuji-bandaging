@@ -23,6 +23,20 @@ def coords(v):
     return ' '.join(f'{x:.7f}' for x in v)
 
 
+def deep_robot_contacts(model, data):
+    found = []
+    for c in data.contact:
+        if c.geom1 < 0 or c.geom2 < 0:
+            continue
+        a, b = model.geom(c.geom1).name, model.geom(c.geom2).name
+        body_a = model.body(model.geom_bodyid[c.geom1]).name
+        body_b = model.body(model.geom_bodyid[c.geom2]).name
+        if (body_a.startswith('g1_') or body_b.startswith('g1_')) and c.dist < -.001:
+            found.append({'geoms': (a, b), 'bodies': (body_a, body_b),
+                          'penetration_m': float(-c.dist)})
+    return found
+
+
 def main():
     root = ET.parse(SOURCE).getroot()
     root.set('model', 'two_g1_four_wuji_manikin_bandaging_v0')
@@ -30,6 +44,8 @@ def main():
     for item in list(world):
         if item.get('name') == 'shared_payload' or item.get('name', '').startswith('door_'):
             world.remove(item)
+    for robot, x in (('g1_a', -.70), ('g1_b', .70)):
+        world.find(f"body[@name='{robot}/pelvis']").set('pos', f'{x} 0 .8')
     # A seated training manikin, visible wound region, and a supported forearm.
     mannequin = ET.SubElement(world, 'body', {'name': 'training_manikin', 'pos': '0 .48 0'})
     geom(mannequin, 'manikin_torso', 'capsule', fromto='0 0 .66 0 0 1.15', size='.16', rgba='.82 .70 .58 1', contype='0', conaffinity='0')
@@ -64,20 +80,20 @@ def main():
     geom(world, 'care_station_backboard', 'box', pos='-.62 1.35 1.28', size='.23 .025 .23', rgba='.92 .94 .92 1', contype='0', conaffinity='0')
     geom(world, 'care_station_cross_v', 'box', pos='-.62 1.315 1.28', size='.035 .004 .13', rgba='.14 .55 .37 1', contype='0', conaffinity='0')
     geom(world, 'care_station_cross_h', 'box', pos='-.62 1.31 1.28', size='.13 .004 .035', rgba='.14 .55 .37 1', contype='0', conaffinity='0')
-    geom(world, 'equipment_tray', 'box', pos='.40 -.62 .65', size='.30 .20 .025', rgba='.55 .57 .62 1')
-    for sx in ('.16', '.64'):
-        geom(world, f'tray_leg_{sx}', 'box', pos=f'{sx} -.62 .32', size='.025 .025 .30', rgba='.35 .37 .42 1')
-    pad = ET.SubElement(world, 'body', {'name': 'dressing_pad', 'pos': '.25 -.62 .695'})
+    geom(world, 'equipment_tray', 'box', pos='0 -.48 .65', size='.50 .20 .025', rgba='.55 .57 .62 1')
+    for sx in ('-.45', '.45'):
+        geom(world, f'tray_leg_{sx}', 'box', pos=f'{sx} -.48 .32', size='.025 .025 .30', rgba='.35 .37 .42 1')
+    pad = ET.SubElement(world, 'body', {'name': 'dressing_pad', 'pos': '-.38 -.44 .695'})
     ET.SubElement(pad, 'freejoint', {'name': 'dressing_pad_free'})
     geom(pad, 'dressing_pad_contact', 'box', size='.065 .055 .008', mass='.012',
          rgba='.95 .95 .92 1', friction='1 .005 .0001')
     ET.SubElement(pad, 'site', {'name': 'bandage_pad_anchor', 'pos': '0 0 .01', 'size': '.003'})
-    spool = ET.SubElement(world, 'body', {'name': 'bandage_spool', 'pos': '.52 -.62 .72'})
+    spool = ET.SubElement(world, 'body', {'name': 'bandage_spool', 'pos': '.38 -.44 .72'})
     ET.SubElement(spool, 'freejoint', {'name': 'bandage_spool_free'})
     geom(spool, 'bandage_roll', 'cylinder', size='.055 .025', mass='.08', rgba='.96 .94 .88 1', friction='.8 .005 .0001')
     geom(spool, 'bandage_core', 'cylinder', size='.018 .027', mass='.005', rgba='.50 .48 .40 1')
     ET.SubElement(spool, 'site', {'name': 'bandage_spool_anchor', 'pos': '0 0 0', 'size': '.003'})
-    route_xyz = [np.array([.25, -.62, .705]), *(p for _, p in wrap_points), np.array([.52, -.62, .72])]
+    route_xyz = [np.array([-.38, -.44, .705]), *(p for _, p in wrap_points), np.array([.38, -.44, .72])]
     route_length = sum(float(np.linalg.norm(b-a)) for a, b in zip(route_xyz, route_xyz[1:]))
     tendon = root.find('tendon')
     if tendon is None:
@@ -95,6 +111,7 @@ def main():
     model = mujoco.MjModel.from_xml_path(str(target))
     data = mujoco.MjData(model)
     mujoco.mj_forward(model, data)
+    initial_robot_contacts = deep_robot_contacts(model, data)
     pad_id = model.body('dressing_pad').id
     pad_initial_z = float(data.xpos[pad_id, 2])
     for _ in range(round(.5 / model.opt.timestep)):
@@ -102,11 +119,7 @@ def main():
     pad_settled_z = float(data.xpos[pad_id, 2])
     route_id = model.tendon('bandage_route_centerline').id
     route_length_after = float(data.ten_length[route_id])
-    robot_contacts = []
-    for c in data.contact:
-        a, b = model.geom(c.geom1).name, model.geom(c.geom2).name
-        if (a.startswith('g1_') or b.startswith('g1_')) and c.dist < -.001:
-            robot_contacts.append((a, b, float(c.dist)))
+    robot_contacts = deep_robot_contacts(model, data)
     report = {
         'scope': 'Two-turn tendon centerline is a geometric proxy; no fabric contact, calibrated tension, trained hand specialist, or completed action',
         'model_loaded': True, 'two_g1': all(model.body(f'{r}/pelvis').id >= 0 for r in ('g1_a', 'g1_b')),
@@ -120,8 +133,9 @@ def main():
         'bandage_route_initial_length_m': route_length,
         'bandage_route_after_half_second_length_m': route_length_after,
         'bandage_route_after_half_second_extension_m': route_length_after-route_length,
-        'initial_deep_robot_contacts': robot_contacts[:20],
-        'passed_initial_geometry': bool(not robot_contacts and .67 < pad_settled_z < .70 and np.isfinite(route_length_after)),
+        'initial_deep_robot_contacts': initial_robot_contacts[:20],
+        'after_uncontrolled_half_second_deep_robot_contacts': robot_contacts[:20],
+        'passed_initial_geometry': bool(not initial_robot_contacts and .67 < pad_settled_z < .70 and np.isfinite(route_length_after)),
     }
     (DEST / 'scene_check.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
     print(json.dumps(report))
