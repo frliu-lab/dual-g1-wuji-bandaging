@@ -1,0 +1,31 @@
+{
+  "name": "two_g1_four_wuji_manikin_forearm_bandaging",
+  "status": "design_contract_not_executed",
+  "scene": "outputs/wuji_multiagent/bandage_v0/scene.xml",
+  "minimum_story_duration_s": 60,
+  "robots": ["g1_a", "g1_b"],
+  "roles": {
+    "g1_a/left": "support_forearm_proximal",
+    "g1_a/right": "hold_dressing_in_place",
+    "g1_b/left": "hold_and_feed_bandage_spool",
+    "g1_b/right": "guide_wrap_and_secure_end"
+  },
+  "phases": [
+    {"name": "enter_and_assess", "controller": "wbc", "exit_evidence": ["both_robots_at_station", "forearm_target_visible"]},
+    {"name": "acquire_supplies", "controller": "wbc_with_finger_grasp", "exit_evidence": ["dressing_held", "spool_held"]},
+    {"name": "support_forearm", "controller": "wbc_with_contact_feedback", "exit_evidence": ["forearm_supported", "both_feet_supported"]},
+    {"name": "place_dressing", "controller": "wbc_plus_hand_specialist", "exit_evidence": ["dressing_covers_target", "dressing_stays_placed"]},
+    {"name": "wrap", "controller": "wbc_plus_hand_specialist", "exit_evidence": ["bandage_path_completed", "tension_in_validated_range", "dressing_stays_placed"]},
+    {"name": "secure_end", "controller": "wbc_plus_hand_specialist", "exit_evidence": ["bandage_end_fixed", "all_hands_unloaded_in_order"]},
+    {"name": "verify_and_withdraw", "controller": "wbc", "exit_evidence": ["coverage_verified", "both_robots_clear", "manikin_arm_stable"]}
+  ],
+  "continuous_guards": ["no_unintended_robot_manikin_contact", "no_joint_limit_violation", "no_robot_robot_collision", "two_robot_foot_support", "hand_command_fresh", "bandage_tension_below_model_limit"],
+  "calibration_needed": {
+    "forearm_force_max_N": null,
+    "bandage_tension_min_N": null,
+    "bandage_tension_max_N": null,
+    "dressing_coverage_min_fraction": null,
+    "allowed_forearm_motion_m": null
+  },
+  "benchmark_status": "not_run_on_HumanoidMimicGen_SIMPLE_Xp-Teleop_or_CoHuB"
+}
