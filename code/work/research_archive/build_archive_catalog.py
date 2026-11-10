@@ -63,6 +63,13 @@ SELECTED = [
     'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_late0p025_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_trace_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_50hz_0.6s_hand.mp4',
+    'bandage_v0/forearm_support_root_m0p58_curl0p4_scan.json',
+    'bandage_v0/forearm_support_root_m0p58_curl0p4_wrist_scan.json',
+    'bandage_v0/forearm_support_root_m0p58_curl0p4_forwardarm_scan.json',
+    'bandage_v0/forearm_support_root_m0p58_curl0p4_wrist_forwardarm_scan.json',
+    'bandage_v0/forearm_support_rrt_report.json',
+    'bandage_v0/forearm_support_wbc_report.json',
+    'bandage_v0/forearm_support_wbc_trace.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.mp4',
 ]
@@ -94,6 +101,9 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/probe_pad_side_pinch.py',
     'work/bandage_hierarchy/plan_side_pinch_path.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',
+    'work/bandage_hierarchy/probe_forearm_support.py',
+    'work/bandage_hierarchy/plan_forearm_support_path.py',
+    'work/bandage_hierarchy/rollout_forearm_support_wbc.py',
     'work/wuji_multiagent/joint_wbc.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
