@@ -26,6 +26,8 @@ parser.add_argument('--side-pinch-path-index', type=int, default=None,
                     help='Use isolated smaller-pad variant and append a checked RRT path')
 parser.add_argument('--force-balance-gain-m-per-n', type=float, default=0.,
                     help='Simulation-only proportional finger adjustment during final hold')
+parser.add_argument('--pad-relative-gain', type=float, default=0.,
+                    help='Track first opposed fingertip poses relative to the moving pad during hold')
 parser.add_argument('--palm-rotation-weight', type=float, default=10.)
 parser.add_argument('--wrist-roll-offset-rad', type=float, default=0.,
                     help='Simulation-only smooth terminal wrist-roll offset')
@@ -36,6 +38,8 @@ if args.pinch and args.side_pinch_path_index is not None:
     parser.error('--pinch and --side-pinch-path-index are mutually exclusive')
 if args.force_balance_gain_m_per_n < 0 or (args.force_balance_gain_m_per_n and args.side_pinch_path_index is None):
     parser.error('Force balance gain requires a side-pinch path and must be nonnegative')
+if not 0 <= args.pad_relative_gain <= 1 or (args.pad_relative_gain and args.side_pinch_path_index is None):
+    parser.error('Pad-relative gain requires a side-pinch path and must be in [0,1]')
 if args.palm_rotation_weight <= 0:
     parser.error('Palm rotation weight must be positive')
 if abs(args.wrist_roll_offset_rad) > .15 or (args.wrist_roll_offset_rad and args.side_pinch_path_index is None):
@@ -78,11 +82,14 @@ gain_tag = str(args.force_balance_gain_m_per_n).replace('.', 'p')
 rotation_tag = f'_rot{str(args.palm_rotation_weight).replace(".", "p")}' if args.palm_rotation_weight != 10. else ''
 roll_tag = f'_roll{str(args.wrist_roll_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_offset_rad else ''
 late_tag = f'_late{str(args.wrist_roll_late_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_late_offset_rad else ''
+relative_tag = f'_relative{str(args.pad_relative_gain).replace(".", "p")}' if args.pad_relative_gain else ''
 output_stem = (f'pad_side_pinch_balance_{args.side_pinch_path_index}_gain{gain_tag}'
                if side_goals is not None and args.force_balance_gain_m_per_n else
                f'pad_side_pinch_attempt_{args.side_pinch_path_index}' if side_goals is not None else
                'pad_pinch_attempt' if args.pinch else 'four_arm_reach')
-output_stem += rotation_tag + roll_tag + late_tag
+output_stem += rotation_tag + roll_tag + late_tag + relative_tag
+if args.pad_relative_gain and args.hold_s != 1.:
+    output_stem += f'_hold{str(args.hold_s).replace(".", "p")}'
 if np.max(np.abs(path[0]-data.qpos)) > 1e-6:
     raise RuntimeError('IK seed and current scene initialization differ')
 
@@ -112,6 +119,8 @@ digit_contact_steps = {'thumb': 0, 'index': 0, 'both': 0}
 peak_digit_force_n = {'thumb': 0., 'index': 0.}
 last_digit_forces = {'thumb': 0., 'index': 0.}
 max_balance_joint_offset_rad = 0.
+max_relative_joint_offset_rad = 0.
+pad_relative_targets = None
 opposition_cosines = []
 current_grasp_valid = False
 current_normal_cosine = None
@@ -189,6 +198,17 @@ for segment, k, count in schedule:
                 wbc.qref[qa]+=delta
                 max_balance_joint_offset_rad=max(max_balance_joint_offset_rad,
                                                  float(np.max(np.abs(delta))))
+        if args.pad_relative_gain and pad_relative_targets is not None and segment==len(path)-1 and k==per_segment:
+            pad_position=data.xpos[pad_body]
+            for digit,(qa,va,bid) in balance_joints.items():
+                jac=np.zeros((3,model.nv))
+                mujoco.mj_jac(model,data,jac,None,data.xpos[bid],bid)
+                relative_error=pad_position+pad_relative_targets[digit]-data.xpos[bid]
+                delta=np.linalg.lstsq(jac[:,va].T@jac[:,va]+1e-3*np.eye(len(va)),
+                                      jac[:,va].T@(args.pad_relative_gain*relative_error),rcond=None)[0]
+                delta=np.clip(delta,-.08,.08)
+                wbc.qref[qa]+=delta
+                max_relative_joint_offset_rad=max(max_relative_joint_offset_rad,float(np.max(np.abs(delta))))
         try:
             evidence = hand_contacts(model, data)
             contact_observations += np.asarray(evidence, dtype=int)
@@ -255,6 +275,9 @@ for segment, k, count in schedule:
                         opposition_cosines.append(cosine)
                         current_normal_cosine = cosine
                         current_grasp_valid = cosine < -.5
+                if current_grasp_valid and pad_relative_targets is None and args.pad_relative_gain:
+                    pad_relative_targets={digit:data.xpos[bid].copy()-data.xpos[pad_body].copy()
+                                          for digit,(_,_,bid) in balance_joints.items()}
                 opposed_run = opposed_run+1 if current_grasp_valid else 0
                 opposed_steps += int(current_grasp_valid)
                 longest_opposed_run = max(longest_opposed_run, opposed_run)
@@ -279,6 +302,8 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
           'pinch_seed_attempted': args.pinch,
           'side_pinch_path_index': args.side_pinch_path_index,
           'force_balance_gain_m_per_n': args.force_balance_gain_m_per_n,
+          'pad_relative_gain': args.pad_relative_gain,
+          'max_relative_joint_offset_rad': max_relative_joint_offset_rad,
           'palm_rotation_weight': args.palm_rotation_weight,
           'wrist_roll_offset_rad': args.wrist_roll_offset_rad,
           'wrist_roll_late_offset_rad': args.wrist_roll_late_offset_rad,

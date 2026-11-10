@@ -13,6 +13,8 @@ for path in sorted(paths):
     row={'file':path.name,
          'path_index':d['side_pinch_path_index'],
          'force_balance_gain_m_per_n':d.get('force_balance_gain_m_per_n',0.),
+         'pad_relative_gain':d.get('pad_relative_gain',0.),
+         'hold_s':d.get('hold_s',1.),
          'palm_rotation_weight':d.get('palm_rotation_weight',10.),
          'wrist_roll_offset_rad':d.get('wrist_roll_offset_rad',0.),
          'wrist_roll_late_offset_rad':d.get('wrist_roll_late_offset_rad',0.),
