@@ -23,3 +23,5 @@
 最新动态前臂对照：[独立场景模型](media/bandage_v0/dynamic_forearm_variant.xml) · [机制检查](media/bandage_v0/dynamic_forearm_variant_check.json) · [双机 WBC 反事实报告](media/bandage_v0/dynamic_forearm_support_comparison.json)。0.8 kg 被动前臂的无接触与小指侧接触两种条件都下垂到约 0.3507 rad；现有左手路径没有形成有效托举，仍判为失败。该结果是条件仿真，不代表真人受伤手臂或实机表现。
 
 后续掌托候选：[静态接触搜索](media/bandage_v0/dynamic_palm_support_search_root_m0p3_pinky0p5.json) · [安全起点和路径检查](media/bandage_v0/dynamic_palm_support_rrt_report.json) · [闭环对照](media/bandage_v0/dynamic_palm_support_wbc_comparison.json) · [七组扫参汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)。该候选在仿真中减小前臂下垂，但掌部承力不足、食指承担过多载荷且峰值力高；按暂定研究门槛 0/7 通过，**不可视作有效包扎或实机质量动作**。
+
+更新的[16 组条件汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)包含前臂跟随、力反馈、软接触和 0.5/0.8/1.2 kg 质量敏感性。0.8 kg 的[较弱跟随试验](media/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5.json)末段由掌面承力，但约 37 N 的初碰峰值未解决；[0.5 kg](media/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_mass0p5.json)与[1.2 kg](media/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_mass1p2.json)均失去这一接触质量。**16 组仍为 0 组达标**。此前七组结果是历史快照，以更新汇总为准。

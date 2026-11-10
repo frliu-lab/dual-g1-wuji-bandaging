@@ -15,19 +15,31 @@ for path in files:
     palm=impulses.get('g1_a/wuji_left/l_wrist',0.)
     mount=impulses.get('g1_a/wuji_left/l_mount',0.)
     index=sum(v for k,v in impulses.items() if '/l_index_' in k)
+    last=test.get('final_half_second_impulse_by_hand_body_ns',{})
+    last_total=sum(last.values())
+    last_palm=last.get('g1_a/wuji_left/l_wrist',0.)
+    last_index=sum(v for k,v in last.items() if '/l_index_' in k)
     reduction=baseline['final_half_second_mean_abs_elbow_rad']-test['final_half_second_mean_abs_elbow_rad']
     gate={'elbow_reduction_at_least_0p05_rad':reduction>=.05,
           'final_contact_at_least_90_percent':test['final_half_second_contact_fraction']>=.9,
-          'palm_impulse_majority':palm/max(total,1e-9)>=.7,
-          'index_impulse_below_10_percent':index/max(total,1e-9)<.1,
+          'last_half_palm_impulse_majority':last_palm/max(last_total,1e-9)>=.7,
+          'last_half_index_impulse_below_10_percent':last_index/max(last_total,1e-9)<.1,
           'peak_force_below_20_n':test['peak_a_left_forearm_force_n']<20.,
+          'no_forearm_overlift_beyond_zero_rad':test['final_elbow_rad']>=0.,
           'both_robots_foot_supported':test['foot_support_fraction']>=.99,
           'no_deep_nonfloor_robot_contact':test['deep_nonfloor_robot_contact_count']==0,
           'finite_no_error':test['finite_state'] and not test['errors']}
     rows.append({'file':path.name,'reach_fraction':report.get('reach_fraction',1.),
         'index_extra_rad':report.get('index_extra_rad',0.),'segment_s':report.get('segment_s',1.2),
+        'forearm_follow_gain':report.get('forearm_follow_gain',0.),
+        'follow_start_fraction':report.get('follow_start_fraction',1.),
+        'force_feedback_gain':report.get('force_feedback_gain',0.),
+        'forearm_mass_kg':report.get('forearm_mass_kg',.8),
+        'forearm_solref_time_s':report.get('forearm_solref_time_s'),
         'elbow_reduction_rad':reduction,'palm_impulse_share':palm/max(total,1e-9),
         'mount_impulse_share':mount/max(total,1e-9),'index_impulse_share':index/max(total,1e-9),
+        'last_half_palm_impulse_share':last_palm/max(last_total,1e-9),
+        'last_half_index_impulse_share':last_index/max(last_total,1e-9),
         'peak_forearm_force_n':test['peak_a_left_forearm_force_n'],
         'final_half_second_mean_force_n':test['final_half_second_mean_force_n'],
         'gate':gate,'passes_all':all(gate.values())})

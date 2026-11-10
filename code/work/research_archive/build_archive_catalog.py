@@ -77,6 +77,10 @@ SELECTED = [
     'bandage_v0/dynamic_palm_support_rrt_report.json',
     'bandage_v0/dynamic_palm_support_wbc_comparison.json',
     'bandage_v0/dynamic_palm_support_sweep_summary.json',
+    'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5.json',
+    'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_mass0p5.json',
+    'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_mass1p2.json',
+    'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_solref0p04.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.mp4',
 ]
