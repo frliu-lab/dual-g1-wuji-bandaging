@@ -100,6 +100,7 @@ class JointWBC:
   acc_lo=np.full(m.nv,-200.);acc_hi=np.full(m.nv,200.)
   for joint in range(m.njnt):
    if not m.jnt_limited[joint] or m.jnt_type[joint]!=mujoco.mjtJoint.mjJNT_HINGE:continue
+   if joint not in m.actuator_trnid[:,0]:continue
    adr=int(m.jnt_dofadr[joint]);q=float(d.qpos[m.jnt_qposadr[joint]]);v=float(d.qvel[adr]);low,high=m.jnt_range[joint];low+=.02;high-=.02
    acc_lo[adr]=max(-200.,-20*v-100*(q-low));acc_hi[adr]=min(200.,-20*v+100*(high-q))
   goals=np.zeros(3*nc);forceweight=np.zeros(3*nc)

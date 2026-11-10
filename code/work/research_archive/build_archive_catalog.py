@@ -70,6 +70,9 @@ SELECTED = [
     'bandage_v0/forearm_support_rrt_report.json',
     'bandage_v0/forearm_support_wbc_report.json',
     'bandage_v0/forearm_support_wbc_trace.json',
+    'bandage_v0/dynamic_forearm_variant.xml',
+    'bandage_v0/dynamic_forearm_variant_check.json',
+    'bandage_v0/dynamic_forearm_support_comparison.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.mp4',
 ]
@@ -104,6 +107,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/probe_forearm_support.py',
     'work/bandage_hierarchy/plan_forearm_support_path.py',
     'work/bandage_hierarchy/rollout_forearm_support_wbc.py',
+    'work/bandage_hierarchy/build_dynamic_forearm_variant.py',
+    'work/bandage_hierarchy/compare_dynamic_forearm_support.py',
     'work/wuji_multiagent/joint_wbc.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
