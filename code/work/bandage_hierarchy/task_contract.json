@@ -13,7 +13,7 @@
   "phases": [
     {"name": "enter_and_assess", "controller": "wbc", "exit_evidence": ["both_robots_at_station", "forearm_target_visible"]},
     {"name": "acquire_supplies", "controller": "wbc_with_finger_grasp", "exit_evidence": ["dressing_held", "spool_held"]},
-    {"name": "support_forearm", "controller": "wbc_with_contact_feedback", "exit_evidence": ["forearm_supported", "both_feet_supported"]},
+    {"name": "support_forearm", "controller": "wbc_with_contact_feedback", "exit_evidence": ["forearm_supported_with_palm_contact", "support_robust_in_parameter_range", "both_feet_supported"]},
     {"name": "place_dressing", "controller": "wbc_plus_hand_specialist", "exit_evidence": ["dressing_covers_target", "dressing_stays_placed"]},
     {"name": "wrap", "controller": "wbc_plus_hand_specialist", "exit_evidence": ["bandage_path_completed", "tension_in_validated_range", "dressing_stays_placed"]},
     {"name": "secure_end", "controller": "wbc_plus_hand_specialist", "exit_evidence": ["bandage_end_fixed", "all_hands_unloaded_in_order"]},

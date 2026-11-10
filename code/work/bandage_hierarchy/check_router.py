@@ -13,7 +13,8 @@ ones = np.ones(80)
 def observation(t, **kwargs):
     values = dict(time_s=t, phase='wrap', body_valid=True, feet_supported=True,
                   arm_pose_stable=True, hand_contacts=(True, True, True, True),
-                  hand_feedback_fresh=True, dressing_grasp_valid=True)
+                  hand_feedback_fresh=True, dressing_grasp_valid=True,
+                  forearm_support_valid=True)
     values.update(kwargs)
     return Observation(**values)
 
@@ -46,4 +47,16 @@ for t in (.0, .05, .10, .15, .20, .25, .30):
     d4 = r4.step(observation(t, phase='place_dressing', dressing_grasp_valid=False),
                  zeros, HandProposal(t, ones, .95))
 assert d4.mode == Mode.BODY
-print('router checks passed: phase-specific four-hand contact gates, handover rate limit, stale fallback, support and contact-loss guards')
+r5 = HandExpertRouter(80)
+for t in (.0, .05, .10, .15, .20, .25, .30):
+    d5 = r5.step(observation(t, forearm_support_valid=False), zeros,
+                 HandProposal(t, ones, .95))
+assert d5.mode == Mode.BODY
+r6 = HandExpertRouter(80)
+for t in (.0, .05, .10, .15, .20, .25, .30):
+    d6 = r6.step(observation(t), zeros, HandProposal(t, ones, .95))
+assert d6.mode == Mode.HAND
+d6 = r6.step(observation(.35, forearm_support_valid=False), zeros,
+             HandProposal(.35, ones, .95))
+assert d6.mode == Mode.HOLD and d6.specialist_weight == 0.
+print('router checks passed: phase-specific contacts, verified forearm support, handover rate limit, stale fallback, and loss guards')
