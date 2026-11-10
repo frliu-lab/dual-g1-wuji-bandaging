@@ -21,9 +21,14 @@ parser.add_argument('--segment-s', type=float, default=1.0)
 parser.add_argument('--hold-s', type=float, default=1.0)
 parser.add_argument('--video', action='store_true')
 parser.add_argument('--pinch', action='store_true', help='Append static thumb-first dressing contact seed')
+parser.add_argument('--side-pinch-path-index', type=int, default=None,
+                    help='Use isolated smaller-pad variant and append a checked RRT path')
 args = parser.parse_args()
+if args.pinch and args.side_pinch_path_index is not None:
+    parser.error('--pinch and --side-pinch-path-index are mutually exclusive')
 
-model = mujoco.MjModel.from_xml_path(str(OUT / 'scene.xml'))
+scene_file = 'pad_side_pinch_variant.xml' if args.side_pinch_path_index is not None else 'scene.xml'
+model = mujoco.MjModel.from_xml_path(str(OUT / scene_file))
 data = mujoco.MjData(model)
 mujoco.mj_forward(model, data)
 for robot in ('g1_a', 'g1_b'):
@@ -45,6 +50,14 @@ if args.pinch:
             qa = int(model.jnt_qposadr[j])
             thumb_first[qa] = pinch['qpos'][qa]
     path = np.vstack([path, thumb_first, pinch['qpos']])
+side_goals = None
+if args.side_pinch_path_index is not None:
+    rrt = np.load(OUT/f'pad_side_pinch_rrt_{args.side_pinch_path_index}.npz')['qpos']
+    if np.max(np.abs(rrt[0]-path[-1])) > 1e-6:
+        raise RuntimeError('Side-pinch path and reach seed differ')
+    path = np.vstack([path, rrt[1:]])
+    side_report = json.loads((OUT/'pad_side_pinch_scan.json').read_text(encoding='utf8'))
+    side_goals = side_report['collision_refined_candidates'][args.side_pinch_path_index]['goals_m']
 if np.max(np.abs(path[0]-data.qpos)) > 1e-6:
     raise RuntimeError('IK seed and current scene initialization differ')
 
@@ -65,6 +78,10 @@ digit_contact_steps = {'thumb': 0, 'index': 0, 'both': 0}
 peak_digit_force_n = {'thumb': 0., 'index': 0.}
 opposition_cosines = []
 current_grasp_valid = False
+opposed_steps = 0
+opposed_run = 0
+longest_opposed_run = 0
+opposed_last_half_second = 0
 max_pad_displacement = 0.
 pad_body = model.body('dressing_pad').id
 pad_start = data.xpos[pad_body].copy()
@@ -114,7 +131,7 @@ for segment, k, count in schedule:
             evidence = hand_contacts(model, data)
             contact_observations += np.asarray(evidence, dtype=int)
             decision = router.step(Observation(
-                time_s=float(data.time), phase='place_dressing' if args.pinch and segment >= 5 else 'approach', body_valid=True,
+                time_s=float(data.time), phase='place_dressing' if (args.pinch or side_goals is not None) and segment >= 5 else 'approach', body_valid=True,
                 feet_supported=both_foot_support == steps if steps else True,
                 arm_pose_stable=False, hand_contacts=evidence,
                 hand_feedback_fresh=False, dressing_grasp_valid=current_grasp_valid),
@@ -173,6 +190,11 @@ for segment, k, count in schedule:
                         cosine = float(np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b)))
                         opposition_cosines.append(cosine)
                         current_grasp_valid = cosine < -.5
+                opposed_run = opposed_run+1 if current_grasp_valid else 0
+                opposed_steps += int(current_grasp_valid)
+                longest_opposed_run = max(longest_opposed_run, opposed_run)
+                if data.time >= (len(path)-1)*args.segment_s+args.hold_s-.5:
+                    opposed_last_half_second += int(current_grasp_valid)
                 both_foot_support += int(supported == {'g1_a','g1_b'})
             max_joint_error = max(max_joint_error, float(np.max(np.abs(
                 data.qpos[arm_qadr]-wbc.qref[arm_qadr]))))
@@ -181,6 +203,7 @@ for segment, k, count in schedule:
             break
 report = {'scope': 'Four-arm reach with optional dressing contact attempt; no proven grasp, cloth or bandaging',
           'pinch_seed_attempted': args.pinch,
+          'side_pinch_path_index': args.side_pinch_path_index,
           'wbc_hz': args.hz, 'segment_s': args.segment_s, 'hold_s': args.hold_s,
           'segments_completed': segment if not error else segment-1,
           'simulated_time_s': float(data.time),
@@ -196,11 +219,17 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
           'two_digit_contact_normal_cosine_mean': float(np.mean(opposition_cosines)) if opposition_cosines else None,
           'two_digit_opposed_fraction_cos_lt_minus_0p5': (sum(c < -.5 for c in opposition_cosines)/len(opposition_cosines)
                                                         if opposition_cosines else None),
+          'opposed_contact_total_s': opposed_steps*float(model.opt.timestep),
+          'longest_continuous_opposed_contact_s': longest_opposed_run*float(model.opt.timestep),
+          'opposed_contact_fraction_final_half_second': opposed_last_half_second/max(1,round(.5/model.opt.timestep)),
           'max_pad_center_displacement_m': max_pad_displacement,
           'router_observer_mode_counts': router_modes,
           'router_output_actuated': False,
           'final_pad_center_m': data.xpos[model.body('dressing_pad').id].tolist(),
           'final_thumb_tip_m': data.xpos[model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id].tolist(),
+          'final_thumb_goal_error_m': (float(np.linalg.norm(
+              data.xpos[model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id]-side_goals[1]))
+              if side_goals is not None else None),
           'final_arm_joint_error_rad': float(np.max(np.abs(data.qpos[arm_qadr]-path[-1,arm_qadr]))),
           'worst_final_arm_joints': sorted(({'joint': model.joint(model.actuator_trnid[i,0]).name,
                                              'error_rad': float(abs(data.qpos[q]-path[-1,q]))}
@@ -211,7 +240,8 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
               name: float(np.linalg.norm(data.xpos[model.body(name).id]-goal))
               for name, goal in (
                   ('g1_a/wuji_left/l_index_finger_tip_sensor_frame', (-.22,.18,.84)),
-                  ('g1_a/wuji_right/r_index_finger_tip_sensor_frame', (-.38,-.44,.7164 if args.pinch else .72)),
+                  ('g1_a/wuji_right/r_index_finger_tip_sensor_frame',
+                   side_goals[0] if side_goals is not None else (-.38,-.44,.7164 if args.pinch else .72)),
                   ('g1_b/wuji_left/l_index_finger_tip_sensor_frame', (.38,-.44,.78)),
                   ('g1_b/wuji_right/r_index_finger_tip_sensor_frame', (.45,-.08,.89)))},
           'finite_state': bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel))),
@@ -219,7 +249,8 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
 if renderer is not None:
     renderer.close()
     ffmpeg = ROOT / 'work/retarget_env/Lib/site-packages/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe'
-    stem = 'pad_pinch_attempt' if args.pinch else 'four_arm_reach'
+    stem = (f'pad_side_pinch_attempt_{args.side_pinch_path_index}' if side_goals is not None
+            else 'pad_pinch_attempt' if args.pinch else 'four_arm_reach')
     video = OUT / f'{stem}_{args.hz}hz_{args.segment_s:g}s.mp4'
     proc = subprocess.Popen([str(ffmpeg), '-y', '-loglevel', 'error', '-f', 'rawvideo',
                              '-pixel_format', 'rgb24', '-video_size', '960x540', '-framerate', '15',
@@ -231,6 +262,6 @@ if renderer is not None:
     if proc.wait() != 0:
         raise RuntimeError('ffmpeg failed')
     report['video_frames'] = len(video_frames)
-(OUT / f'{"pad_pinch_attempt" if args.pinch else "four_arm_reach"}_{args.hz}hz_{args.segment_s:g}s.json').write_text(
+(OUT / f'{f"pad_side_pinch_attempt_{args.side_pinch_path_index}" if side_goals is not None else "pad_pinch_attempt" if args.pinch else "four_arm_reach"}_{args.hz}hz_{args.segment_s:g}s.json').write_text(
     json.dumps(report, indent=2), encoding='utf-8')
 print(json.dumps(report))

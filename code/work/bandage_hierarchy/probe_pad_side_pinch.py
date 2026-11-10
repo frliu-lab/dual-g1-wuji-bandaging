@@ -15,6 +15,7 @@ pad_geom.set('size', '.045 .03 .008')
 stage_geom = next(g for g in scene.getroot().iter('geom') if g.get('name') == 'dressing_stage')
 stage_geom.set('size', '.04 .015 .006')
 m = mujoco.MjModel.from_xml_string(ET.tostring(scene.getroot(),encoding='unicode'))
+(OUT/'pad_side_pinch_variant.xml').write_text(ET.tostring(scene.getroot(),encoding='unicode'),encoding='utf8')
 d = mujoco.MjData(m)
 base = np.load(OUT/'reach_ik_seed.npz')['qpos']
 tip_names = ('g1_a/wuji_right/r_index_finger_tip_sensor_frame',
@@ -127,6 +128,8 @@ for i in ranked:
                     'deep_contacts':deep,'forces_n':forces,'contact_normal_cosine':cos,
                     'solver_success':bool(opt.success),'solver_iterations':int(opt.nit)})
     refined_q.append(d.qpos.copy())
+np.savez_compressed(OUT/'pad_side_pinch_candidates.npz',initial_qpos=base,
+                    qpos=np.stack(refined_q),source_indices=np.array(ranked),joint_qpos_addresses=qa)
 for item,qend in zip(refined,refined_q):
     finger_first=base.copy();finger_first[qa[7:]]=qend[qa[7:]]
     arm_first=base.copy();arm_first[qa[:7]]=qend[qa[:7]]

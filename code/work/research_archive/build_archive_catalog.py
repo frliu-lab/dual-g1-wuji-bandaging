@@ -49,6 +49,9 @@ SELECTED = [
     'bandage_v0/pad_thumb_scan.json',
     'bandage_v0/pad_pinch_scan.json',
     'bandage_v0/pad_side_pinch_scan.json',
+    'bandage_v0/pad_side_pinch_rrt_report.json',
+    'bandage_v0/pad_side_pinch_attempt_2_50hz_0.6s.json',
+    'bandage_v0/pad_side_pinch_attempt_2_50hz_0.6s.mp4',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.mp4',
 ]
@@ -78,6 +81,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/probe_pad_thumb.py',
     'work/bandage_hierarchy/probe_pad_pinch.py',
     'work/bandage_hierarchy/probe_pad_side_pinch.py',
+    'work/bandage_hierarchy/plan_side_pinch_path.py',
     'work/wuji_multiagent/joint_wbc.py',
     'work/bandage_hierarchy/task_contract.json',
 ]
