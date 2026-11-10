@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'outputs/wuji_multiagent/bandage_v0'
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
-from controller_router import HandExpertRouter, Observation, Mode
+from controller_router import HandExpertRouter, HandProposal, Observation, Mode
 from scene_evidence import hand_contacts
 
 parser = argparse.ArgumentParser()
@@ -30,6 +30,18 @@ parser.add_argument('--pad-relative-gain', type=float, default=0.,
                     help='Track first opposed fingertip poses relative to the moving pad during hold')
 parser.add_argument('--pad-lift-m', type=float, default=0.,
                     help='Diagnostic A-right wrist lift after 0.5 s of held pinch')
+parser.add_argument('--lift-start-s', type=float, default=.5,
+                    help='Elapsed hold time before diagnostic wrist lift begins')
+parser.add_argument('--dressing-normal-goal-n', type=float, default=None,
+                    help='Predicted QP normal-force goal per A-right grasp digit')
+parser.add_argument('--thumb-inward-m', type=float, default=0.,
+                    help='Move thumb target toward pad center along x after first opposed contact')
+parser.add_argument('--lift-arm-only', action='store_true',
+                    help='Keep wrist joints on their original pinch reference during diagnostic lift')
+parser.add_argument('--routed-finger-feedback', action='store_true',
+                    help='Route analytical finger feedback through the phase-gated hand interface')
+parser.add_argument('--pad-frame-relative', action='store_true',
+                    help='Express specialist fingertip targets in the pad body frame')
 parser.add_argument('--palm-rotation-weight', type=float, default=10.)
 parser.add_argument('--wrist-roll-offset-rad', type=float, default=0.,
                     help='Simulation-only smooth terminal wrist-roll offset')
@@ -44,6 +56,19 @@ if not 0 <= args.pad_relative_gain <= 1 or (args.pad_relative_gain and args.side
     parser.error('Pad-relative gain requires a side-pinch path and must be in [0,1]')
 if not 0 <= args.pad_lift_m <= .05 or (args.pad_lift_m and args.side_pinch_path_index is None):
     parser.error('Pad lift requires side pinch and must be in [0, 0.05] m')
+if args.lift_start_s<0 or not np.isfinite(args.lift_start_s):
+    parser.error('Lift start must be finite and nonnegative')
+if args.dressing_normal_goal_n is not None and (not np.isfinite(args.dressing_normal_goal_n)
+        or not 0 <= args.dressing_normal_goal_n <= 2 or args.side_pinch_path_index is None):
+    parser.error('Dressing normal goal requires side pinch and must be in [0, 2] N')
+if not 0 <= args.thumb_inward_m <= .025 or (args.thumb_inward_m and not args.pad_relative_gain):
+    parser.error('Thumb inward target requires pad-relative feedback and must be in [0, 0.025] m')
+if args.lift_arm_only and not args.pad_lift_m:
+    parser.error('Arm-only lift requires a positive pad-lift command')
+if args.routed_finger_feedback and (args.side_pinch_path_index is None or not args.pad_relative_gain):
+    parser.error('Routed finger feedback requires side pinch and pad-relative feedback')
+if args.pad_frame_relative and not args.pad_relative_gain:
+    parser.error('Pad-frame feedback requires pad-relative feedback')
 if args.palm_rotation_weight <= 0:
     parser.error('Palm rotation weight must be positive')
 if abs(args.wrist_roll_offset_rad) > .15 or (args.wrist_roll_offset_rad and args.side_pinch_path_index is None):
@@ -88,11 +113,17 @@ roll_tag = f'_roll{str(args.wrist_roll_offset_rad).replace(".", "p").replace("-"
 late_tag = f'_late{str(args.wrist_roll_late_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_late_offset_rad else ''
 relative_tag = f'_relative{str(args.pad_relative_gain).replace(".", "p")}' if args.pad_relative_gain else ''
 lift_tag = f'_lift{str(args.pad_lift_m).replace(".", "p")}' if args.pad_lift_m else ''
+normal_tag = f'_normal{str(args.dressing_normal_goal_n).replace(".", "p")}' if args.dressing_normal_goal_n is not None else ''
+thumb_tag = f'_thumbx{str(args.thumb_inward_m).replace(".", "p")}' if args.thumb_inward_m else ''
+arm_tag = '_armonly' if args.lift_arm_only else ''
+route_tag = '_routed' if args.routed_finger_feedback else ''
+frame_tag = '_padframe' if args.pad_frame_relative else ''
+lift_start_tag = f'_liftstart{str(args.lift_start_s).replace(".", "p")}' if args.pad_lift_m and args.lift_start_s != .5 else ''
 output_stem = (f'pad_side_pinch_balance_{args.side_pinch_path_index}_gain{gain_tag}'
                if side_goals is not None and args.force_balance_gain_m_per_n else
                f'pad_side_pinch_attempt_{args.side_pinch_path_index}' if side_goals is not None else
                'pad_pinch_attempt' if args.pinch else 'four_arm_reach')
-output_stem += rotation_tag + roll_tag + late_tag + relative_tag + lift_tag
+output_stem += rotation_tag + roll_tag + late_tag + relative_tag + lift_tag + normal_tag + thumb_tag + arm_tag + route_tag + frame_tag + lift_start_tag
 if args.pad_relative_gain and args.hold_s != 1.:
     output_stem += f'_hold{str(args.hold_s).replace(".", "p")}'
 if np.max(np.abs(path[0]-data.qpos)) > 1e-6:
@@ -107,6 +138,7 @@ def robot_contact_only(m, c):
 wbc = JointWBC(model, data.qpos.copy(), palm_names=palms,
                contact_filter=robot_contact_only,
                palm_rotation_weight=args.palm_rotation_weight)
+wbc.dressing_contact_normal_goal_n=args.dressing_normal_goal_n
 finger_qadr = np.array([int(model.jnt_qposadr[model.actuator_trnid[i, 0]])
                        for i in wbc.hand_indices], dtype=int)
 balance_joints = {}
@@ -120,6 +152,8 @@ for digit in ('thumb', 'index'):
 router = HandExpertRouter(len(finger_qadr))
 contact_observations = np.zeros(4, dtype=int)
 router_modes = {mode.value: 0 for mode in Mode}
+first_hand_specialist_time_s = None
+max_specialist_weight = 0.
 digit_contact_steps = {'thumb': 0, 'index': 0, 'both': 0}
 peak_digit_force_n = {'thumb': 0., 'index': 0.}
 last_digit_forces = {'thumb': 0., 'index': 0.}
@@ -135,6 +169,7 @@ opposed_steps = 0
 opposed_run = 0
 longest_opposed_run = 0
 opposed_last_half_second = 0
+last_half_steps = 0
 max_pad_displacement = 0.
 contact_trace = []
 pad_body = model.body('dressing_pad').id
@@ -193,6 +228,7 @@ for segment, k, count in schedule:
         u = (k+1)/count
         ease = u*u*(3-2*u)
         wbc.qref[:] = (1-ease)*path[segment-1]+ease*path[segment]
+        base_finger_targets=wbc.qref[finger_qadr].copy()
         if (args.wrist_roll_offset_rad or args.wrist_roll_late_offset_rad) and segment==len(path)-1 and k==per_segment:
             hold_elapsed=max(0.,float(data.time)-(len(path)-1)*args.segment_s)
             ramp=min(1.,hold_elapsed/.5)
@@ -215,7 +251,10 @@ for segment, k, count in schedule:
             for digit,(qa,va,bid) in balance_joints.items():
                 jac=np.zeros((3,model.nv))
                 mujoco.mj_jac(model,data,jac,None,data.xpos[bid],bid)
-                relative_error=pad_position+pad_relative_targets[digit]-data.xpos[bid]
+                local_offset=pad_relative_targets[digit]
+                world_offset=(data.xmat[pad_body].reshape(3,3)@local_offset
+                              if args.pad_frame_relative else local_offset)
+                relative_error=pad_position+world_offset-data.xpos[bid]
                 delta=np.linalg.lstsq(jac[:,va].T@jac[:,va]+1e-3*np.eye(len(va)),
                                       jac[:,va].T@(args.pad_relative_gain*relative_error),rcond=None)[0]
                 delta=np.clip(delta,-.08,.08)
@@ -223,26 +262,47 @@ for segment, k, count in schedule:
                 max_relative_joint_offset_rad=max(max_relative_joint_offset_rad,float(np.max(np.abs(delta))))
         if args.pad_lift_m and segment==len(path)-1 and k==per_segment:
             hold_elapsed=max(0.,float(data.time)-(len(path)-1)*args.segment_s)
-            if hold_elapsed>=.5 and lift_start_palm is None:
+            if hold_elapsed>=args.lift_start_s and lift_start_palm is None:
                 lift_start_palm=data.xpos[lift_palm_id].copy()
             if lift_start_palm is not None:
-                lift_ramp=np.clip((hold_elapsed-.5)/.5,0.,1.)
+                lift_ramp=np.clip((hold_elapsed-args.lift_start_s)/.5,0.,1.)
                 palm_target=lift_start_palm+np.array([0.,0.,args.pad_lift_m*lift_ramp])
                 jac=np.zeros((3,model.nv))
                 mujoco.mj_jac(model,data,jac,None,data.xpos[lift_palm_id],lift_palm_id)
-                J=jac[:,lift_vadr]
-                delta=np.linalg.solve(J.T@J+1e-3*np.eye(len(lift_vadr)),J.T@(palm_target-data.xpos[lift_palm_id]))
-                wbc.qref[lift_qadr]=data.qpos[lift_qadr]+np.clip(delta,-.08,.08)
+                qadr=lift_qadr[:4] if args.lift_arm_only else lift_qadr
+                vadr=lift_vadr[:4] if args.lift_arm_only else lift_vadr
+                J=jac[:,vadr]
+                delta=np.linalg.solve(J.T@J+1e-3*np.eye(len(vadr)),J.T@(palm_target-data.xpos[lift_palm_id]))
+                wbc.qref[qadr]=data.qpos[qadr]+np.clip(delta,-.08,.08)
         try:
             evidence = hand_contacts(model, data)
             contact_observations += np.asarray(evidence, dtype=int)
+            hold_elapsed=max(0.,float(data.time)-(len(path)-1)*args.segment_s)
+            if args.routed_finger_feedback:
+                proposal_targets=wbc.qref[finger_qadr].copy()
+                wbc.qref[finger_qadr]=base_finger_targets
+                phase='pinch_dressing' if segment==len(path)-1 and k==per_segment else 'approach'
+                contact_flags=(bool(evidence[0]),bool(evidence[1] and current_normal_cosine is not None),
+                               bool(evidence[2]),bool(evidence[3]))
+                specialist=HandProposal(float(data.time),proposal_targets,.95)
+            else:
+                phase='place_dressing' if (args.pinch or side_goals is not None) and segment>=5 else 'approach'
+                contact_flags=evidence
+                specialist=None
             decision = router.step(Observation(
-                time_s=float(data.time), phase='place_dressing' if (args.pinch or side_goals is not None) and segment >= 5 else 'approach', body_valid=True,
+                time_s=float(data.time), phase=phase, body_valid=True,
                 feet_supported=both_foot_support == steps if steps else True,
-                arm_pose_stable=False, hand_contacts=evidence,
-                hand_feedback_fresh=False, dressing_grasp_valid=current_grasp_valid),
-                data.qpos[finger_qadr].copy(), None)
+                arm_pose_stable=(hold_elapsed>=.25 and np.max(np.abs(data.qvel[lift_vadr]))<.5)
+                    if args.routed_finger_feedback else False,
+                hand_contacts=contact_flags,
+                hand_feedback_fresh=args.routed_finger_feedback,
+                dressing_grasp_valid=current_grasp_valid),
+                base_finger_targets if args.routed_finger_feedback else data.qpos[finger_qadr].copy(), specialist)
             router_modes[decision.mode.value] += 1
+            if decision.mode == Mode.HAND and first_hand_specialist_time_s is None:
+                first_hand_specialist_time_s=float(data.time)
+            max_specialist_weight=max(max_specialist_weight,decision.specialist_weight)
+            if args.routed_finger_feedback:wbc.qref[finger_qadr]=decision.finger_targets_rad
             ctrl, _, _ = wbc.solve(data)
             data.ctrl[:] = ctrl
             for _ in range(interval):
@@ -301,12 +361,16 @@ for segment, k, count in schedule:
                         current_normal_cosine = cosine
                         current_grasp_valid = cosine < -.5
                 if current_grasp_valid and pad_relative_targets is None and args.pad_relative_gain:
-                    pad_relative_targets={digit:data.xpos[bid].copy()-data.xpos[pad_body].copy()
+                    pad_R=data.xmat[pad_body].reshape(3,3)
+                    pad_relative_targets={digit:(pad_R.T@(data.xpos[bid]-data.xpos[pad_body])
+                                                 if args.pad_frame_relative else data.xpos[bid].copy()-data.xpos[pad_body].copy())
                                           for digit,(_,_,bid) in balance_joints.items()}
+                    pad_relative_targets['thumb'][0]+=args.thumb_inward_m
                 opposed_run = opposed_run+1 if current_grasp_valid else 0
                 opposed_steps += int(current_grasp_valid)
                 longest_opposed_run = max(longest_opposed_run, opposed_run)
                 if data.time >= (len(path)-1)*args.segment_s+args.hold_s-.5:
+                    last_half_steps += 1
                     opposed_last_half_second += int(current_grasp_valid)
                 both_foot_support += int(supported == {'g1_a','g1_b'})
             max_joint_error = max(max_joint_error, float(np.max(np.abs(
@@ -329,6 +393,10 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
           'force_balance_gain_m_per_n': args.force_balance_gain_m_per_n,
           'pad_relative_gain': args.pad_relative_gain,
           'pad_lift_command_m': args.pad_lift_m,
+          'lift_start_s': args.lift_start_s,
+          'dressing_normal_goal_n': args.dressing_normal_goal_n,
+          'thumb_inward_m': args.thumb_inward_m,
+          'lift_arm_only': args.lift_arm_only,
           'peak_pad_vertical_lift_m': peak_pad_vertical_lift_m,
           'final_pad_vertical_lift_m': float(data.xpos[pad_body,2]-pad_start[2]),
           'max_relative_joint_offset_rad': max_relative_joint_offset_rad,
@@ -353,10 +421,14 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
                                                         if opposition_cosines else None),
           'opposed_contact_total_s': opposed_steps*float(model.opt.timestep),
           'longest_continuous_opposed_contact_s': longest_opposed_run*float(model.opt.timestep),
-          'opposed_contact_fraction_final_half_second': opposed_last_half_second/max(1,round(.5/model.opt.timestep)),
+          'opposed_contact_fraction_final_half_second': opposed_last_half_second/max(1,last_half_steps),
           'max_pad_center_displacement_m': max_pad_displacement,
           'router_observer_mode_counts': router_modes,
-          'router_output_actuated': False,
+          'router_output_actuated': args.routed_finger_feedback,
+          'router_first_hand_specialist_time_s': first_hand_specialist_time_s,
+          'router_max_specialist_weight': max_specialist_weight,
+          'hand_specialist_type': 'analytic_pad_relative_jacobian_feedback' if args.routed_finger_feedback else None,
+          'pad_frame_relative': args.pad_frame_relative,
           'final_pad_center_m': data.xpos[model.body('dressing_pad').id].tolist(),
           'final_thumb_tip_m': data.xpos[model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id].tolist(),
           'final_thumb_goal_error_m': (float(np.linalg.norm(

@@ -46,9 +46,10 @@ class Decision:
 class HandExpertRouter:
     """Blend a hand expert in only after contact and posture are stable."""
 
-    FINE_PHASES = frozenset({'place_dressing', 'wrap', 'secure_end'})
+    FINE_PHASES = frozenset({'pinch_dressing', 'place_dressing', 'wrap', 'secure_end'})
     # Order: A-left support, A-right dressing, B-left spool, B-right guide.
     REQUIRED_CONTACTS = {
+        'pinch_dressing': (1,),
         'place_dressing': (0, 1),
         'wrap': (0, 1, 2, 3),
         'secure_end': (0, 1, 3),
@@ -82,8 +83,8 @@ class HandExpertRouter:
             raise ValueError('Four per-hand contact booleans are required')
         required = self.REQUIRED_CONTACTS.get(obs.phase, ())
         contact_ready = all(obs.hand_contacts[i] for i in required)
-        grasp_ready = obs.dressing_grasp_valid if obs.phase in self.FINE_PHASES else True
-        support_ready = obs.forearm_support_valid if obs.phase in self.FINE_PHASES else True
+        grasp_ready = obs.dressing_grasp_valid if obs.phase in {'place_dressing','wrap','secure_end'} else True
+        support_ready = obs.forearm_support_valid if obs.phase in {'place_dressing','wrap','secure_end'} else True
         stable = (obs.body_valid and obs.feet_supported and obs.arm_pose_stable
                   and contact_ready and grasp_ready and support_ready)
         if stable:

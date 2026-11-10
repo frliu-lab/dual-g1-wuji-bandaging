@@ -16,6 +16,7 @@ class JointWBC:
   self.disabled_pressure_agents=set();self.backend='CLARABEL';self.force_control_indices=set();self.hard_hand_indices=set();self.world_force_targets={};self.world_force_command={};self.last_tau=np.zeros(m.nu)
   self.forearm_contact_force_limit_n=None
   self.forearm_finger_force_limit_n=None
+  self.dressing_contact_normal_goal_n=None
   self.hand_position_mode=False;self.hand_indices=np.array([i for i in range(m.nu) if '/wuji_' in m.actuator(i).name]);self.hand_commands=np.zeros(m.nu);self.hand_tau_correction=np.zeros(m.nu);self.hand_admittance_offset=np.zeros(m.nu);self.last_pad_force_targets={}
   self.pressure_cmd={};self.pressure_time=None
   self.reference_data=mujoco.MjData(m);palm_names=palm_names or ('g1_a/wuji_right/r_wrist','g1_b/wuji_left/l_wrist');self.palm_ids=[m.body(name).id for name in palm_names];self.task_dim=6*len(self.palm_ids);self.act_qadr=np.array([m.jnt_qposadr[j] for j in m.actuator_trnid[:,0]]);self.act_vadr=np.array([m.jnt_dofadr[j] for j in m.actuator_trnid[:,0]]);self.act_gear=m.actuator_gear[:,0].copy()
@@ -111,6 +112,17 @@ class JointWBC:
   for k,(ga,gb) in enumerate(ids):
    if m.geom(ga).name=='floor' or m.geom(gb).name=='floor':
     measured=np.zeros(6);mujoco.mj_contactForce(m,d,self.contact_indices[k],measured);goals[k*3:k*3+3]=measured[:3];forceweight[k*3:k*3+3]=.3
+  if self.dressing_contact_normal_goal_n is not None:
+   if not np.isfinite(self.dressing_contact_normal_goal_n) or self.dressing_contact_normal_goal_n<0:
+    raise ValueError('Dressing contact normal goal must be finite and nonnegative')
+   dressing_contacts={digit:[] for digit in ('thumb','index')}
+   for k,(ga,gb) in enumerate(ids):
+    if 'dressing_pad_contact' not in (m.geom(ga).name,m.geom(gb).name):continue
+    names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
+    for digit in dressing_contacts:
+     if any(n.startswith(f'g1_a/wuji_right/r_{digit}_') for n in names):dressing_contacts[digit].append(k)
+   for entries in dressing_contacts.values():
+    for k in entries:goals[k*3]=self.dressing_contact_normal_goal_n/len(entries);forceweight[k*3]=5.
   pad_contacts={robot:[] for robot in ('g1_a','g1_b')}
   for k,(geom_a,geom_b) in enumerate(ids):
    names=[m.body(m.geom_bodyid[g]).name for g in (geom_a,geom_b)]

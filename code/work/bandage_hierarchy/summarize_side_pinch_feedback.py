@@ -14,9 +14,14 @@ for path in sorted(paths):
          'path_index':d['side_pinch_path_index'],
          'force_balance_gain_m_per_n':d.get('force_balance_gain_m_per_n',0.),
          'pad_relative_gain':d.get('pad_relative_gain',0.),
+         'pad_frame_relative':d.get('pad_frame_relative',False),
+         'dressing_normal_goal_n':d.get('dressing_normal_goal_n'),
+         'thumb_inward_m':d.get('thumb_inward_m',0.),
          'pad_lift_command_m':d.get('pad_lift_command_m',0.),
          'peak_pad_vertical_lift_m':d.get('peak_pad_vertical_lift_m'),
          'final_pad_vertical_lift_m':d.get('final_pad_vertical_lift_m'),
+         'router_output_actuated':d.get('router_output_actuated',False),
+         'router_first_hand_specialist_time_s':d.get('router_first_hand_specialist_time_s'),
          'hold_s':d.get('hold_s',1.),
          'palm_rotation_weight':d.get('palm_rotation_weight',10.),
          'wrist_roll_offset_rad':d.get('wrist_roll_offset_rad',0.),
@@ -25,14 +30,20 @@ for path in sorted(paths):
          'deep_robot_contact_samples':d['deep_nonfloor_robot_contact_samples'],
          'max_pad_displacement_m':d['max_pad_center_displacement_m'],
          'longest_opposed_contact_s':d['longest_continuous_opposed_contact_s'],
-         'opposed_final_half_second_fraction':d['opposed_contact_fraction_final_half_second'],
+         'opposed_final_half_second_fraction':min(1.,d['opposed_contact_fraction_final_half_second']),
          'peak_thumb_force_n':d['peak_digit_normal_force_n']['thumb'],
          'peak_index_force_n':d['peak_digit_normal_force_n']['index'],
          'index_goal_error_m':d['final_fingertip_position_error_m']['g1_a/wuji_right/r_index_finger_tip_sensor_frame'],
          'thumb_goal_error_m':d['final_thumb_goal_error_m']}
     row['provisional_contact_gate_pass']=(row['foot_support_fraction']>=.999 and
         row['deep_robot_contact_samples']==0 and row['max_pad_displacement_m']<.005 and
-        row['longest_opposed_contact_s']>=2. and row['opposed_final_half_second_fraction']>=.9)
+        row['longest_opposed_contact_s']>=2. and row['opposed_final_half_second_fraction']>=.9 and
+        not row['pad_lift_command_m'])
+    row['loaded_grasp_gate_pass']=(row['foot_support_fraction']>=.999 and
+        row['deep_robot_contact_samples']==0 and row['pad_lift_command_m']>=.005 and
+        row['final_pad_vertical_lift_m'] is not None and row['final_pad_vertical_lift_m']>=.003 and
+        row['max_pad_displacement_m']<.01 and row['longest_opposed_contact_s']>=2. and
+        row['opposed_final_half_second_fraction']>=.9)
     cases.append(row)
 report={'scope':'Simulation-only comparison on an isolated smaller-pad variant; no lift, cloth or complete bandaging',
         'provisional_contact_gate':{'foot_support_fraction_min':.999,
@@ -41,8 +52,10 @@ report={'scope':'Simulation-only comparison on an isolated smaller-pad variant; 
                                     'longest_opposed_contact_s_min':2.,
                                     'opposed_final_half_second_fraction_min':.9},
         'cases':cases,
-        'passed_cases':sum(x['provisional_contact_gate_pass'] for x in cases)}
+        'passed_cases':sum(x['provisional_contact_gate_pass'] for x in cases),
+        'loaded_grasp_passed_cases':sum(x['loaded_grasp_gate_pass'] for x in cases)}
 (OUT/'pad_side_pinch_feedback_comparison.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps({'cases':len(cases),'passed':report['passed_cases'],
+                  'loaded_grasp_passed':report['loaded_grasp_passed_cases'],
                   'best_continuous_s':max(x['longest_opposed_contact_s'] for x in cases),
                   'best_final_half_second_fraction':max(x['opposed_final_half_second_fraction'] for x in cases)}))

@@ -41,3 +41,5 @@
 新增[敷料相对位姿反馈试验](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_hold2p0_50hz_0.6s.json)：2 秒保持的连续相向接触延长至 1.829 秒，末段比例 90%；延长到[2.5 秒](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_hold2p5_50hz_0.6s.json)后接触失效。按[12 组更新汇总](media/bandage_v0/pad_side_pinch_feedback_comparison.json)仍为 0 组通过，敷料未离台，不可称为成功抓取。
 
 [20 mm 离台诊断](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_lift0p02_hold2p0_50hz_0.6s.json)中，敷料最大仅上升 3.73 mm，末态回到台面，接触失效且横移约 19 mm。更新汇总为 13 组、0 组通过；这是抓持失败的反证。
+
+已新增[实际路由的解析式手指反馈](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_routed_hold2p5_50hz_0.6s.json)：WBC 在仿真中持续运行，手部模式 83 个控制周期，静态接触连续 2.201 秒，末段接触比例 100%。这只通过**未离台接触**门槛；[延迟 5 mm 抬腕试验](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_lift0p005_routed_liftstart1p2_hold2p5_50hz_0.6s.json)失去敷料。最新[21 组汇总](media/bandage_v0/pad_side_pinch_feedback_comparison.json)为未离台 1 组通过、带负载离台 0 组通过。策略尚不是训练好的 Wuji 手部模型，也不是完整四手包扎。
