@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser()
 parser.add_argument('--candidate-path',action='store_true')
+parser.add_argument('--candidate-root-x',type=float,default=-.3)
 parser.add_argument('--reach-fraction',type=float,default=1.)
 parser.add_argument('--segment-s',type=float,default=None)
 parser.add_argument('--index-extra',type=float,default=0.)
@@ -33,7 +34,7 @@ from support_quality import SupportQualityMonitor, SupportSample
 old = mujoco.MjModel.from_xml_path(str(OUT / 'scene.xml'))
 path_old = np.load(OUT / 'forearm_support_rrt.npz')['qpos']
 scene = ET.parse(OUT / 'dynamic_forearm_variant.xml').getroot()
-scene.find(".//body[@name='g1_a/pelvis']").set('pos', '-.3 0 .8' if args.candidate_path else '-.58 0 .8')
+scene.find(".//body[@name='g1_a/pelvis']").set('pos', f'{args.candidate_root_x} 0 .8' if args.candidate_path else '-.58 0 .8')
 scene.find(".//geom[@name='manikin_forearm']").set('mass',str(args.forearm_mass_kg))
 if args.armrest:
     pad_pos=('.04 -.365' if args.armrest_profile=='side' else '-.08 -.34')
@@ -54,7 +55,9 @@ def remap(q):
         result[model.jnt_qposadr[new_id]:model.jnt_qposadr[new_id]+n] = q[old.jnt_qposadr[j]:old.jnt_qposadr[j]+n]
     return result
 
-path = (np.load(OUT/'dynamic_palm_support_rrt.npz')['qpos'] if args.candidate_path
+path_file=(OUT/'dynamic_palm_support_rrt.npz' if args.candidate_root_x==-.3 else
+           OUT/('dynamic_palm_support_rrt_root_'+str(args.candidate_root_x).replace('-','m').replace('.','p')+'.npz'))
+path = (np.load(path_file)['qpos'] if args.candidate_path
         else np.array([remap(q) for q in path_old]))
 if args.candidate_path:
     path[-1]=path[0]+args.reach_fraction*(path[-1]-path[0])
@@ -252,7 +255,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'errors': errors, 'trace': trace}
 report = {'scope': ('Dynamic training-forearm WBC counterfactual for a static palm candidate; no validity claim' if args.candidate_path else
                     'Dynamic training-forearm WBC counterfactual; provisional path is pinky-only and rejected as humanlike support'),
-          'forearm_mass_kg':args.forearm_mass_kg, 'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'easing':args.easing,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
+          'forearm_mass_kg':args.forearm_mass_kg, 'candidate_root_x_m':args.candidate_root_x if args.candidate_path else None,'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'easing':args.easing,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
 name='dynamic_forearm_support_comparison.json'
 if args.candidate_path:
     name='dynamic_palm_support_wbc_comparison'
@@ -266,6 +269,7 @@ if args.candidate_path:
     if args.forearm_mass_kg!=.8:name+='_mass'+str(args.forearm_mass_kg).replace('.','p')
     if args.armrest:name+='_armrest'+args.armrest_profile+str(args.armrest_top_z).replace('.','p')
     if args.easing!='cubic':name+='_easing'+args.easing
+    if args.candidate_root_x!=-.3:name+='_root'+str(args.candidate_root_x).replace('-','m').replace('.','p')
     name+='.json'
 (OUT/name).write_text(json.dumps(report, indent=2), encoding='utf8')
 print(json.dumps({k: {j:v for j,v in s.items() if j!='trace'} for k,s in out.items()}, indent=2))

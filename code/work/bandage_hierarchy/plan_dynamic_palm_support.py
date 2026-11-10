@@ -1,5 +1,6 @@
 """Collision-screened RRT path to the isolated palm-only support pose."""
 import json
+import argparse
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -8,10 +9,14 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
-stem='dynamic_palm_support_search_root_m0p3_pinky0p5'
+parser=argparse.ArgumentParser()
+parser.add_argument('--root-x',type=float,default=-.3)
+args=parser.parse_args()
+suffix=str(args.root_x).replace('-','m').replace('.','p')
+stem='dynamic_palm_support_search_root_'+suffix+'_pinky0p5'
 candidate=np.load(OUT/f'{stem}_candidate.npz')['qpos'].copy()
 scene=ET.parse(OUT/'dynamic_forearm_variant.xml').getroot()
-scene.find(".//body[@name='g1_a/pelvis']").set('pos','-.3 0 .8')
+scene.find(".//body[@name='g1_a/pelvis']").set('pos',f'{args.root_x} 0 .8')
 model=mujoco.MjModel.from_xml_string(ET.tostring(scene,encoding='unicode'))
 data=mujoco.MjData(model)
 report_search=json.loads((OUT/f'{stem}.json').read_text(encoding='utf8'))
@@ -24,7 +29,7 @@ for j in range(old.njnt):
     k=model.joint(old.joint(j).name).id
     n=7 if old.jnt_type[j]==mujoco.mjtJoint.mjJNT_FREE else (4 if old.jnt_type[j]==mujoco.mjtJoint.mjJNT_BALL else 1)
     base[model.jnt_qposadr[k]:model.jnt_qposadr[k]+n]=old_q[old.jnt_qposadr[j]:old.jnt_qposadr[j]+n]
-base[model.joint('g1_a/floating_base').qposadr[0]]=-.3
+base[model.joint('g1_a/floating_base').qposadr[0]]=args.root_x
 base[model.joint('training_elbow_hinge').qposadr[0]]=.25
 for n in names[-2:]:
     j=model.joint(n).id;a=int(model.jnt_qposadr[j]);lo,hi=model.jnt_range[j]
@@ -108,10 +113,10 @@ if found is not None:
         if j>i+1 and edge(found[i],found[j]):found=found[:i+1]+found[j:]
     path=np.repeat(base[None,:],len(found),axis=0)
     for row,q in zip(path,found):row[qa]=q
-    np.savez_compressed(OUT/'dynamic_palm_support_rrt.npz',qpos=path)
+    np.savez_compressed(OUT/f'dynamic_palm_support_rrt_root_{suffix}.npz',qpos=path)
 report={'scope':'Static path at prescribed elbow angle .25 rad; no dynamic execution claim',
-        'start_clear':start_ok,'safe_start_search_samples':safe_start_search,'start_deep_contacts':start_deep,'goal_clear':goal_ok,'found_path':found is not None,
+        'root_x_m':args.root_x,'start_clear':start_ok,'safe_start_search_samples':safe_start_search,'start_deep_contacts':start_deep,'goal_clear':goal_ok,'found_path':found is not None,
         'waypoints':len(found) if found is not None else 0,'collision_checks':checks,
         'iterations':iterations,'dense_recheck_passed':all(edge(a,b) for a,b in zip(found,found[1:])) if found is not None else False}
-(OUT/'dynamic_palm_support_rrt_report.json').write_text(json.dumps(report,indent=2),encoding='utf8')
+(OUT/f'dynamic_palm_support_rrt_root_{suffix}_report.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps(report))

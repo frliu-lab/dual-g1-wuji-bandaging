@@ -38,6 +38,7 @@ for path in files:
         'follow_start_fraction':report.get('follow_start_fraction',1.),
         'force_feedback_gain':report.get('force_feedback_gain',0.),
         'forearm_mass_kg':report.get('forearm_mass_kg',.8),
+        'candidate_root_x_m':report.get('candidate_root_x_m',-.3),
         'armrest_variant':report.get('armrest_variant',False),
         'forearm_solref_time_s':report.get('forearm_solref_time_s'),
         'elbow_reduction_rad':reduction,'palm_impulse_share':palm/max(total,1e-9),
