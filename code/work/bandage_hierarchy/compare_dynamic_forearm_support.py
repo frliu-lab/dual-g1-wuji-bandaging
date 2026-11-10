@@ -27,7 +27,15 @@ parser.add_argument('--armrest',action='store_true')
 parser.add_argument('--armrest-top-z',type=float,default=.795)
 parser.add_argument('--armrest-profile',choices=('side','proximal'),default='side')
 parser.add_argument('--easing',choices=('cubic','frontloaded'),default='cubic')
+parser.add_argument('--abort-on-support-fault',action='store_true')
+parser.add_argument('--abort-mode',choices=('hold','retreat'),default='hold')
+parser.add_argument('--wbc-forearm-force-cap-n',type=float,default=None)
+parser.add_argument('--wbc-finger-force-cap-n',type=float,default=None)
 args=parser.parse_args()
+for cap_name in ('wbc_forearm_force_cap_n', 'wbc_finger_force_cap_n'):
+    cap=getattr(args,cap_name)
+    if cap is not None and (not np.isfinite(cap) or cap <= 0):
+        parser.error(f'{cap_name} must be finite and positive')
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
 from support_quality import SupportQualityMonitor, SupportSample
@@ -146,6 +154,8 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
     data.qpos[:] = path[0]
     mujoco.mj_forward(model, data)
     wbc = JointWBC(model, data.qpos.copy(), palm_names=palms, contact_filter=contact_filter)
+    if condition!='no_contact':wbc.forearm_contact_force_limit_n=args.wbc_forearm_force_cap_n
+    if condition!='no_contact':wbc.forearm_finger_force_limit_n=args.wbc_finger_force_cap_n
     trace = []
     errors = []
     impulse_by_body = {}
@@ -160,9 +170,17 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
     support_monitor=SupportQualityMonitor()
     online_valid_steps=0
     first_online_valid_time=None
+    abort_time=None
+    abort_reference=None
     initial = float(data.qpos[qadr])
     for k in range(round(duration * hz)):
-        if condition != 'no_contact':
+        if abort_time is not None:
+            if args.abort_mode=='hold':wbc.qref[:]=abort_reference
+            else:
+                retreat_u=min(1.,max(0.,(data.time-abort_time)/1.0))
+                retreat_u=retreat_u*retreat_u*(3-2*retreat_u)
+                wbc.qref[:]=(1-retreat_u)*abort_reference+retreat_u*path[0]
+        elif condition != 'no_contact':
             segment_steps=round(segment_s*hz)
             segment = min(k // segment_steps + 1, len(path) - 1)
             u = min(1., (k % segment_steps + 1) / segment_steps) if k < (len(path)-1)*segment_steps else 1.
@@ -227,6 +245,10 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
                 deep_nonfloor_contact=frame_deep))
             online_valid_steps+=int(online_valid)
             if online_valid and first_online_valid_time is None:first_online_valid_time=float(data.time)
+            if (args.abort_on_support_fault and condition!='no_contact'
+                    and abort_time is None and support_monitor.faults):
+                abort_time=float(data.time)
+                abort_reference=data.qpos.copy()
             trace.append({'time_s': float(data.time), 'elbow_rad': float(data.qpos[qadr]),
                           'elbow_speed_rad_s': float(data.qvel[vadr]),
                           'forearm_center_m': data.geom_xpos[geom_id].tolist(),
@@ -250,6 +272,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'online_support_quality_final':support_monitor.last_report,
         'online_support_valid_fraction':online_valid_steps/max(1,len(trace)),
         'first_online_support_valid_time_s':first_online_valid_time,
+        'support_fault_abort_time_s':abort_time,
         'a_left_impulse_by_hand_body_ns': impulse_by_body,
         'final_half_second_impulse_by_hand_body_ns':last_half_impulse_by_body,
         'foot_support_fraction': foot_support/max(1, len(trace)*interval),
@@ -258,7 +281,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'errors': errors, 'trace': trace}
 report = {'scope': ('Dynamic training-forearm WBC counterfactual for a static palm candidate; no validity claim' if args.candidate_path else
                     'Dynamic training-forearm WBC counterfactual; provisional path is pinky-only and rejected as humanlike support'),
-          'forearm_mass_kg':args.forearm_mass_kg, 'candidate_root_x_m':args.candidate_root_x if args.candidate_path else None,'candidate_initial_elbow_rad':args.candidate_elbow_angle if args.candidate_path else None,'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'easing':args.easing,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
+          'forearm_mass_kg':args.forearm_mass_kg, 'candidate_root_x_m':args.candidate_root_x if args.candidate_path else None,'candidate_initial_elbow_rad':args.candidate_elbow_angle if args.candidate_path else None,'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'easing':args.easing,'abort_on_support_fault':args.abort_on_support_fault,'abort_mode':args.abort_mode,'wbc_forearm_force_cap_n':args.wbc_forearm_force_cap_n,'wbc_finger_force_cap_n':args.wbc_finger_force_cap_n,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
 name='dynamic_forearm_support_comparison.json'
 if args.candidate_path:
     name='dynamic_palm_support_wbc_comparison'
@@ -274,6 +297,9 @@ if args.candidate_path:
     if args.easing!='cubic':name+='_easing'+args.easing
     if args.candidate_root_x!=-.3:name+='_root'+str(args.candidate_root_x).replace('-','m').replace('.','p')
     if args.candidate_elbow_angle!=.25:name+='_elbow'+str(args.candidate_elbow_angle).replace('.','p')
+    if args.abort_on_support_fault:name+='_abort'+args.abort_mode
+    if args.wbc_forearm_force_cap_n is not None:name+='_wbcforce'+str(args.wbc_forearm_force_cap_n).replace('.','p')
+    if args.wbc_finger_force_cap_n is not None:name+='_wbcfinger'+str(args.wbc_finger_force_cap_n).replace('.','p')
     name+='.json'
 (OUT/name).write_text(json.dumps(report, indent=2), encoding='utf8')
 print(json.dumps({k: {j:v for j,v in s.items() if j!='trace'} for k,s in out.items()}, indent=2))

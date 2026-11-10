@@ -18,14 +18,14 @@ for path in files:
     last=test.get('final_half_second_impulse_by_hand_body_ns',{})
     last_total=sum(last.values())
     last_palm=last.get('g1_a/wuji_left/l_wrist',0.)
-    last_index=sum(v for k,v in last.items() if '/l_index_' in k)
+    last_fingers=sum(v for k,v in last.items() if '_finger_' in k or '/l_thumb_' in k)
     reduction=baseline['final_half_second_mean_abs_elbow_rad']-test['final_half_second_mean_abs_elbow_rad']
     gate={'elbow_reduction_at_least_0p05_rad':reduction>=.05,
           'matched_full_duration':baseline['simulated_time_s']>=3.79 and test['simulated_time_s']>=3.79,
           'baseline_collision_free':baseline['deep_nonfloor_robot_contact_count']==0 and baseline['finite_state'] and not baseline['errors'],
           'final_contact_at_least_90_percent':test['final_half_second_contact_fraction']>=.9,
           'last_half_palm_impulse_majority':last_palm/max(last_total,1e-9)>=.7,
-          'last_half_index_impulse_below_10_percent':last_index/max(last_total,1e-9)<.1,
+          'last_half_all_finger_impulse_below_10_percent':last_fingers/max(last_total,1e-9)<.1,
           'peak_force_below_20_n':test['peak_a_left_forearm_force_n']<20.,
           'no_forearm_overlift_beyond_zero_rad':test['final_elbow_rad']>=0.,
           'both_robots_foot_supported':test['foot_support_fraction']>=.99,
@@ -35,9 +35,13 @@ for path in files:
         'index_extra_rad':report.get('index_extra_rad',0.),'segment_s':report.get('segment_s',1.2),
         'forearm_follow_gain':report.get('forearm_follow_gain',0.),
         'easing':report.get('easing','cubic'),
+        'abort_on_support_fault':report.get('abort_on_support_fault',False),
+        'abort_mode':report.get('abort_mode'),
         'follow_start_fraction':report.get('follow_start_fraction',1.),
         'force_feedback_gain':report.get('force_feedback_gain',0.),
         'forearm_mass_kg':report.get('forearm_mass_kg',.8),
+        'wbc_forearm_force_cap_n':report.get('wbc_forearm_force_cap_n'),
+        'wbc_finger_force_cap_n':report.get('wbc_finger_force_cap_n'),
         'candidate_root_x_m':report.get('candidate_root_x_m',-.3),
         'candidate_initial_elbow_rad':report.get('candidate_initial_elbow_rad',.25),
         'armrest_variant':report.get('armrest_variant',False),
@@ -45,7 +49,7 @@ for path in files:
         'elbow_reduction_rad':reduction,'palm_impulse_share':palm/max(total,1e-9),
         'mount_impulse_share':mount/max(total,1e-9),'index_impulse_share':index/max(total,1e-9),
         'last_half_palm_impulse_share':last_palm/max(last_total,1e-9),
-        'last_half_index_impulse_share':last_index/max(last_total,1e-9),
+        'last_half_all_finger_impulse_share':last_fingers/max(last_total,1e-9),
         'peak_forearm_force_n':test['peak_a_left_forearm_force_n'],
         'online_support_valid_fraction':test.get('online_support_valid_fraction'),
         'final_half_second_mean_force_n':test['final_half_second_mean_force_n'],

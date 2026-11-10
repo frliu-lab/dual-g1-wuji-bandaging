@@ -35,3 +35,5 @@
 更近的 A 站位增加了[−0.25 m 动态对照](media/bandage_v0/dynamic_palm_support_wbc_comparison_rootm0p25.json)和[−0.20 m 路径失败检查](media/bandage_v0/dynamic_palm_support_rrt_root_m0p2_report.json)。前者峰值力和中指承力仍不合格，且进入幅度缩小 10% 即失去接触；后者只有静态终态、未找到路径。[最新 23 组汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)仍为 0 组达标。
 
 把假人肘角初态设为自然下垂后的 0.35 rad 再规划，也没有修好接触：[闭环报告](media/bandage_v0/dynamic_palm_support_wbc_comparison_rootm0p25_elbow0p35.json)显示末段仍由手指承力、峰值约 28 N。[更新的 24 组汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)为 0 组通过；静态掌面接触不能替代动态整手验证。
+
+最新 35 组托臂仿真汇总中，2 组通过暂定子技能门槛：[0.8 kg / 12 N 总力约束 / 2 N 手指约束](media/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_wbcforce12p0_wbcfinger2p0.json)和[0.5 kg / 10 N / 2 N](media/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_mass0p5_wbcforce10p0_wbcfinger2p0.json)。[1.2 kg / 14 N / 2 N](media/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_mass1p2_wbcforce14p0_wbcfinger2p0.json)因峰值力 31.43 N 未通过。详见[更新汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)。这仅是条件仿真的托臂子技能，不是完整包扎或实机验收。
