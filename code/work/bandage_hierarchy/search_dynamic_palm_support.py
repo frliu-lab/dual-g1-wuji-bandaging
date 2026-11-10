@@ -17,6 +17,7 @@ parser=argparse.ArgumentParser()
 parser.add_argument('--root-x',type=float,default=-.58)
 parser.add_argument('--pinky-extra',type=float,default=0.)
 parser.add_argument('--elbow-angle',type=float,default=.25)
+parser.add_argument('--min-contact-x',type=float,default=.02)
 args=parser.parse_args()
 scene = ET.parse(OUT/'dynamic_forearm_variant.xml').getroot()
 scene.find(".//body[@name='g1_a/pelvis']").set('pos', f'{args.root_x} 0 .8')
@@ -86,7 +87,7 @@ def evaluate(x, detail=False):
                 finger_contacts.append((next(b for b in bodies if b.startswith('g1_a/wuji_left/')), float(c.dist)))
     # Seeking a shallow palm contact while excluding any deep nonfloor robot collision.
     objective = 400*abs(dist+.0005) + 80*sum(max(0.,-.003-v['distance_m']) for v in deep)
-    objective += 20*max(0.,.02-closest[3])
+    objective += 20*max(0.,args.min_contact_x-closest[3])
     objective += .4*len(finger_contacts)+100*sum(max(0.,-v) for _,v in finger_contacts)
     objective += .08*float(np.linalg.norm(x-base[qadr]))
     if detail:
@@ -107,10 +108,10 @@ candidate = evaluate(opt.x, True)
 eligible = bool(candidate['palm_contact_distances_m'] and
                 not candidate['deep_nonfloor_contact_distances_m'] and
                 not candidate['finger_forearm_contacts'] and
-                candidate['palm_forearm_closest_points_m'][3] >= .02 and
+                candidate['palm_forearm_closest_points_m'][3] >= args.min_contact_x and
                 abs(candidate['palm_forearm_distance_m']) < .003)
 report = {'scope':'Static dynamic-forearm palm geometry search at prescribed elbow angle; no force, motion path, or WBC claim',
-          'random_seed':rng,'a_root_x_m':args.root_x,'pinky_extra_rad':args.pinky_extra,'target_elbow_rad':args.elbow_angle,'checks':checks,'optimizer_success':bool(opt.success),
+          'random_seed':rng,'a_root_x_m':args.root_x,'pinky_extra_rad':args.pinky_extra,'target_elbow_rad':args.elbow_angle,'min_contact_x_m':args.min_contact_x,'checks':checks,'optimizer_success':bool(opt.success),
           'baseline':baseline,'candidate':candidate,'eligible_palm_contact':eligible}
 stem='dynamic_palm_support_search_root_'+str(args.root_x).replace('-','m').replace('.','p')
 if args.pinky_extra:stem+='_pinky'+str(args.pinky_extra).replace('-','m').replace('.','p')

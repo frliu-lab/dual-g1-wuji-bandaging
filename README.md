@@ -33,3 +33,5 @@
 [掌托正面诊断图](media/bandage_v0/dynamic_palm_candidate_front.png)和[俯视诊断图](media/bandage_v0/dynamic_palm_candidate_top.png)展示当前候选的接触姿态。前段加速进入路径的峰值力和食指受力进一步恶化；图像仅供查找失败机理，不是合格动作演示。
 
 更近的 A 站位增加了[−0.25 m 动态对照](media/bandage_v0/dynamic_palm_support_wbc_comparison_rootm0p25.json)和[−0.20 m 路径失败检查](media/bandage_v0/dynamic_palm_support_rrt_root_m0p2_report.json)。前者峰值力和中指承力仍不合格，且进入幅度缩小 10% 即失去接触；后者只有静态终态、未找到路径。[最新 23 组汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)仍为 0 组达标。
+
+把假人肘角初态设为自然下垂后的 0.35 rad 再规划，也没有修好接触：[闭环报告](media/bandage_v0/dynamic_palm_support_wbc_comparison_rootm0p25_elbow0p35.json)显示末段仍由手指承力、峰值约 28 N。[更新的 24 组汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)为 0 组通过；静态掌面接触不能替代动态整手验证。
