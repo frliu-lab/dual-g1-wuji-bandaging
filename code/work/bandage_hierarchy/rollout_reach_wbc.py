@@ -1,4 +1,4 @@
-"""Closed-loop four-arm reach to the precontact seed; no object grasp or bandaging."""
+"""Simulation-only four-arm reach and contact pilots; no validated grasp or bandaging."""
 import argparse
 import json
 import sys
@@ -20,12 +20,28 @@ parser.add_argument('--hz', type=int, default=50)
 parser.add_argument('--segment-s', type=float, default=1.0)
 parser.add_argument('--hold-s', type=float, default=1.0)
 parser.add_argument('--video', action='store_true')
+parser.add_argument('--camera', choices=('overview','hand'), default='overview')
 parser.add_argument('--pinch', action='store_true', help='Append static thumb-first dressing contact seed')
 parser.add_argument('--side-pinch-path-index', type=int, default=None,
                     help='Use isolated smaller-pad variant and append a checked RRT path')
+parser.add_argument('--force-balance-gain-m-per-n', type=float, default=0.,
+                    help='Simulation-only proportional finger adjustment during final hold')
+parser.add_argument('--palm-rotation-weight', type=float, default=10.)
+parser.add_argument('--wrist-roll-offset-rad', type=float, default=0.,
+                    help='Simulation-only smooth terminal wrist-roll offset')
+parser.add_argument('--wrist-roll-late-offset-rad', type=float, default=0.,
+                    help='Additional smooth wrist-roll offset in the second half of hold')
 args = parser.parse_args()
 if args.pinch and args.side_pinch_path_index is not None:
     parser.error('--pinch and --side-pinch-path-index are mutually exclusive')
+if args.force_balance_gain_m_per_n < 0 or (args.force_balance_gain_m_per_n and args.side_pinch_path_index is None):
+    parser.error('Force balance gain requires a side-pinch path and must be nonnegative')
+if args.palm_rotation_weight <= 0:
+    parser.error('Palm rotation weight must be positive')
+if abs(args.wrist_roll_offset_rad) > .15 or (args.wrist_roll_offset_rad and args.side_pinch_path_index is None):
+    parser.error('Wrist-roll offset requires side pinch and magnitude <= 0.15 rad')
+if abs(args.wrist_roll_late_offset_rad)>.10 or (args.wrist_roll_late_offset_rad and args.side_pinch_path_index is None):
+    parser.error('Late wrist-roll offset requires side pinch and magnitude <= 0.10 rad')
 
 scene_file = 'pad_side_pinch_variant.xml' if args.side_pinch_path_index is not None else 'scene.xml'
 model = mujoco.MjModel.from_xml_path(str(OUT / scene_file))
@@ -58,6 +74,15 @@ if args.side_pinch_path_index is not None:
     path = np.vstack([path, rrt[1:]])
     side_report = json.loads((OUT/'pad_side_pinch_scan.json').read_text(encoding='utf8'))
     side_goals = side_report['collision_refined_candidates'][args.side_pinch_path_index]['goals_m']
+gain_tag = str(args.force_balance_gain_m_per_n).replace('.', 'p')
+rotation_tag = f'_rot{str(args.palm_rotation_weight).replace(".", "p")}' if args.palm_rotation_weight != 10. else ''
+roll_tag = f'_roll{str(args.wrist_roll_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_offset_rad else ''
+late_tag = f'_late{str(args.wrist_roll_late_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_late_offset_rad else ''
+output_stem = (f'pad_side_pinch_balance_{args.side_pinch_path_index}_gain{gain_tag}'
+               if side_goals is not None and args.force_balance_gain_m_per_n else
+               f'pad_side_pinch_attempt_{args.side_pinch_path_index}' if side_goals is not None else
+               'pad_pinch_attempt' if args.pinch else 'four_arm_reach')
+output_stem += rotation_tag + roll_tag + late_tag
 if np.max(np.abs(path[0]-data.qpos)) > 1e-6:
     raise RuntimeError('IK seed and current scene initialization differ')
 
@@ -68,21 +93,34 @@ def robot_contact_only(m, c):
                for g in c.geom if g >= 0)
 
 wbc = JointWBC(model, data.qpos.copy(), palm_names=palms,
-               contact_filter=robot_contact_only)
+               contact_filter=robot_contact_only,
+               palm_rotation_weight=args.palm_rotation_weight)
 finger_qadr = np.array([int(model.jnt_qposadr[model.actuator_trnid[i, 0]])
                        for i in wbc.hand_indices], dtype=int)
+balance_joints = {}
+for digit in ('thumb', 'index'):
+    prefix = f'g1_a/wuji_right/r_{digit}_'
+    js = [j for j in range(model.njnt) if model.joint(j).name.startswith(prefix)]
+    balance_joints[digit] = (np.array([model.jnt_qposadr[j] for j in js],dtype=int),
+                             np.array([model.jnt_dofadr[j] for j in js],dtype=int),
+                             model.body(f'g1_a/wuji_right/r_{digit}_tip_sensor_frame' if digit=='thumb'
+                                        else 'g1_a/wuji_right/r_index_finger_tip_sensor_frame').id)
 router = HandExpertRouter(len(finger_qadr))
 contact_observations = np.zeros(4, dtype=int)
 router_modes = {mode.value: 0 for mode in Mode}
 digit_contact_steps = {'thumb': 0, 'index': 0, 'both': 0}
 peak_digit_force_n = {'thumb': 0., 'index': 0.}
+last_digit_forces = {'thumb': 0., 'index': 0.}
+max_balance_joint_offset_rad = 0.
 opposition_cosines = []
 current_grasp_valid = False
+current_normal_cosine = None
 opposed_steps = 0
 opposed_run = 0
 longest_opposed_run = 0
 opposed_last_half_second = 0
 max_pad_displacement = 0.
+contact_trace = []
 pad_body = model.body('dressing_pad').id
 pad_start = data.xpos[pad_body].copy()
 renderer = None
@@ -92,10 +130,16 @@ if args.video:
     model.vis.global_.offheight = 540
     renderer = mujoco.Renderer(model, height=540, width=960)
     camera = mujoco.MjvCamera()
-    camera.lookat[:] = [0, 0, .80]
-    camera.distance = 2.8
-    camera.azimuth = 90
-    camera.elevation = -18
+    if args.camera=='hand':
+        camera.lookat[:] = [-.38, -.44, .72]
+        camera.distance = .65
+        camera.azimuth = 115
+        camera.elevation = -24
+    else:
+        camera.lookat[:] = [0, 0, .80]
+        camera.distance = 2.8
+        camera.azimuth = 90
+        camera.elevation = -18
     visual = mujoco.MjvOption()
     visual.flags[mujoco.mjtVisFlag.mjVIS_TENDON] = 0
     visual.geomgroup[2] = 0
@@ -119,6 +163,7 @@ arm_qadr = [int(model.jnt_qposadr[j]) for j in range(model.njnt)
             if any(model.joint(j).name.startswith(f'{r}/{s}_') for r in ('g1_a','g1_b') for s in ('left','right'))
             and any(t in model.joint(j).name for t in ('shoulder','elbow','wrist'))
             and model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE]
+right_wrist_roll_qadr=int(model.joint('g1_a/right_wrist_roll_joint').qposadr[0])
 
 schedule = [(segment, k, per_segment) for segment in range(1, len(path))
             for k in range(per_segment)]
@@ -127,6 +172,23 @@ for segment, k, count in schedule:
         u = (k+1)/count
         ease = u*u*(3-2*u)
         wbc.qref[:] = (1-ease)*path[segment-1]+ease*path[segment]
+        if (args.wrist_roll_offset_rad or args.wrist_roll_late_offset_rad) and segment==len(path)-1 and k==per_segment:
+            hold_elapsed=max(0.,float(data.time)-(len(path)-1)*args.segment_s)
+            ramp=min(1.,hold_elapsed/.5)
+            late_ramp=min(1.,max(0.,hold_elapsed-1.)/.5)
+            wbc.qref[right_wrist_roll_qadr]+=args.wrist_roll_offset_rad*ramp+args.wrist_roll_late_offset_rad*late_ramp
+        if args.force_balance_gain_m_per_n and segment==len(path)-1 and k==per_segment:
+            imbalance=last_digit_forces['thumb']-last_digit_forces['index']
+            shift=float(np.clip(args.force_balance_gain_m_per_n*imbalance,-.004,.004))
+            for digit,(qa,va,bid) in balance_joints.items():
+                jac=np.zeros((3,model.nv))
+                mujoco.mj_jac(model,data,jac,None,data.xpos[bid],bid)
+                row=jac[1,va]
+                delta=row/(float(row@row)+1e-4)*shift
+                delta=np.clip(delta,-.12,.12)
+                wbc.qref[qa]+=delta
+                max_balance_joint_offset_rad=max(max_balance_joint_offset_rad,
+                                                 float(np.max(np.abs(delta))))
         try:
             evidence = hand_contacts(model, data)
             contact_observations += np.asarray(evidence, dtype=int)
@@ -183,12 +245,15 @@ for segment, k, count in schedule:
                     digit_contact_steps[digit] += int(force >= .05)
                     peak_digit_force_n[digit] = max(peak_digit_force_n[digit], force)
                 digit_contact_steps['both'] += int(all(f >= .05 for f in digit_forces.values()))
+                last_digit_forces = digit_forces.copy()
                 current_grasp_valid = False
+                current_normal_cosine = None
                 if all(f >= .05 for f in digit_forces.values()):
                     a,b = digit_normals['thumb'], digit_normals['index']
                     if np.linalg.norm(a)*np.linalg.norm(b) > 1e-8:
                         cosine = float(np.dot(a,b)/(np.linalg.norm(a)*np.linalg.norm(b)))
                         opposition_cosines.append(cosine)
+                        current_normal_cosine = cosine
                         current_grasp_valid = cosine < -.5
                 opposed_run = opposed_run+1 if current_grasp_valid else 0
                 opposed_steps += int(current_grasp_valid)
@@ -198,12 +263,26 @@ for segment, k, count in schedule:
                 both_foot_support += int(supported == {'g1_a','g1_b'})
             max_joint_error = max(max_joint_error, float(np.max(np.abs(
                 data.qpos[arm_qadr]-wbc.qref[arm_qadr]))))
+            if side_goals is not None:
+                contact_trace.append({'time_s':float(data.time),
+                                      'pad_center_m':data.xpos[pad_body].tolist(),
+                                      'thumb_force_n':digit_forces['thumb'],
+                                      'index_force_n':digit_forces['index'],
+                                      'opposed':current_grasp_valid,
+                                      'normal_cosine':current_normal_cosine,
+                                      'thumb_tip_m':data.xpos[model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id].tolist(),
+                                      'index_tip_m':data.xpos[model.body('g1_a/wuji_right/r_index_finger_tip_sensor_frame').id].tolist()})
         except Exception as exc:
             error = f'{type(exc).__name__}: {exc}'
             break
 report = {'scope': 'Four-arm reach with optional dressing contact attempt; no proven grasp, cloth or bandaging',
           'pinch_seed_attempted': args.pinch,
           'side_pinch_path_index': args.side_pinch_path_index,
+          'force_balance_gain_m_per_n': args.force_balance_gain_m_per_n,
+          'palm_rotation_weight': args.palm_rotation_weight,
+          'wrist_roll_offset_rad': args.wrist_roll_offset_rad,
+          'wrist_roll_late_offset_rad': args.wrist_roll_late_offset_rad,
+          'max_balance_joint_offset_rad': max_balance_joint_offset_rad,
           'wbc_hz': args.hz, 'segment_s': args.segment_s, 'hold_s': args.hold_s,
           'segments_completed': segment if not error else segment-1,
           'simulated_time_s': float(data.time),
@@ -249,9 +328,7 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
 if renderer is not None:
     renderer.close()
     ffmpeg = ROOT / 'work/retarget_env/Lib/site-packages/imageio_ffmpeg/binaries/ffmpeg-win-x86_64-v7.1.exe'
-    stem = (f'pad_side_pinch_attempt_{args.side_pinch_path_index}' if side_goals is not None
-            else 'pad_pinch_attempt' if args.pinch else 'four_arm_reach')
-    video = OUT / f'{stem}_{args.hz}hz_{args.segment_s:g}s.mp4'
+    video = OUT / f'{output_stem}_{args.hz}hz_{args.segment_s:g}s{("_hand" if args.camera=="hand" else "")}.mp4'
     proc = subprocess.Popen([str(ffmpeg), '-y', '-loglevel', 'error', '-f', 'rawvideo',
                              '-pixel_format', 'rgb24', '-video_size', '960x540', '-framerate', '15',
                              '-i', 'pipe:0', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', str(video)],
@@ -262,6 +339,10 @@ if renderer is not None:
     if proc.wait() != 0:
         raise RuntimeError('ffmpeg failed')
     report['video_frames'] = len(video_frames)
-(OUT / f'{f"pad_side_pinch_attempt_{args.side_pinch_path_index}" if side_goals is not None else "pad_pinch_attempt" if args.pinch else "four_arm_reach"}_{args.hz}hz_{args.segment_s:g}s.json').write_text(
+(OUT / f'{output_stem}_{args.hz}hz_{args.segment_s:g}s.json').write_text(
     json.dumps(report, indent=2), encoding='utf-8')
+if side_goals is not None:
+    (OUT/f'{output_stem}_trace_{args.hz}hz_{args.segment_s:g}s.json').write_text(
+        json.dumps({'scope':'50 Hz diagnostic trace; not a grasp certificate',
+                    'frames':contact_trace},indent=2),encoding='utf-8')
 print(json.dumps(report))

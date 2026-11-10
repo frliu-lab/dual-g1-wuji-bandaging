@@ -10,7 +10,9 @@ import numpy as np,mujoco,cvxpy as cp
 ROOT=Path(__file__).resolve().parents[2];OUT=ROOT/'outputs/wuji_multiagent'
 
 class JointWBC:
- def __init__(self,m,qref,palm_names=None,contact_filter=None):
+ def __init__(self,m,qref,palm_names=None,contact_filter=None,palm_rotation_weight=10.):
+  if palm_rotation_weight<=0:raise ValueError('Palm rotation weight must be positive')
+  self.palm_rotation_weight=float(palm_rotation_weight)
   self.disabled_pressure_agents=set();self.backend='CLARABEL';self.force_control_indices=set();self.hard_hand_indices=set();self.world_force_targets={};self.world_force_command={};self.last_tau=np.zeros(m.nu)
   self.hand_position_mode=False;self.hand_indices=np.array([i for i in range(m.nu) if '/wuji_' in m.actuator(i).name]);self.hand_commands=np.zeros(m.nu);self.hand_tau_correction=np.zeros(m.nu);self.hand_admittance_offset=np.zeros(m.nu);self.last_pad_force_targets={}
   self.pressure_cmd={};self.pressure_time=None
@@ -79,7 +81,7 @@ class JointWBC:
    if self.hand_position_mode and len(hard_hand):constraints.append(tau[hard_hand]==P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in hard_hand]])
    for c in range(nc):
     normal=f[c*3];tang=f[c*3+1:c*3+3];constraints.extend([normal>=0,normal<=1000,cp.norm1(tang)<=P['mu'][c]*normal])
-   objective=cp.sum_squares(cp.multiply(np.tile(np.r_[np.full(3,np.sqrt(1000.)),np.full(3,np.sqrt(10.))],len(self.palm_ids)),P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(self.weights,a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
+   objective=cp.sum_squares(cp.multiply(np.tile(np.r_[np.full(3,np.sqrt(1000.)),np.full(3,np.sqrt(self.palm_rotation_weight))],len(self.palm_ids)),P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(self.weights,a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
    if self.hand_position_mode and len(fixed_hand):objective+=1e4*cp.sum_squares(tau[fixed_hand]-P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in fixed_hand]])
    self.cache[key]=(cp.Problem(cp.Minimize(objective),constraints),P,a,tau,f)
   problem,P,a,tau,f=self.cache[key]
