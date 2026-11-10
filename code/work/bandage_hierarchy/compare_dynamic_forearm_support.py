@@ -23,6 +23,7 @@ parser.add_argument('--forearm-solref-time',type=float,default=None)
 parser.add_argument('--forearm-mass-kg',type=float,default=.8)
 parser.add_argument('--armrest',action='store_true')
 parser.add_argument('--armrest-top-z',type=float,default=.795)
+parser.add_argument('--armrest-profile',choices=('side','proximal'),default='side')
 args=parser.parse_args()
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
@@ -34,9 +35,11 @@ scene = ET.parse(OUT / 'dynamic_forearm_variant.xml').getroot()
 scene.find(".//body[@name='g1_a/pelvis']").set('pos', '-.3 0 .8' if args.candidate_path else '-.58 0 .8')
 scene.find(".//geom[@name='manikin_forearm']").set('mass',str(args.forearm_mass_kg))
 if args.armrest:
+    pad_pos=('.04 -.365' if args.armrest_profile=='side' else '-.08 -.34')
+    pad_size=('.10 .015 .035' if args.armrest_profile=='side' else '.05 .04 .035')
     ET.SubElement(scene.find(".//body[@name='training_manikin']"),'geom',{
-        'name':'manikin_armrest_pad','type':'box','pos':f'.04 -.365 {args.armrest_top_z-.035}',
-        'size':'.10 .015 .035','rgba':'.35 .55 .65 1','friction':'.8 .005 .0001'})
+        'name':'manikin_armrest_pad','type':'box','pos':f'{pad_pos} {args.armrest_top_z-.035}',
+        'size':pad_size,'rgba':'.35 .55 .65 1','friction':'.8 .005 .0001'})
 if args.forearm_solref_time is not None:
     scene.find(".//geom[@name='manikin_forearm']").set('solref',f'{args.forearm_solref_time} 1')
 model = mujoco.MjModel.from_xml_string(ET.tostring(scene, encoding='unicode'))
@@ -248,7 +251,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'errors': errors, 'trace': trace}
 report = {'scope': ('Dynamic training-forearm WBC counterfactual for a static palm candidate; no validity claim' if args.candidate_path else
                     'Dynamic training-forearm WBC counterfactual; provisional path is pinky-only and rejected as humanlike support'),
-          'forearm_mass_kg':args.forearm_mass_kg, 'armrest_variant':args.armrest,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
+          'forearm_mass_kg':args.forearm_mass_kg, 'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
 name='dynamic_forearm_support_comparison.json'
 if args.candidate_path:
     name='dynamic_palm_support_wbc_comparison'
@@ -260,7 +263,7 @@ if args.candidate_path:
     if args.force_feedback_gain:name+='_force'+str(args.force_feedback_gain).replace('.','p')
     if args.forearm_solref_time is not None:name+='_solref'+str(args.forearm_solref_time).replace('.','p')
     if args.forearm_mass_kg!=.8:name+='_mass'+str(args.forearm_mass_kg).replace('.','p')
-    if args.armrest:name+='_armrest'+str(args.armrest_top_z).replace('.','p')
+    if args.armrest:name+='_armrest'+args.armrest_profile+str(args.armrest_top_z).replace('.','p')
     name+='.json'
 (OUT/name).write_text(json.dumps(report, indent=2), encoding='utf8')
 print(json.dumps({k: {j:v for j,v in s.items() if j!='trace'} for k,s in out.items()}, indent=2))

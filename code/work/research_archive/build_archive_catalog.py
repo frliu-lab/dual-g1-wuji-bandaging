@@ -83,6 +83,7 @@ SELECTED = [
     'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_solref0p04.json',
     'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_armrest.json',
     'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_armrest0p775.json',
+    'bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5_armrestproximal0p8.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.json',
     'bandage_v0/pad_pinch_attempt_50hz_0.5s.mp4',
 ]

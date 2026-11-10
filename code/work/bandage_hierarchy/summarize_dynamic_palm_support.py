@@ -21,6 +21,8 @@ for path in files:
     last_index=sum(v for k,v in last.items() if '/l_index_' in k)
     reduction=baseline['final_half_second_mean_abs_elbow_rad']-test['final_half_second_mean_abs_elbow_rad']
     gate={'elbow_reduction_at_least_0p05_rad':reduction>=.05,
+          'matched_full_duration':baseline['simulated_time_s']>=3.79 and test['simulated_time_s']>=3.79,
+          'baseline_collision_free':baseline['deep_nonfloor_robot_contact_count']==0 and baseline['finite_state'] and not baseline['errors'],
           'final_contact_at_least_90_percent':test['final_half_second_contact_fraction']>=.9,
           'last_half_palm_impulse_majority':last_palm/max(last_total,1e-9)>=.7,
           'last_half_index_impulse_below_10_percent':last_index/max(last_total,1e-9)<.1,
