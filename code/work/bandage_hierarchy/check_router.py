@@ -1,5 +1,6 @@
 """Small behavior checks for handover, continuity and stale-policy fallback."""
 from pathlib import Path
+import json
 import sys
 import numpy as np
 sys.path.insert(0, str(Path(__file__).parent))
@@ -59,4 +60,13 @@ assert d6.mode == Mode.HAND
 d6 = r6.step(observation(.35, forearm_support_valid=False), zeros,
              HandProposal(.35, ones, .95))
 assert d6.mode == Mode.HOLD and d6.specialist_weight == 0.
-print('router checks passed: phase-specific contacts, verified forearm support, handover rate limit, stale fallback, and loss guards')
+trace_path=Path(__file__).resolve().parents[2]/'outputs/wuji_multiagent/bandage_v0/dynamic_palm_support_wbc_comparison_follow0p5.json'
+trace=json.loads(trace_path.read_text(encoding='utf8'))['conditions']['palm_candidate_path']['trace']
+r7=HandExpertRouter(80)
+for frame in trace:
+    t=frame['time_s']
+    decision=r7.step(observation(t, forearm_support_valid=frame['online_support_valid']),
+                     zeros, HandProposal(t, ones, .95))
+    assert decision.mode == Mode.BODY
+assert not any(frame['online_support_valid'] for frame in trace)
+print('router checks passed: phase contacts, live support gate replay, handover rate limit, stale fallback, and loss guards')

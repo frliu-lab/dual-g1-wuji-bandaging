@@ -21,15 +21,22 @@ parser.add_argument('--force-feedback-gain',type=float,default=0.)
 parser.add_argument('--force-target-n',type=float,default=8.)
 parser.add_argument('--forearm-solref-time',type=float,default=None)
 parser.add_argument('--forearm-mass-kg',type=float,default=.8)
+parser.add_argument('--armrest',action='store_true')
+parser.add_argument('--armrest-top-z',type=float,default=.795)
 args=parser.parse_args()
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
+from support_quality import SupportQualityMonitor, SupportSample
 
 old = mujoco.MjModel.from_xml_path(str(OUT / 'scene.xml'))
 path_old = np.load(OUT / 'forearm_support_rrt.npz')['qpos']
 scene = ET.parse(OUT / 'dynamic_forearm_variant.xml').getroot()
 scene.find(".//body[@name='g1_a/pelvis']").set('pos', '-.3 0 .8' if args.candidate_path else '-.58 0 .8')
 scene.find(".//geom[@name='manikin_forearm']").set('mass',str(args.forearm_mass_kg))
+if args.armrest:
+    ET.SubElement(scene.find(".//body[@name='training_manikin']"),'geom',{
+        'name':'manikin_armrest_pad','type':'box','pos':f'.04 -.365 {args.armrest_top_z-.035}',
+        'size':'.10 .015 .035','rgba':'.35 .55 .65 1','friction':'.8 .005 .0001'})
 if args.forearm_solref_time is not None:
     scene.find(".//geom[@name='manikin_forearm']").set('solref',f'{args.forearm_solref_time} 1')
 model = mujoco.MjModel.from_xml_string(ET.tostring(scene, encoding='unicode'))
@@ -140,6 +147,9 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
     max_follow_error=0.
     force_offset_z=0.
     contact_engaged=False
+    support_monitor=SupportQualityMonitor()
+    online_valid_steps=0
+    first_online_valid_time=None
     initial = float(data.qpos[qadr])
     for k in range(round(duration * hz)):
         if condition != 'no_contact':
@@ -164,6 +174,10 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
             wbc.qref[:] = path[0]
         try:
             data.ctrl[:], _, _ = wbc.solve(data)
+            frame_impulse={}
+            frame_peak=0.
+            frame_both_feet=True
+            frame_deep=False
             for _ in range(interval):
                 mujoco.mj_step(model, data)
                 supported = set()
@@ -180,6 +194,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
                     elif any(b.startswith(('g1_a/', 'g1_b/')) for b in bodies):
                         if c.dist < -.003:
                             deep += 1
+                            frame_deep=True
                         if 'manikin_forearm' in names:
                             hand = next((b for b in bodies if b.startswith('g1_a/wuji_left/')), None)
                             if hand:
@@ -188,14 +203,25 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
                                 fn = max(0., float(wrench[0]))
                                 force += fn
                                 impulse_by_body[hand] = impulse_by_body.get(hand, 0.) + fn*model.opt.timestep
+                                frame_impulse[hand]=frame_impulse.get(hand,0.)+fn*model.opt.timestep
                                 if data.time>=duration-.5:
                                     last_half_impulse_by_body[hand]=last_half_impulse_by_body.get(hand,0.)+fn*model.opt.timestep
                 foot_support += int(supported == {'g1_a', 'g1_b'})
+                frame_both_feet=frame_both_feet and supported=={'g1_a','g1_b'}
+                frame_peak=max(frame_peak,force)
                 if force>peak_force:peak_force=force;peak_force_time=float(data.time)
+            online_valid=support_monitor.update(SupportSample(
+                time_s=float(data.time),elbow_rad=float(data.qpos[qadr]),
+                elbow_speed_rad_s=float(data.qvel[vadr]),peak_force_n=frame_peak,
+                impulse_by_body_ns=frame_impulse,both_feet_supported=frame_both_feet,
+                deep_nonfloor_contact=frame_deep))
+            online_valid_steps+=int(online_valid)
+            if online_valid and first_online_valid_time is None:first_online_valid_time=float(data.time)
             trace.append({'time_s': float(data.time), 'elbow_rad': float(data.qpos[qadr]),
                           'elbow_speed_rad_s': float(data.qvel[vadr]),
                           'forearm_center_m': data.geom_xpos[geom_id].tolist(),
-                          'a_left_forearm_force_n': force})
+                          'a_left_forearm_force_n': force,
+                          'online_support_valid':online_valid})
         except Exception as exc:
             errors.append(f'{type(exc).__name__}: {exc}')
             break
@@ -211,6 +237,9 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'peak_force_time_s':peak_force_time,
         'max_forearm_follow_reference_error_m':max_follow_error,
         'final_force_feedback_offset_z_m':force_offset_z,
+        'online_support_quality_final':support_monitor.last_report,
+        'online_support_valid_fraction':online_valid_steps/max(1,len(trace)),
+        'first_online_support_valid_time_s':first_online_valid_time,
         'a_left_impulse_by_hand_body_ns': impulse_by_body,
         'final_half_second_impulse_by_hand_body_ns':last_half_impulse_by_body,
         'foot_support_fraction': foot_support/max(1, len(trace)*interval),
@@ -219,7 +248,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'errors': errors, 'trace': trace}
 report = {'scope': ('Dynamic training-forearm WBC counterfactual for a static palm candidate; no validity claim' if args.candidate_path else
                     'Dynamic training-forearm WBC counterfactual; provisional path is pinky-only and rejected as humanlike support'),
-          'forearm_mass_kg':args.forearm_mass_kg, 'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
+          'forearm_mass_kg':args.forearm_mass_kg, 'armrest_variant':args.armrest,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
 name='dynamic_forearm_support_comparison.json'
 if args.candidate_path:
     name='dynamic_palm_support_wbc_comparison'
@@ -231,6 +260,7 @@ if args.candidate_path:
     if args.force_feedback_gain:name+='_force'+str(args.force_feedback_gain).replace('.','p')
     if args.forearm_solref_time is not None:name+='_solref'+str(args.forearm_solref_time).replace('.','p')
     if args.forearm_mass_kg!=.8:name+='_mass'+str(args.forearm_mass_kg).replace('.','p')
+    if args.armrest:name+='_armrest'+str(args.armrest_top_z).replace('.','p')
     name+='.json'
 (OUT/name).write_text(json.dumps(report, indent=2), encoding='utf8')
 print(json.dumps({k: {j:v for j,v in s.items() if j!='trace'} for k,s in out.items()}, indent=2))
