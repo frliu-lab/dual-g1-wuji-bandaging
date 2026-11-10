@@ -28,6 +28,8 @@ parser.add_argument('--force-balance-gain-m-per-n', type=float, default=0.,
                     help='Simulation-only proportional finger adjustment during final hold')
 parser.add_argument('--pad-relative-gain', type=float, default=0.,
                     help='Track first opposed fingertip poses relative to the moving pad during hold')
+parser.add_argument('--pad-lift-m', type=float, default=0.,
+                    help='Diagnostic A-right wrist lift after 0.5 s of held pinch')
 parser.add_argument('--palm-rotation-weight', type=float, default=10.)
 parser.add_argument('--wrist-roll-offset-rad', type=float, default=0.,
                     help='Simulation-only smooth terminal wrist-roll offset')
@@ -40,6 +42,8 @@ if args.force_balance_gain_m_per_n < 0 or (args.force_balance_gain_m_per_n and a
     parser.error('Force balance gain requires a side-pinch path and must be nonnegative')
 if not 0 <= args.pad_relative_gain <= 1 or (args.pad_relative_gain and args.side_pinch_path_index is None):
     parser.error('Pad-relative gain requires a side-pinch path and must be in [0,1]')
+if not 0 <= args.pad_lift_m <= .05 or (args.pad_lift_m and args.side_pinch_path_index is None):
+    parser.error('Pad lift requires side pinch and must be in [0, 0.05] m')
 if args.palm_rotation_weight <= 0:
     parser.error('Palm rotation weight must be positive')
 if abs(args.wrist_roll_offset_rad) > .15 or (args.wrist_roll_offset_rad and args.side_pinch_path_index is None):
@@ -83,11 +87,12 @@ rotation_tag = f'_rot{str(args.palm_rotation_weight).replace(".", "p")}' if args
 roll_tag = f'_roll{str(args.wrist_roll_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_offset_rad else ''
 late_tag = f'_late{str(args.wrist_roll_late_offset_rad).replace(".", "p").replace("-", "m")}' if args.wrist_roll_late_offset_rad else ''
 relative_tag = f'_relative{str(args.pad_relative_gain).replace(".", "p")}' if args.pad_relative_gain else ''
+lift_tag = f'_lift{str(args.pad_lift_m).replace(".", "p")}' if args.pad_lift_m else ''
 output_stem = (f'pad_side_pinch_balance_{args.side_pinch_path_index}_gain{gain_tag}'
                if side_goals is not None and args.force_balance_gain_m_per_n else
                f'pad_side_pinch_attempt_{args.side_pinch_path_index}' if side_goals is not None else
                'pad_pinch_attempt' if args.pinch else 'four_arm_reach')
-output_stem += rotation_tag + roll_tag + late_tag + relative_tag
+output_stem += rotation_tag + roll_tag + late_tag + relative_tag + lift_tag
 if args.pad_relative_gain and args.hold_s != 1.:
     output_stem += f'_hold{str(args.hold_s).replace(".", "p")}'
 if np.max(np.abs(path[0]-data.qpos)) > 1e-6:
@@ -121,6 +126,8 @@ last_digit_forces = {'thumb': 0., 'index': 0.}
 max_balance_joint_offset_rad = 0.
 max_relative_joint_offset_rad = 0.
 pad_relative_targets = None
+lift_start_palm = None
+peak_pad_vertical_lift_m = 0.
 opposition_cosines = []
 current_grasp_valid = False
 current_normal_cosine = None
@@ -173,6 +180,11 @@ arm_qadr = [int(model.jnt_qposadr[j]) for j in range(model.njnt)
             and any(t in model.joint(j).name for t in ('shoulder','elbow','wrist'))
             and model.jnt_type[j] == mujoco.mjtJoint.mjJNT_HINGE]
 right_wrist_roll_qadr=int(model.joint('g1_a/right_wrist_roll_joint').qposadr[0])
+lift_joints=[model.joint(f'g1_a/right_{name}_joint').id for name in
+             ('shoulder_pitch','shoulder_roll','shoulder_yaw','elbow','wrist_roll','wrist_pitch','wrist_yaw')]
+lift_qadr=np.array([model.jnt_qposadr[j] for j in lift_joints],dtype=int)
+lift_vadr=np.array([model.jnt_dofadr[j] for j in lift_joints],dtype=int)
+lift_palm_id=model.body('g1_a/wuji_right/r_wrist').id
 
 schedule = [(segment, k, per_segment) for segment in range(1, len(path))
             for k in range(per_segment)]
@@ -209,6 +221,18 @@ for segment, k, count in schedule:
                 delta=np.clip(delta,-.08,.08)
                 wbc.qref[qa]+=delta
                 max_relative_joint_offset_rad=max(max_relative_joint_offset_rad,float(np.max(np.abs(delta))))
+        if args.pad_lift_m and segment==len(path)-1 and k==per_segment:
+            hold_elapsed=max(0.,float(data.time)-(len(path)-1)*args.segment_s)
+            if hold_elapsed>=.5 and lift_start_palm is None:
+                lift_start_palm=data.xpos[lift_palm_id].copy()
+            if lift_start_palm is not None:
+                lift_ramp=np.clip((hold_elapsed-.5)/.5,0.,1.)
+                palm_target=lift_start_palm+np.array([0.,0.,args.pad_lift_m*lift_ramp])
+                jac=np.zeros((3,model.nv))
+                mujoco.mj_jac(model,data,jac,None,data.xpos[lift_palm_id],lift_palm_id)
+                J=jac[:,lift_vadr]
+                delta=np.linalg.solve(J.T@J+1e-3*np.eye(len(lift_vadr)),J.T@(palm_target-data.xpos[lift_palm_id]))
+                wbc.qref[lift_qadr]=data.qpos[lift_qadr]+np.clip(delta,-.08,.08)
         try:
             evidence = hand_contacts(model, data)
             contact_observations += np.asarray(evidence, dtype=int)
@@ -232,6 +256,7 @@ for segment, k, count in schedule:
                     data.xpos[root_ids]-root_start, axis=1))))
                 max_pad_displacement = max(max_pad_displacement,
                                            float(np.linalg.norm(data.xpos[pad_body]-pad_start)))
+                peak_pad_vertical_lift_m=max(peak_pad_vertical_lift_m,float(data.xpos[pad_body,2]-pad_start[2]))
                 digit_forces = {'thumb': 0., 'index': 0.}
                 digit_normals = {'thumb': np.zeros(3), 'index': np.zeros(3)}
                 supported = set()
@@ -303,6 +328,9 @@ report = {'scope': 'Four-arm reach with optional dressing contact attempt; no pr
           'side_pinch_path_index': args.side_pinch_path_index,
           'force_balance_gain_m_per_n': args.force_balance_gain_m_per_n,
           'pad_relative_gain': args.pad_relative_gain,
+          'pad_lift_command_m': args.pad_lift_m,
+          'peak_pad_vertical_lift_m': peak_pad_vertical_lift_m,
+          'final_pad_vertical_lift_m': float(data.xpos[pad_body,2]-pad_start[2]),
           'max_relative_joint_offset_rad': max_relative_joint_offset_rad,
           'palm_rotation_weight': args.palm_rotation_weight,
           'wrist_roll_offset_rad': args.wrist_roll_offset_rad,

@@ -56,6 +56,7 @@ SELECTED = [
     'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_hold2p0_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_hold2p5_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_late0p025_relative0p6_hold2p5_50hz_0.6s.json',
+    'bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_lift0p02_hold2p0_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_2_gain0p0015_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_2_gain0p0015_rot100p0_50hz_0.6s.json',
     'bandage_v0/pad_side_pinch_balance_2_gain0p0015_rot300p0_50hz_0.6s.json',
