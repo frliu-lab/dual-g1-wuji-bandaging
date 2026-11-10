@@ -34,6 +34,7 @@ for path in files:
     rows.append({'file':path.name,'reach_fraction':report.get('reach_fraction',1.),
         'index_extra_rad':report.get('index_extra_rad',0.),'segment_s':report.get('segment_s',1.2),
         'forearm_follow_gain':report.get('forearm_follow_gain',0.),
+        'easing':report.get('easing','cubic'),
         'follow_start_fraction':report.get('follow_start_fraction',1.),
         'force_feedback_gain':report.get('force_feedback_gain',0.),
         'forearm_mass_kg':report.get('forearm_mass_kg',.8),

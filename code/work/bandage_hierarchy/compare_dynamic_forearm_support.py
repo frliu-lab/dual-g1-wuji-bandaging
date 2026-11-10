@@ -24,6 +24,7 @@ parser.add_argument('--forearm-mass-kg',type=float,default=.8)
 parser.add_argument('--armrest',action='store_true')
 parser.add_argument('--armrest-top-z',type=float,default=.795)
 parser.add_argument('--armrest-profile',choices=('side','proximal'),default='side')
+parser.add_argument('--easing',choices=('cubic','frontloaded'),default='cubic')
 args=parser.parse_args()
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
@@ -159,7 +160,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
             segment_steps=round(segment_s*hz)
             segment = min(k // segment_steps + 1, len(path) - 1)
             u = min(1., (k % segment_steps + 1) / segment_steps) if k < (len(path)-1)*segment_steps else 1.
-            u = u*u*(3-2*u)
+            u = u*u*(3-2*u) if args.easing=='cubic' else (1-(1-u)**4)**2
             wbc.qref[:] = (1-u)*path[segment-1] + u*path[segment]
             if args.candidate_path and args.forearm_follow_gain:
                 progress=min(1.,k/max(1,round(segment_s*hz)*(len(path)-1)))
@@ -251,7 +252,7 @@ for condition in ('no_contact', 'palm_candidate_path' if args.candidate_path els
         'errors': errors, 'trace': trace}
 report = {'scope': ('Dynamic training-forearm WBC counterfactual for a static palm candidate; no validity claim' if args.candidate_path else
                     'Dynamic training-forearm WBC counterfactual; provisional path is pinky-only and rejected as humanlike support'),
-          'forearm_mass_kg':args.forearm_mass_kg, 'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
+          'forearm_mass_kg':args.forearm_mass_kg, 'armrest_variant':args.armrest,'armrest_profile':args.armrest_profile if args.armrest else None,'armrest_top_z_m':args.armrest_top_z if args.armrest else None,'forearm_solref_time_s':args.forearm_solref_time,'reach_fraction':args.reach_fraction,'segment_s':segment_s,'easing':args.easing,'index_extra_rad':args.index_extra,'forearm_follow_gain':args.forearm_follow_gain,'follow_start_fraction':args.follow_start_fraction,'force_feedback_gain':args.force_feedback_gain,'force_target_n':args.force_target_n,'conditions': out}
 name='dynamic_forearm_support_comparison.json'
 if args.candidate_path:
     name='dynamic_palm_support_wbc_comparison'
@@ -264,6 +265,7 @@ if args.candidate_path:
     if args.forearm_solref_time is not None:name+='_solref'+str(args.forearm_solref_time).replace('.','p')
     if args.forearm_mass_kg!=.8:name+='_mass'+str(args.forearm_mass_kg).replace('.','p')
     if args.armrest:name+='_armrest'+args.armrest_profile+str(args.armrest_top_z).replace('.','p')
+    if args.easing!='cubic':name+='_easing'+args.easing
     name+='.json'
 (OUT/name).write_text(json.dumps(report, indent=2), encoding='utf8')
 print(json.dumps({k: {j:v for j,v in s.items() if j!='trace'} for k,s in out.items()}, indent=2))

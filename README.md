@@ -29,3 +29,5 @@
 控制接口已增加托臂质量门槛：仅四手接触不足以切换到手部专家。门槛当前默认关闭，尚未接入实时机器人控制；不应把它表述为已完成大小模型控制闭环。
 
 后续已将[在线质量门槛](code/work/bandage_hierarchy/support_quality.py)接入 MuJoCo 接触诊断，并用真实仿真时序回放大小模型路由器：0.8 kg 候选仍因初碰峰值超研究门槛而始终不放行。三组独立扶手布局也失败，详见[更新的 19 组汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)。这是仿真与路由器接口验证，尚未接入实机传感器或训练好的手部策略。
+
+[掌托正面诊断图](media/bandage_v0/dynamic_palm_candidate_front.png)和[俯视诊断图](media/bandage_v0/dynamic_palm_candidate_top.png)展示当前候选的接触姿态。前段加速进入路径的峰值力和食指受力进一步恶化；[最新 20 组汇总](media/bandage_v0/dynamic_palm_support_sweep_summary.json)仍为 0 组达标。图像仅供查找失败机理，不是合格动作演示。
