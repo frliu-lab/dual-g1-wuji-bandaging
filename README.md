@@ -45,3 +45,5 @@
 已新增[实际路由的解析式手指反馈](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_routed_hold2p5_50hz_0.6s.json)：WBC 在仿真中持续运行，手部模式 83 个控制周期，静态接触连续 2.201 秒，末段接触比例 100%。这只通过**未离台接触**门槛；[延迟 5 mm 抬腕试验](media/bandage_v0/pad_side_pinch_balance_1_gain0p0015_rot100p0_roll0p05_relative0p6_lift0p005_routed_liftstart1p2_hold2p5_50hz_0.6s.json)失去敷料。最新[21 组汇总](media/bandage_v0/pad_side_pinch_feedback_comparison.json)为未离台 1 组通过、带负载离台 0 组通过。策略尚不是训练好的 Wuji 手部模型，也不是完整四手包扎。
 
 双手同场联合审计：[静态终态与预抓搜索](media/bandage_v0/joint_support_pinch_static_screen.json) · [零接触预抓路径](media/bandage_v0/joint_support_pregrasp_rrt_report.json) · [7.5 秒 WBC 基线](media/bandage_v0/joint_support_pinch_staged_wbc_report.json) · [11 组联合汇总](media/bandage_v0/joint_support_pinch_sweep_summary.json)。基线中 A 左手托臂在线门槛末段有效，但右拇指没有碰到敷料。提高右腕位置权重后出现双指接触，却使托臂门槛失败；联合门槛 0/11。B 机器人尚未参与操作，不能把此子任务称作四手协同包扎。
+
+视觉核查：[静态终态](media/bandage_v0/joint_support_pinch_static_target_oblique.png)与[动态末态](media/bandage_v0/joint_support_pinch_dynamic_endpoint_oblique.png)并排可见右手实际到位偏差；静态图中的双指位置不能代替动态受力和持续接触。两张图只用于定位失败机理，不是任务演示。

@@ -117,6 +117,8 @@ SELECTED = [
     'bandage_v0/joint_support_pinch_staged_wbc_report_position1500p0_specialist_hold2p5.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_position2000p0_specialist_hold2p5.json',
     'bandage_v0/joint_support_pinch_sweep_summary.json',
+    'bandage_v0/joint_support_pinch_static_target_oblique.png',
+    'bandage_v0/joint_support_pinch_dynamic_endpoint_oblique.png',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -150,6 +152,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/screen_staged_joint_pinch.py',
     'work/bandage_hierarchy/rollout_joint_support_pinch.py',
     'work/bandage_hierarchy/summarize_joint_support_pinch.py',
+    'work/bandage_hierarchy/render_joint_support_pinch_diagnostic.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',
     'work/bandage_hierarchy/plan_side_pinch_path.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',
