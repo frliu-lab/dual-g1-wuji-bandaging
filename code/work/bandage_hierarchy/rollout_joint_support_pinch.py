@@ -16,6 +16,7 @@ parser.add_argument('--palm-rotation-weight',type=float,default=10.,help='WBC wr
 parser.add_argument('--right-palm-position-weight',type=float,default=1000.,help='WBC A-right wrist position tracking weight')
 parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WBC B-left wrist position tracking weight')
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
+parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
 parser.add_argument('--analytic-grip-specialist',action='store_true',
                     help='Route pad-relative finger corrections after support and pad touch')
 parser.add_argument('--hold-s',type=float,default=1.5,help='Final pinch hold duration')
@@ -29,6 +30,7 @@ parser.add_argument('--settled-spool',action='store_true',help='Use z=0.702 m re
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
+if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
 if not 1.<=args.grasp_finger_weight<=30.:
     parser.error('Grasp finger weight must be in [1,30]')
 if not 1.<=args.palm_rotation_weight<=300.:
@@ -224,11 +226,34 @@ for digit,bid in (('thumb',thumb_tip),('index',index_tip)):
         'vadr':np.array([model.jnt_dofadr[j] for j in joints],dtype=int),
         'body':bid,
         'pad_local':goal_pad_rot.T@(goal_data.xpos[bid]-goal_data.xpos[pad_body])}
+b_digit_info={}
+if args.b_analytic_grip:
+    goal_spool_rot=goal_data.xmat[spool_body].reshape(3,3)
+    for digit in ('thumb','index'):
+        bid=model.body(f'g1_b/wuji_left/l_{digit if digit=="thumb" else "index_finger"}_tip_sensor_frame').id
+        joints=[j for j in range(model.njnt)
+                if model.joint(j).name.startswith(f'g1_b/wuji_left/l_{digit if digit=="thumb" else "index_finger"}_')]
+        local=goal_spool_rot.T@(goal_data.xpos[bid]-goal_data.xpos[spool_body])
+        local[1]+=(-.008 if digit=='thumb' else .005)
+        b_digit_info[digit]={'body':bid,'qadr':np.array([model.jnt_qposadr[j] for j in joints],dtype=int),
+                             'vadr':np.array([model.jnt_dofadr[j] for j in joints],dtype=int),
+                             'spool_local':local}
 for segment,k,count in schedule:
     u=(k/count)**2*(3-2*k/count)
     wbc.qref[:]=(1-u)*path[segment-1]+u*path[segment]
     if segment>=2:
         follow_forearm(wbc.qref)
+    if b_digit_info and segment>=len(path)-2:
+        spool_rot=data.xmat[spool_body].reshape(3,3)
+        for info in b_digit_info.values():
+            bid=info['body'];vadr=info['vadr'];qadr=info['qadr']
+            target=data.xpos[spool_body]+spool_rot@info['spool_local']
+            jac=np.zeros((3,model.nv))
+            mujoco.mj_jac(model,data,jac,None,data.xpos[bid],bid)
+            J=jac[:,vadr]
+            delta=np.linalg.solve(J.T@J+1e-3*np.eye(len(vadr)),J.T@(.6*(target-data.xpos[bid])))
+            for address,offset in zip(qadr,np.clip(delta,-.08,.08)):
+                wbc.qref[address]+=offset
     if args.analytic_grip_specialist:
         base_fingers=wbc.qref[hand_qadr].copy()
         proposed=base_fingers.copy()
@@ -357,6 +382,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
         'settled_spool':args.settled_spool,
         'analytic_grip_specialist':args.analytic_grip_specialist,
+        'b_analytic_grip':args.b_analytic_grip,
         'wbc_backend':args.wbc_backend,
         'hold_s':args.hold_s,
         'router_mode_counts':router_modes,
@@ -411,6 +437,7 @@ if args.support_finger_force_cap_n!=2.:stem+=f'_fingercap{str(args.support_finge
 if args.support_total_force_cap_n!=12.:stem+=f'_totalcap{str(args.support_total_force_cap_n).replace(".","p")}'
 if args.spool_after:stem+='_spool'
 if args.settled_spool:stem+='_settled'
+if args.b_analytic_grip:stem+='_bfeedback'
 if args.b_finger_weight!=1.:stem+='_bfinger'+str(args.b_finger_weight).replace('.','p')
 if args.b_palm_position_weight!=1000.:stem+='_bposition'+str(args.b_palm_position_weight).replace('.','p')
 if args.wbc_backend!='CLARABEL':stem+='_'+args.wbc_backend.lower()
