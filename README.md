@@ -47,3 +47,5 @@
 双手同场联合审计：[静态终态与预抓搜索](media/bandage_v0/joint_support_pinch_static_screen.json) · [零接触预抓路径](media/bandage_v0/joint_support_pregrasp_rrt_report.json) · [7.5 秒 WBC 基线](media/bandage_v0/joint_support_pinch_staged_wbc_report.json) · [11 组联合汇总](media/bandage_v0/joint_support_pinch_sweep_summary.json)。基线中 A 左手托臂在线门槛末段有效，但右拇指没有碰到敷料。提高右腕位置权重后出现双指接触，却使托臂门槛失败；联合门槛 0/11。B 机器人尚未参与操作，不能把此子任务称作四手协同包扎。
 
 视觉核查：[静态终态](media/bandage_v0/joint_support_pinch_static_target_oblique.png)与[动态末态](media/bandage_v0/joint_support_pinch_dynamic_endpoint_oblique.png)并排可见右手实际到位偏差；静态图中的双指位置不能代替动态受力和持续接触。两张图只用于定位失败机理，不是任务演示。
+
+[B 左手卷轴静态接触探测](media/bandage_v0/joint_spool_grasp_static_z0p745_screen.json)尚未找到无深度碰撞且相向的抓持：[向内收紧 1.5 mm](media/bandage_v0/joint_spool_grasp_static_z0p745_closure0p0015_screen.json)虽然改善接触方向，但出现 6 处深度接触。B 机器人仍未参与有效操作。
