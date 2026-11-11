@@ -15,6 +15,7 @@ parser.add_argument('--goal-z',type=float,default=.72)
 parser.add_argument('--y-closure',type=float,default=0.)
 parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--spool-z',type=float,default=.72,help='World-height initial state for spool free joint')
+parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the settled-spool dynamic terminal state')
 args=parser.parse_args()
 if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
@@ -26,8 +27,13 @@ if args.b_root_x!=.7:
 model=mujoco.MjModel.from_xml_string(ET.tostring(scene,encoding='unicode'))
 data=mujoco.MjData(model)
 base=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
-base[model.joint('g1_b/floating_base').qposadr[0]]=args.b_root_x
-base[model.joint('bandage_spool_free').qposadr[0]+2]=args.spool_z
+if args.warm_dynamic:
+    if abs(args.b_root_x-.55)>1e-9 or abs(args.spool_z-.702)>1e-9:
+        parser.error('Dynamic warm start requires B root x=0.55 and spool z=0.702')
+    base=np.load(OUT/'joint_support_pinch_staged_wbc_report_spool_settled_final_state.npz')['qpos'].copy()
+else:
+    base[model.joint('g1_b/floating_base').qposadr[0]]=args.b_root_x
+    base[model.joint('bandage_spool_free').qposadr[0]+2]=args.spool_z
 joint_ids=[j for j in range(model.njnt)
            if (model.joint(j).name.startswith('g1_b/left_') and
                any(s in model.joint(j).name for s in ('shoulder','elbow','wrist')))
@@ -40,8 +46,14 @@ hi=np.array([model.jnt_range[j,1]-.03 for j in joint_ids])
 start=np.clip(base[qa],lo+1e-5,hi-1e-5)
 tips=[model.body('g1_b/wuji_left/l_index_finger_tip_sensor_frame').id,
       model.body('g1_b/wuji_left/l_thumb_tip_sensor_frame').id]
-goals=np.array([[.38,-.50+args.y_closure,args.goal_z],
-                [.38,-.38-args.y_closure,args.goal_z]])
+if args.warm_dynamic:
+    data.qpos[:]=base;mujoco.mj_forward(model,data)
+    spool_center=data.xpos[model.body('bandage_spool').id]
+    goals=np.array([[spool_center[0],spool_center[1]-.06+args.y_closure,spool_center[2]+args.goal_z-.702],
+                    [spool_center[0],spool_center[1]+.06-args.y_closure,spool_center[2]+args.goal_z-.702]])
+else:
+    goals=np.array([[.38,-.50+args.y_closure,args.goal_z],
+                    [.38,-.38-args.y_closure,args.goal_z]])
 def forward(x):
     data.qpos[:]=base;data.qpos[qa]=x;mujoco.mj_forward(model,data)
 def residual(x):
@@ -92,6 +104,7 @@ eligible=bool(not deep and all(f>.05 for f in forces.values()) and cosine is not
 report={'scope':'Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim',
         'b_root_x_m':args.b_root_x,
         'spool_initial_z_m':args.spool_z,
+        'warm_dynamic':args.warm_dynamic,
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
@@ -103,6 +116,7 @@ stem='joint_spool_grasp_static'+('' if args.goal_z==.72 else '_z'+str(args.goal_
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
 if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 if args.spool_z!=.72:stem+='_spoolz'+str(args.spool_z).replace('.','p')
+if args.warm_dynamic:stem+='_dynamicwarm'
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())

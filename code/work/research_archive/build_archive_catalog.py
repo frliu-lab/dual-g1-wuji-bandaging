@@ -130,6 +130,13 @@ SELECTED = [
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bfinger10p0_bposition2000p0.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bfeedback.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_hold2p5_spool_settled_bfeedback.json',
+    'bandage_v0/joint_spool_grasp_static_z0p73_closure0p004_root0p55_spoolz0p702_dynamicwarm_screen.json',
+    'bandage_v0/joint_spool_grasp_static_z0p73_closure0p008_root0p55_spoolz0p702_dynamicwarm_screen.json',
+    'bandage_v0/joint_support_ring_clearance_screen.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_hold2p5_spool_settled_bwarm.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_closure0p008_rewrist_roll.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -165,6 +172,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/summarize_joint_support_pinch.py',
     'work/bandage_hierarchy/render_joint_support_pinch_diagnostic.py',
     'work/bandage_hierarchy/probe_spool_grasp.py',
+    'work/bandage_hierarchy/probe_support_ring_clearance.py',
     'work/bandage_hierarchy/plan_spool_grasp_path.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',
     'work/bandage_hierarchy/plan_side_pinch_path.py',

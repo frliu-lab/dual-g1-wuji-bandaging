@@ -17,6 +17,11 @@ parser.add_argument('--right-palm-position-weight',type=float,default=1000.,help
 parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WBC B-left wrist position tracking weight')
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
+parser.add_argument('--b-warm-reference',action='store_true',help='Blend B-left joints toward contact-screened dynamic terminal pose')
+parser.add_argument('--b-warm-closure',choices=('0p004','0p008'),default='0p004')
+parser.add_argument('--open-support-pinky',action='store_true',help='Retract A-left little finger during final contact hold')
+parser.add_argument('--support-wrist-reorient',action='store_true',help='Blend A-left wrist toward screened palm-only orientation')
+parser.add_argument('--support-wrist-candidate',choices=('near','roll','roll_yaw'),default='near')
 parser.add_argument('--analytic-grip-specialist',action='store_true',
                     help='Route pad-relative finger corrections after support and pad touch')
 parser.add_argument('--hold-s',type=float,default=1.5,help='Final pinch hold duration')
@@ -31,6 +36,7 @@ parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
+if args.b_warm_reference and not args.settled_spool:parser.error('B warm reference requires --settled-spool')
 if not 1.<=args.grasp_finger_weight<=30.:
     parser.error('Grasp finger weight must be in [1,30]')
 if not 1.<=args.palm_rotation_weight<=300.:
@@ -124,6 +130,19 @@ b_grasp_vadr=np.array([model.jnt_dofadr[j] for j in range(model.njnt)
                        if model.joint(j).name.startswith(('g1_b/wuji_left/l_thumb_',
                                                            'g1_b/wuji_left/l_index_finger_'))],dtype=int)
 wbc.weights[b_grasp_vadr]=args.b_finger_weight
+b_warm_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
+                       if (model.joint(j).name.startswith('g1_b/left_') and
+                           any(s in model.joint(j).name for s in ('shoulder','elbow','wrist')))
+                       or model.joint(j).name.startswith(('g1_b/wuji_left/l_thumb_',
+                                                           'g1_b/wuji_left/l_index_finger_'))],dtype=int)
+b_warm_target=(np.load(OUT/f'joint_spool_grasp_static_z0p73_closure{args.b_warm_closure}_root0p55_spoolz0p702_dynamicwarm_candidate.npz')['qpos']
+               if args.b_warm_reference else None)
+support_pinky_qadr=np.array([model.joint(name).qposadr[0] for name in
+                             ('g1_a/wuji_left/l_pinky_mcp_flex','g1_a/wuji_left/l_pinky_mcp_abd')],dtype=int)
+support_pinky_open=left_path[0,support_pinky_qadr].copy()
+support_wrist_qadr=np.array([model.joint(name).qposadr[0] for name in
+                            ('g1_a/left_wrist_roll_joint','g1_a/left_wrist_pitch_joint',
+                             'g1_a/left_wrist_yaw_joint')],dtype=int)
 elbow_joint = model.joint('training_elbow_hinge').id
 elbow_qadr = model.jnt_qposadr[elbow_joint]
 elbow_vadr = model.jnt_dofadr[elbow_joint]
@@ -243,6 +262,17 @@ for segment,k,count in schedule:
     wbc.qref[:]=(1-u)*path[segment-1]+u*path[segment]
     if segment>=2:
         follow_forearm(wbc.qref)
+    if b_warm_target is not None and segment==len(path)-1 and k==count:
+        blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.4))
+        wbc.qref[b_warm_qadr]=(1-blend)*wbc.qref[b_warm_qadr]+blend*b_warm_target[b_warm_qadr]
+    if args.open_support_pinky and segment==len(path)-1 and k==count:
+        blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.5))
+        wbc.qref[support_pinky_qadr]=(1-blend)*wbc.qref[support_pinky_qadr]+blend*support_pinky_open
+    if args.support_wrist_reorient and segment==len(path)-1 and k==count:
+        blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.5))
+        delta={'near':[-.045,0.,.09],'roll':[-.135,-.045,0.],
+               'roll_yaw':[-.135,-.045,.045]}[args.support_wrist_candidate]
+        wbc.qref[support_wrist_qadr]+=blend*np.array(delta)
     if b_digit_info and segment>=len(path)-2:
         spool_rot=data.xmat[spool_body].reshape(3,3)
         for info in b_digit_info.values():
@@ -369,6 +399,7 @@ for segment,k,count in schedule:
         b_longest_opposed_run=max(b_longest_opposed_run,b_opposed_run)
         trace.append({'time_s':float(data.time),'segment':segment,'elbow_rad':float(data.qpos[elbow_qadr]),
                       'support_valid':valid,'support_force_n':frame_peak,'thumb_force_n':thumb_force,
+                      'support_impulse_by_body_ns':frame_impulse,
                       'index_force_n':index_force,'normal_cosine':cos,'opposed':opposed,
                       'b_thumb_force_n':b_forces['thumb'],'b_index_force_n':b_forces['index'],
                       'b_normal_cosine':bcos,'b_opposed':b_opposed,
@@ -383,6 +414,11 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'settled_spool':args.settled_spool,
         'analytic_grip_specialist':args.analytic_grip_specialist,
         'b_analytic_grip':args.b_analytic_grip,
+        'b_warm_reference':args.b_warm_reference,
+        'b_warm_closure':args.b_warm_closure if args.b_warm_reference else None,
+        'open_support_pinky':args.open_support_pinky,
+        'support_wrist_reorient':args.support_wrist_reorient,
+        'support_wrist_candidate':args.support_wrist_candidate if args.support_wrist_reorient else None,
         'wbc_backend':args.wbc_backend,
         'hold_s':args.hold_s,
         'router_mode_counts':router_modes,
@@ -438,6 +474,11 @@ if args.support_total_force_cap_n!=12.:stem+=f'_totalcap{str(args.support_total_
 if args.spool_after:stem+='_spool'
 if args.settled_spool:stem+='_settled'
 if args.b_analytic_grip:stem+='_bfeedback'
+if args.b_warm_reference:stem+='_bwarm'
+if args.b_warm_reference and args.b_warm_closure!='0p004':stem+='_closure'+args.b_warm_closure
+if args.open_support_pinky:stem+='_openpinky'
+if args.support_wrist_reorient:stem+='_rewrist'
+if args.support_wrist_reorient and args.support_wrist_candidate!='near':stem+='_'+args.support_wrist_candidate
 if args.b_finger_weight!=1.:stem+='_bfinger'+str(args.b_finger_weight).replace('.','p')
 if args.b_palm_position_weight!=1000.:stem+='_bposition'+str(args.b_palm_position_weight).replace('.','p')
 if args.wbc_backend!='CLARABEL':stem+='_'+args.wbc_backend.lower()
