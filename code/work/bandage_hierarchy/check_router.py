@@ -97,4 +97,16 @@ for t in (.0,.05,.10,.15,.20,.25,.30):
         hand_contacts=(False,True,False,False),dressing_grasp_valid=False,
         forearm_support_valid=False),zeros,HandProposal(t,ones,.95))
 assert pinch_decision.mode == Mode.HAND
+supported_pinch_router=HandExpertRouter(80)
+for t in (.0,.05,.10,.15,.20,.25,.30):
+    supported_decision=supported_pinch_router.step(observation(t,phase='pinch_dressing_supported',
+        hand_contacts=(True,True,False,False),dressing_grasp_valid=False,
+        forearm_support_valid=True),zeros,HandProposal(t,ones,.95))
+assert supported_decision.mode == Mode.HAND
+supported_pinch_router2=HandExpertRouter(80)
+for t in (.0,.05,.10,.15,.20,.25,.30):
+    rejected=supported_pinch_router2.step(observation(t,phase='pinch_dressing_supported',
+        hand_contacts=(True,True,False,False),forearm_support_valid=False),zeros,
+        HandProposal(t,ones,.95))
+assert rejected.mode == Mode.BODY
 print(f'router checks passed: failed/conditional support replays, first conditional hand switch {first_hand:.2f}s, stale fallback and loss guards')

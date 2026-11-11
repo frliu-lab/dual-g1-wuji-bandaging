@@ -10,7 +10,7 @@ import numpy as np,mujoco,cvxpy as cp
 ROOT=Path(__file__).resolve().parents[2];OUT=ROOT/'outputs/wuji_multiagent'
 
 class JointWBC:
- def __init__(self,m,qref,palm_names=None,contact_filter=None,palm_rotation_weight=10.):
+ def __init__(self,m,qref,palm_names=None,contact_filter=None,palm_rotation_weight=10.,palm_rotation_weights=None,palm_position_weights=None):
   if palm_rotation_weight<=0:raise ValueError('Palm rotation weight must be positive')
   self.palm_rotation_weight=float(palm_rotation_weight)
   self.disabled_pressure_agents=set();self.backend='CLARABEL';self.force_control_indices=set();self.hard_hand_indices=set();self.world_force_targets={};self.world_force_command={};self.last_tau=np.zeros(m.nu)
@@ -20,6 +20,10 @@ class JointWBC:
   self.hand_position_mode=False;self.hand_indices=np.array([i for i in range(m.nu) if '/wuji_' in m.actuator(i).name]);self.hand_commands=np.zeros(m.nu);self.hand_tau_correction=np.zeros(m.nu);self.hand_admittance_offset=np.zeros(m.nu);self.last_pad_force_targets={}
   self.pressure_cmd={};self.pressure_time=None
   self.reference_data=mujoco.MjData(m);palm_names=palm_names or ('g1_a/wuji_right/r_wrist','g1_b/wuji_left/l_wrist');self.palm_ids=[m.body(name).id for name in palm_names];self.task_dim=6*len(self.palm_ids);self.act_qadr=np.array([m.jnt_qposadr[j] for j in m.actuator_trnid[:,0]]);self.act_vadr=np.array([m.jnt_dofadr[j] for j in m.actuator_trnid[:,0]]);self.act_gear=m.actuator_gear[:,0].copy()
+  self.palm_rotation_weights=np.full(len(self.palm_ids),self.palm_rotation_weight) if palm_rotation_weights is None else np.asarray(palm_rotation_weights,dtype=float)
+  if self.palm_rotation_weights.shape!=(len(self.palm_ids),) or not np.all(np.isfinite(self.palm_rotation_weights)) or np.any(self.palm_rotation_weights<=0):raise ValueError('Palm rotation weights must be positive finite values for each palm')
+  self.palm_position_weights=np.full(len(self.palm_ids),1000.) if palm_position_weights is None else np.asarray(palm_position_weights,dtype=float)
+  if self.palm_position_weights.shape!=(len(self.palm_ids),) or not np.all(np.isfinite(self.palm_position_weights)) or np.any(self.palm_position_weights<=0):raise ValueError('Palm position weights must be positive finite values for each palm')
   self.m=m;self.contact_filter=contact_filter;self.qref=qref.copy();self.vref=np.zeros(m.nv);self.aref=np.zeros(m.nv);self.preload_enabled=False;self.B=np.zeros((m.nv,m.nu));self.cache={}
   self.kp=np.full(m.nv,60.);self.kd=np.full(m.nv,14.);self.weights=np.ones(m.nv)
   for i in range(m.nu):self.B[m.jnt_dofadr[m.actuator_trnid[i,0]],i]=m.actuator_gear[i,0]
@@ -86,7 +90,8 @@ class JointWBC:
     normal=f[c*3];tang=f[c*3+1:c*3+3];constraints.extend([normal>=0,normal<=1000,cp.norm1(tang)<=P['mu'][c]*normal])
    if any(forearm_flags):constraints.append(cp.sum(cp.hstack([f[3*c] for c,flag in enumerate(forearm_flags) if flag]))<=P['forearm_cap'])
    if any(finger_flags):constraints.append(cp.sum(cp.hstack([f[3*c] for c,flag in enumerate(finger_flags) if flag]))<=P['finger_forearm_cap'])
-   objective=cp.sum_squares(cp.multiply(np.tile(np.r_[np.full(3,np.sqrt(1000.)),np.full(3,np.sqrt(self.palm_rotation_weight))],len(self.palm_ids)),P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(self.weights,a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
+   task_weights=np.concatenate([np.r_[np.full(3,np.sqrt(pos)),np.full(3,np.sqrt(rot))] for pos,rot in zip(self.palm_position_weights,self.palm_rotation_weights)])
+   objective=cp.sum_squares(cp.multiply(task_weights,P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(self.weights,a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
    if self.hand_position_mode and len(fixed_hand):objective+=1e4*cp.sum_squares(tau[fixed_hand]-P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in fixed_hand]])
    self.cache[key]=(cp.Problem(cp.Minimize(objective),constraints),P,a,tau,f)
   problem,P,a,tau,f=self.cache[key]
@@ -173,7 +178,7 @@ class JointWBC:
    except cp.error.SolverError:fallback=True;clarabel_solve()
   else:clarabel_solve()
   def valid_solution():
-   if (not direct_success and problem.status!='optimal') or tau.value is None or a.value is None or f.value is None:return False,float('inf')
+   if (not direct_success and problem.status not in ('optimal','optimal_inaccurate')) or tau.value is None or a.value is None or f.value is None:return False,float('inf')
    residual=float(np.max(np.abs(M@a.value+h-self.B@tau.value-J.T@f.value)));force=f.value.reshape(-1,3);viol=max(0.,float(np.max(lo-tau.value)),float(np.max(tau.value-hi)),float(np.max(-force[:,0])),float(np.max(np.abs(force[:,1:]).sum(axis=1)-mus*force[:,0])),float(np.max(force[:,0]-1000.)),float(np.max(acc_lo-a.value)),float(np.max(a.value-acc_hi)))
    if any(forearm_flags):viol=max(viol,float(sum(force[c,0] for c,flag in enumerate(forearm_flags) if flag)-P['forearm_cap'].value))
    if any(finger_flags):viol=max(viol,float(sum(force[c,0] for c,flag in enumerate(finger_flags) if flag)-P['finger_forearm_cap'].value))
