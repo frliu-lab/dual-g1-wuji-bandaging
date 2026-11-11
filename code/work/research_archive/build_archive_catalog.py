@@ -137,6 +137,7 @@ SELECTED = [
     'bandage_v0/joint_support_pinch_staged_wbc_report_hold2p5_spool_settled_bwarm.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_closure0p008_rewrist_roll.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll_scale1p3.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',

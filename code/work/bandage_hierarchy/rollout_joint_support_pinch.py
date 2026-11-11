@@ -22,6 +22,7 @@ parser.add_argument('--b-warm-closure',choices=('0p004','0p008'),default='0p004'
 parser.add_argument('--open-support-pinky',action='store_true',help='Retract A-left little finger during final contact hold')
 parser.add_argument('--support-wrist-reorient',action='store_true',help='Blend A-left wrist toward screened palm-only orientation')
 parser.add_argument('--support-wrist-candidate',choices=('near','roll','roll_yaw'),default='near')
+parser.add_argument('--support-wrist-scale',type=float,default=1.)
 parser.add_argument('--analytic-grip-specialist',action='store_true',
                     help='Route pad-relative finger corrections after support and pad touch')
 parser.add_argument('--hold-s',type=float,default=1.5,help='Final pinch hold duration')
@@ -47,6 +48,7 @@ if not 1000.<=args.b_palm_position_weight<=10000.:
     parser.error('B-left palm position weight must be in [1000,10000]')
 if not 1.<=args.b_finger_weight<=30.:
     parser.error('B-left finger weight must be in [1,30]')
+if not .5<=args.support_wrist_scale<=1.5:parser.error('Support wrist scale must be in [0.5,1.5]')
 if args.analytic_grip_specialist and not args.staged:
     parser.error('Analytic grip specialist requires staged pregrasp path')
 if not .5<=args.hold_s<=5.:
@@ -272,7 +274,7 @@ for segment,k,count in schedule:
         blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.5))
         delta={'near':[-.045,0.,.09],'roll':[-.135,-.045,0.],
                'roll_yaw':[-.135,-.045,.045]}[args.support_wrist_candidate]
-        wbc.qref[support_wrist_qadr]+=blend*np.array(delta)
+        wbc.qref[support_wrist_qadr]+=blend*args.support_wrist_scale*np.array(delta)
     if b_digit_info and segment>=len(path)-2:
         spool_rot=data.xmat[spool_body].reshape(3,3)
         for info in b_digit_info.values():
@@ -419,6 +421,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'open_support_pinky':args.open_support_pinky,
         'support_wrist_reorient':args.support_wrist_reorient,
         'support_wrist_candidate':args.support_wrist_candidate if args.support_wrist_reorient else None,
+        'support_wrist_scale':args.support_wrist_scale if args.support_wrist_reorient else None,
         'wbc_backend':args.wbc_backend,
         'hold_s':args.hold_s,
         'router_mode_counts':router_modes,
@@ -479,6 +482,7 @@ if args.b_warm_reference and args.b_warm_closure!='0p004':stem+='_closure'+args.
 if args.open_support_pinky:stem+='_openpinky'
 if args.support_wrist_reorient:stem+='_rewrist'
 if args.support_wrist_reorient and args.support_wrist_candidate!='near':stem+='_'+args.support_wrist_candidate
+if args.support_wrist_reorient and args.support_wrist_scale!=1.:stem+='_scale'+str(args.support_wrist_scale).replace('.','p')
 if args.b_finger_weight!=1.:stem+='_bfinger'+str(args.b_finger_weight).replace('.','p')
 if args.b_palm_position_weight!=1000.:stem+='_bposition'+str(args.b_palm_position_weight).replace('.','p')
 if args.wbc_backend!='CLARABEL':stem+='_'+args.wbc_backend.lower()

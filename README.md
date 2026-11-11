@@ -57,3 +57,5 @@
 进一步按[动态末态卷轴姿态](media/bandage_v0/joint_spool_grasp_static_z0p73_closure0p004_root0p55_spoolz0p702_dynamicwarm_screen.json)重新求解 B 左手接触，避免把旧静态姿态直接移植后造成约 10–12 mm 的食指穿透。该静态候选虽无深度碰撞且双指相向，[8.30 s 闭环](media/bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm.json)中两指仅短暂接触，法线没有持续相向；[延长保持](media/bandage_v0/joint_support_pinch_staged_wbc_report_hold2p5_spool_settled_bwarm.json)也未改善。[收紧 8 mm 的静态候选](media/bandage_v0/joint_spool_grasp_static_z0p73_closure0p008_root0p55_spoolz0p702_dynamicwarm_screen.json)同样未带来动态抓持。
 
 [托臂接触来源筛查](media/bandage_v0/joint_support_ring_clearance_screen.json)显示末段无名指近节承担约 25% 接触冲量：固定腕姿下 270 组指关节候选无一能在保留掌面接触时去掉该接触；729 组腕姿中 15 组静态几何合格。[较好的腕姿闭环](media/bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll.json)仅把末段手指冲量份额降到约 17%，仍超过暂定 10% 上限；[更紧的卷轴指姿组合](media/bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_closure0p008_rewrist_roll.json)仍无持续相向抓持。静态接触筛查不能代替动态受力验收。
+
+[放大腕姿偏移 1.3 倍](media/bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll_scale1p3.json)后手指冲量份额仍约 16.5%，B 左手相向抓卷轴时长仍为 0 s。此类末段角度微调未触及联合接触力分配的根因。
