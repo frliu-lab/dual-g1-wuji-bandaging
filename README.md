@@ -48,4 +48,4 @@
 
 视觉核查：[静态终态](media/bandage_v0/joint_support_pinch_static_target_oblique.png)与[动态末态](media/bandage_v0/joint_support_pinch_dynamic_endpoint_oblique.png)并排可见右手实际到位偏差；静态图中的双指位置不能代替动态受力和持续接触。两张图只用于定位失败机理，不是任务演示。
 
-[B 左手卷轴静态接触探测](media/bandage_v0/joint_spool_grasp_static_z0p745_screen.json)尚未找到无深度碰撞且相向的抓持：[向内收紧 1.5 mm](media/bandage_v0/joint_spool_grasp_static_z0p745_closure0p0015_screen.json)虽然改善接触方向，但出现 6 处深度接触。B 机器人仍未参与有效操作。
+[B 左手卷轴静态接触探测](media/bandage_v0/joint_spool_grasp_static_z0p745_screen.json)在原 B 根位置 x=0.70 m 未找到合格终态；[向内收紧 1.5 mm](media/bandage_v0/joint_spool_grasp_static_z0p745_closure0p0015_screen.json)出现 6 处深度接触。改为预置 B 根位置 x=0.55 m 后，[静态终态](media/bandage_v0/joint_spool_grasp_static_z0p745_root0p55_screen.json)达到双指相向接触、各约 1.33 N 且无深度碰撞；[三点进入路径](media/bandage_v0/joint_spool_grasp_rrt_report.json)通过静态筛查。[联合动态试验](media/bandage_v0/joint_support_pinch_staged_wbc_report_spool.json)在约 8.78/9.10 s 时因 QP 约束违背终止，B 双指未碰卷轴，A 右拇指未碰敷料，托臂在线门槛失效。B 的位置是预置的，尚无行走或动态抓卷轴证明；不能称为四手包扎。

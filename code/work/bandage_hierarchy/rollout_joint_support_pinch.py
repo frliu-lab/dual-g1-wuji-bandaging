@@ -24,6 +24,8 @@ parser.add_argument('--support-finger-force-cap-n',type=float,default=2.,
                     help='Predicted A-left finger contact force cap on the forearm')
 parser.add_argument('--support-total-force-cap-n',type=float,default=12.,
                     help='Predicted total A-left contact force cap on the forearm')
+parser.add_argument('--spool-after',action='store_true',
+                    help='Use the separate B-root x=0.55 m layout and append B-left spool approach')
 args=parser.parse_args()
 if not 1.<=args.grasp_finger_weight<=30.:
     parser.error('Grasp finger weight must be in [1,30]')
@@ -45,16 +47,46 @@ from support_quality import SupportQualityMonitor, SupportSample
 sys.path.insert(0,str(ROOT/'work/bandage_hierarchy'))
 from controller_router import HandExpertRouter, HandProposal, Observation, Mode
 
-model = mujoco.MjModel.from_xml_path(str(OUT / 'joint_support_pinch_variant.xml'))
+model = mujoco.MjModel.from_xml_path(str(OUT / ('joint_spool_grasp_static_z0p745_root0p55_variant.xml'
+                                                if args.spool_after else 'joint_support_pinch_variant.xml')))
 data = mujoco.MjData(model)
-left_path = np.load(OUT / 'dynamic_palm_support_rrt.npz')['qpos']
+left_path = np.load(OUT / 'dynamic_palm_support_rrt.npz')['qpos'].copy()
 right_path = np.load(OUT / ('joint_support_pregrasp_rrt.npz' if args.staged
-                            else 'joint_support_pinch_rrt.npz'))['qpos']
+                            else 'joint_support_pinch_rrt.npz'))['qpos'].copy()
+if args.spool_after:
+    b_root_qadr=model.joint('g1_b/floating_base').qposadr[0]
+    left_path[:,b_root_qadr]=.55
+    right_path[:,b_root_qadr]=.55
 if np.max(np.abs(left_path[-1] - right_path[0])) > 1e-9:
     raise RuntimeError('Support and pinch paths do not join')
 path = np.vstack([left_path, right_path[1:]])
 if args.staged:
-    path=np.vstack([path,np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos']])
+    closure=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
+    if args.spool_after:closure[b_root_qadr]=.55
+    path=np.vstack([path,closure])
+if args.spool_after:
+    spool_path=np.load(OUT/'joint_spool_grasp_rrt.npz')['qpos']
+    if np.max(np.abs(path[-1]-spool_path[0]))>1e-9:
+        raise RuntimeError('Pinch and spool paths do not join')
+    path=np.vstack([path,spool_path[1:]])
+if args.spool_after:
+    static_deep=[]
+    for segment,(a,b) in enumerate(zip(path,path[1:]),start=1):
+        samples=max(2,int(np.ceil(np.linalg.norm(b-a)/.04)))
+        for u in np.linspace(0,1,samples+1):
+            data.qpos[:]=(1-u)*a+u*b
+            mujoco.mj_forward(model,data)
+            for c in data.contact:
+                if c.geom1<0 or c.geom2<0 or c.dist>=-.003:continue
+                geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
+                bodies=(model.body(model.geom_bodyid[c.geom1]).name,
+                        model.body(model.geom_bodyid[c.geom2]).name)
+                if 'floor' not in geoms and any(body.startswith(('g1_a/','g1_b/')) for body in bodies):
+                    static_deep.append({'segment':segment,'fraction':float(u),
+                                        'bodies':bodies,'distance_m':float(c.dist)})
+                    break
+    if static_deep:
+        raise RuntimeError(f'Combined spool path has {len(static_deep)} static deep-contact samples; first {static_deep[0]}')
 data.qpos[:] = path[0]
 mujoco.mj_forward(model, data)
 palms = ('g1_a/wuji_left/l_wrist', 'g1_a/wuji_right/r_wrist',
@@ -133,6 +165,13 @@ both_digits_opposed_steps=0
 opposed_run=0
 longest_opposed_run=0
 pad_body=model.body('dressing_pad').id
+spool_body=model.body('bandage_spool').id
+spool_start=data.xpos[spool_body].copy()
+max_spool_displacement=0.
+peak_b_thumb_force=0.
+peak_b_index_force=0.
+b_opposed_run=0
+b_longest_opposed_run=0
 thumb_tip=model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id
 index_tip=model.body('g1_a/wuji_right/r_index_finger_tip_sensor_frame').id
 right_arm_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
@@ -211,6 +250,8 @@ for segment,k,count in schedule:
             supported=set()
             thumb_force=0.;index_force=0.
             normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+            b_forces={'thumb':0.,'index':0.}
+            b_normals={'thumb':np.zeros(3),'index':np.zeros(3)}
             support_force=0.
             for ci,c in enumerate(data.contact):
                 if c.geom1<0 or c.geom2<0:continue
@@ -243,13 +284,24 @@ for segment,k,count in schedule:
                             normals[digit]+=sign*force*np.asarray(c.frame[:3])
                             if digit=='thumb':thumb_force+=force
                             else:index_force+=force
+                if 'bandage_roll' in geoms or 'bandage_core' in geoms:
+                    for digit in b_forces:
+                        if any(b.startswith(f'g1_b/wuji_left/l_{digit}_') for b in bodies):
+                            wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
+                            force=max(0.,float(wrench[0]))
+                            sign=1. if geoms[0] in ('bandage_roll','bandage_core') else -1.
+                            b_forces[digit]+=force
+                            b_normals[digit]+=sign*force*np.asarray(c.frame[:3])
             frame_peak=max(frame_peak,support_force)
             peak_support_force=max(peak_support_force,support_force)
             peak_thumb_force=max(peak_thumb_force,thumb_force)
             peak_index_force=max(peak_index_force,index_force)
+            peak_b_thumb_force=max(peak_b_thumb_force,b_forces['thumb'])
+            peak_b_index_force=max(peak_b_index_force,b_forces['index'])
             frame_foot &= supported=={'g1_a','g1_b'}
             foot_steps+=int(supported=={'g1_a','g1_b'})
             max_pad_displacement=max(max_pad_displacement,float(np.linalg.norm(data.xpos[pad_body]-pad_start)))
+            max_spool_displacement=max(max_spool_displacement,float(np.linalg.norm(data.xpos[spool_body]-spool_start)))
         deep_steps+=int(frame_deep)
         valid=support_monitor.update(SupportSample(
             time_s=float(data.time),elbow_rad=float(data.qpos[elbow_qadr]),
@@ -266,15 +318,24 @@ for segment,k,count in schedule:
         opposed_run=opposed_run+1 if opposed else 0
         longest_opposed_run=max(longest_opposed_run,opposed_run)
         both_digits_opposed_steps+=int(opposed)
+        ba,bb=b_normals.values()
+        bcos=float(ba@bb/(np.linalg.norm(ba)*np.linalg.norm(bb))) if np.linalg.norm(ba)*np.linalg.norm(bb)>1e-8 else None
+        b_opposed=bool(b_forces['thumb']>=.05 and b_forces['index']>=.05 and bcos is not None and bcos<-.5)
+        b_opposed_run=b_opposed_run+1 if b_opposed else 0
+        b_longest_opposed_run=max(b_longest_opposed_run,b_opposed_run)
         trace.append({'time_s':float(data.time),'segment':segment,'elbow_rad':float(data.qpos[elbow_qadr]),
                       'support_valid':valid,'support_force_n':frame_peak,'thumb_force_n':thumb_force,
                       'index_force_n':index_force,'normal_cosine':cos,'opposed':opposed,
+                      'b_thumb_force_n':b_forces['thumb'],'b_index_force_n':b_forces['index'],
+                      'b_normal_cosine':bcos,'b_opposed':b_opposed,
                       'pad_center_m':data.xpos[pad_body].tolist()})
     except Exception as exc:
         errors.append(f'{type(exc).__name__}: {exc}')
         break
-report={'scope':'Dynamic double-G1 WBC screen: A-left support and A-right pinch; B stands; no bandaging claim',
+report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right pad pinch, B-left spool grasp attempt; no bandaging claim'
+                 if args.spool_after else 'Dynamic double-G1 WBC screen: A-left support and A-right pinch; B stands; no bandaging claim'),
         'staged_pregrasp':args.staged,
+        'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
         'analytic_grip_specialist':args.analytic_grip_specialist,
         'hold_s':args.hold_s,
         'router_mode_counts':router_modes,
@@ -299,6 +360,10 @@ report={'scope':'Dynamic double-G1 WBC screen: A-left support and A-right pinch;
         'longest_opposed_contact_s':longest_opposed_run/hz,
         'opposed_contact_control_fraction':both_digits_opposed_steps/max(1,len(trace)),
         'max_pad_center_displacement_m':max_pad_displacement,
+        'max_spool_center_displacement_m':max_spool_displacement,
+        'peak_b_left_thumb_force_n':peak_b_thumb_force,
+        'peak_b_left_index_force_n':peak_b_index_force,
+        'longest_b_left_opposed_spool_contact_s':b_longest_opposed_run/hz,
         'final_pad_center_m':data.xpos[pad_body].tolist(),
         'final_thumb_tip_m':data.xpos[thumb_tip].tolist(),
         'final_index_tip_m':data.xpos[index_tip].tolist(),
@@ -321,6 +386,7 @@ if args.analytic_grip_specialist:stem+='_specialist'
 if args.hold_s!=1.5:stem+=f'_hold{str(args.hold_s).replace(".","p")}'
 if args.support_finger_force_cap_n!=2.:stem+=f'_fingercap{str(args.support_finger_force_cap_n).replace(".","p")}'
 if args.support_total_force_cap_n!=12.:stem+=f'_totalcap{str(args.support_total_force_cap_n).replace(".","p")}'
+if args.spool_after:stem+='_spool'
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel,reference_qpos=path[-1])
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))

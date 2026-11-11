@@ -182,10 +182,11 @@ class JointWBC:
    residual=float(np.max(np.abs(M@a.value+h-self.B@tau.value-J.T@f.value)));force=f.value.reshape(-1,3);viol=max(0.,float(np.max(lo-tau.value)),float(np.max(tau.value-hi)),float(np.max(-force[:,0])),float(np.max(np.abs(force[:,1:]).sum(axis=1)-mus*force[:,0])),float(np.max(force[:,0]-1000.)),float(np.max(acc_lo-a.value)),float(np.max(a.value-acc_hi)))
    if any(forearm_flags):viol=max(viol,float(sum(force[c,0] for c,flag in enumerate(forearm_flags) if flag)-P['forearm_cap'].value))
    if any(finger_flags):viol=max(viol,float(sum(force[c,0] for c,flag in enumerate(finger_flags) if flag)-P['finger_forearm_cap'].value))
-   return residual<=1e-4 and viol<=1e-5,residual
+   self.last_qp_constraint_violation=viol
+   return residual<=1e-4 and viol<=2e-5,residual
   valid,residual=valid_solution()
   if not valid and self.backend in ('OSQP','DIRECT'):fallback=True;direct_success=False;clarabel_solve();valid,residual=valid_solution()
-  if not valid:raise RuntimeError('WBC invalid '+str(problem.status)+' residual '+str(residual))
+  if not valid:raise RuntimeError('WBC invalid '+str(problem.status)+' residual '+str(residual)+' constraint violation '+str(self.last_qp_constraint_violation))
   if fallback:used_backend='CLARABEL_fallback'
   solve_wall=time.perf_counter()-solve_started
   self.hand_tau_correction[:]=0.

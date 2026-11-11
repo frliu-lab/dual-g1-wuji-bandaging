@@ -1,6 +1,7 @@
 """Static B-left Wuji hand approach to the loose bandage spool in the composite scene."""
 import json
 import argparse
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import mujoco
@@ -12,12 +13,18 @@ OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser()
 parser.add_argument('--goal-z',type=float,default=.72)
 parser.add_argument('--y-closure',type=float,default=0.)
+parser.add_argument('--b-root-x',type=float,default=.7)
 args=parser.parse_args()
 if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
-model=mujoco.MjModel.from_xml_path(str(OUT/'joint_support_pinch_variant.xml'))
+if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
+scene=ET.parse(OUT/'joint_support_pinch_variant.xml').getroot()
+if args.b_root_x!=.7:
+    scene.find(".//body[@name='g1_b/pelvis']").set('pos',f'{args.b_root_x} 0 .8')
+model=mujoco.MjModel.from_xml_string(ET.tostring(scene,encoding='unicode'))
 data=mujoco.MjData(model)
 base=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
+base[model.joint('g1_b/floating_base').qposadr[0]]=args.b_root_x
 joint_ids=[j for j in range(model.njnt)
            if (model.joint(j).name.startswith('g1_b/left_') and
                any(s in model.joint(j).name for s in ('shoulder','elbow','wrist')))
@@ -80,6 +87,7 @@ cosine=(float(a@b/(np.linalg.norm(a)*np.linalg.norm(b)))
         if np.linalg.norm(a)*np.linalg.norm(b)>1e-8 else None)
 eligible=bool(not deep and all(f>.05 for f in forces.values()) and cosine is not None and cosine<-.5)
 report={'scope':'Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim',
+        'b_root_x_m':args.b_root_x,
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
@@ -89,7 +97,10 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'eligible_static_endpoint':eligible}
 stem='joint_spool_grasp_static'+('' if args.goal_z==.72 else '_z'+str(args.goal_z).replace('.','p'))
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
+if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
-if eligible:np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())
+if eligible:
+    np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())
+    (OUT/f'{stem}_variant.xml').write_text(ET.tostring(scene,encoding='unicode'),encoding='utf8')
 print(json.dumps({k:v for k,v in report.items() if k not in ('joint_names','deep_contacts')}
                  | {'deep_count':len(deep)}))

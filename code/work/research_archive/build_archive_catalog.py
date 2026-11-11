@@ -121,6 +121,9 @@ SELECTED = [
     'bandage_v0/joint_support_pinch_dynamic_endpoint_oblique.png',
     'bandage_v0/joint_spool_grasp_static_z0p745_screen.json',
     'bandage_v0/joint_spool_grasp_static_z0p745_closure0p0015_screen.json',
+    'bandage_v0/joint_spool_grasp_static_z0p745_root0p55_screen.json',
+    'bandage_v0/joint_spool_grasp_rrt_report.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -156,6 +159,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/summarize_joint_support_pinch.py',
     'work/bandage_hierarchy/render_joint_support_pinch_diagnostic.py',
     'work/bandage_hierarchy/probe_spool_grasp.py',
+    'work/bandage_hierarchy/plan_spool_grasp_path.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',
     'work/bandage_hierarchy/plan_side_pinch_path.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',
