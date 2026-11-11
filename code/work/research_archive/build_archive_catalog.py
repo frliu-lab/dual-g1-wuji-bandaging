@@ -138,6 +138,13 @@ SELECTED = [
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_closure0p008_rewrist_roll.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bwarm_rewrist_roll_scale1p3.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_palmgoal8p0_spool_settled_bwarm_rewrist_roll.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_palmgoal10p0_spool_settled_bwarm_rewrist_roll.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_palmgoal11p5_spool_settled_bwarm_rewrist_roll.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_palmgoal12p0_spool_settled_bwarm_rewrist_roll.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_position1500p0_stageright_specialist_palmgoal11p5_elbowweight10p0_spool_settled_bwarm_rewrist_roll.json',
+    'bandage_v0/joint_spool_grasp_static_z0p73_closure0p004_root0p55_spoolz0p702_dynamicwarm_jointwarm_screen.json',
+    'bandage_v0/joint_spool_grasp_static_closure0p004_root0p55_spoolz0p702_dynamicwarm_jointwarm_screen.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',

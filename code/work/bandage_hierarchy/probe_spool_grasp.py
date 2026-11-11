@@ -16,11 +16,13 @@ parser.add_argument('--y-closure',type=float,default=0.)
 parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--spool-z',type=float,default=.72,help='World-height initial state for spool free joint')
 parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the settled-spool dynamic terminal state')
+parser.add_argument('--warm-joint',action='store_true',help='Use terminal state of staged right-palm and elbow-hold joint rollout')
 args=parser.parse_args()
 if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
 if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
 if not .69<=args.spool_z<=.72:parser.error('Spool center z must be in [0.69,0.72] m')
+if args.warm_joint and not args.warm_dynamic:parser.error('Joint warm state requires --warm-dynamic')
 scene=ET.parse(OUT/'joint_support_pinch_variant.xml').getroot()
 if args.b_root_x!=.7:
     scene.find(".//body[@name='g1_b/pelvis']").set('pos',f'{args.b_root_x} 0 .8')
@@ -30,7 +32,9 @@ base=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
 if args.warm_dynamic:
     if abs(args.b_root_x-.55)>1e-9 or abs(args.spool_z-.702)>1e-9:
         parser.error('Dynamic warm start requires B root x=0.55 and spool z=0.702')
-    base=np.load(OUT/'joint_support_pinch_staged_wbc_report_spool_settled_final_state.npz')['qpos'].copy()
+    warm_name=('joint_support_pinch_staged_wbc_report_position1500p0_stageright_specialist_palmgoal11p5_elbowweight10p0_spool_settled_bwarm_rewrist_roll_final_state.npz'
+               if args.warm_joint else 'joint_support_pinch_staged_wbc_report_spool_settled_final_state.npz')
+    base=np.load(OUT/warm_name)['qpos'].copy()
 else:
     base[model.joint('g1_b/floating_base').qposadr[0]]=args.b_root_x
     base[model.joint('bandage_spool_free').qposadr[0]+2]=args.spool_z
@@ -105,6 +109,7 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'b_root_x_m':args.b_root_x,
         'spool_initial_z_m':args.spool_z,
         'warm_dynamic':args.warm_dynamic,
+        'warm_joint':args.warm_joint,
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
@@ -117,6 +122,7 @@ if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
 if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 if args.spool_z!=.72:stem+='_spoolz'+str(args.spool_z).replace('.','p')
 if args.warm_dynamic:stem+='_dynamicwarm'
+if args.warm_joint:stem+='_jointwarm'
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())

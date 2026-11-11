@@ -14,6 +14,7 @@ parser.add_argument('--staged',action='store_true',help='Use contact-free pregra
 parser.add_argument('--grasp-finger-weight',type=float,default=1.,help='WBC acceleration tracking weight for A-right thumb and index')
 parser.add_argument('--palm-rotation-weight',type=float,default=10.,help='WBC wrist orientation tracking weight')
 parser.add_argument('--right-palm-position-weight',type=float,default=1000.,help='WBC A-right wrist position tracking weight')
+parser.add_argument('--stage-right-palm-weight',action='store_true',help='Use baseline A-right weight until pinch approach')
 parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WBC B-left wrist position tracking weight')
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
@@ -30,6 +31,10 @@ parser.add_argument('--support-finger-force-cap-n',type=float,default=2.,
                     help='Predicted A-left finger contact force cap on the forearm')
 parser.add_argument('--support-total-force-cap-n',type=float,default=12.,
                     help='Predicted total A-left contact force cap on the forearm')
+parser.add_argument('--support-palm-force-goal-n',type=float,default=0.,
+                    help='Soft WBC target for palm forearm normal force; zero disables goal')
+parser.add_argument('--elbow-hold-weight',type=float,default=1.,
+                    help='WBC forearm hinge acceleration tracking weight')
 parser.add_argument('--spool-after',action='store_true',
                     help='Use the separate B-root x=0.55 m layout and append B-left spool approach')
 parser.add_argument('--settled-spool',action='store_true',help='Use z=0.702 m resting spool state and matched B-left path')
@@ -57,6 +62,9 @@ if not .2<=args.support_finger_force_cap_n<=2.:
     parser.error('Support finger force cap must be in [0.2,2] N')
 if not 5.<=args.support_total_force_cap_n<=15.:
     parser.error('Support total force cap must be in [5,15] N')
+if not 0.<=args.support_palm_force_goal_n<=12.:
+    parser.error('Support palm force goal must be in [0,12] N')
+if not 1.<=args.elbow_hold_weight<=100.:parser.error('Elbow hold weight must be in [1,100]')
 sys.path.insert(0, str(ROOT / 'work/wuji_multiagent'))
 from joint_wbc import JointWBC
 from support_quality import SupportQualityMonitor, SupportSample
@@ -148,6 +156,7 @@ support_wrist_qadr=np.array([model.joint(name).qposadr[0] for name in
 elbow_joint = model.joint('training_elbow_hinge').id
 elbow_qadr = model.jnt_qposadr[elbow_joint]
 elbow_vadr = model.jnt_dofadr[elbow_joint]
+elbow_hold_target=float(left_path[-1,elbow_qadr])
 forearm_body = model.body('training_forearm_dynamic').id
 forearm_geom = model.geom('manikin_forearm').id
 left_palm = model.body('g1_a/wuji_left/l_wrist').id
@@ -260,10 +269,17 @@ if args.b_analytic_grip:
                              'vadr':np.array([model.jnt_dofadr[j] for j in joints],dtype=int),
                              'spool_local':local}
 for segment,k,count in schedule:
+    wbc.weights[elbow_vadr]=(args.elbow_hold_weight if segment>=3 else 1.)
+    wbc.palm_position_weights[1]=(args.right_palm_position_weight if not args.stage_right_palm_weight or segment>=5 else 1000.)
+    wbc.support_palm_force_goal_n=(args.support_palm_force_goal_n
+                                   if args.support_palm_force_goal_n>0 and segment==len(path)-1 and k==count
+                                   else None)
     u=(k/count)**2*(3-2*k/count)
     wbc.qref[:]=(1-u)*path[segment-1]+u*path[segment]
     if segment>=2:
         follow_forearm(wbc.qref)
+    if args.elbow_hold_weight>1. and segment>=3:
+        wbc.qref[elbow_qadr]=elbow_hold_target
     if b_warm_target is not None and segment==len(path)-1 and k==count:
         blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.4))
         wbc.qref[b_warm_qadr]=(1-blend)*wbc.qref[b_warm_qadr]+blend*b_warm_target[b_warm_qadr]
@@ -431,10 +447,14 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'b_palm_position_weight':args.b_palm_position_weight,
         'a_right_palm_rotation_weight':args.palm_rotation_weight,
         'a_right_palm_position_weight':args.right_palm_position_weight,
+        'stage_right_palm_weight':args.stage_right_palm_weight,
         'simulated_time_s':float(data.time),'planned_duration_s':sum(durations),
         'wbc_hz':hz,'segments_completed':segment if not errors else segment-1,
         'forearm_mass_kg':.8,'wbc_forearm_force_cap_n':args.support_total_force_cap_n,
         'wbc_finger_force_cap_n':args.support_finger_force_cap_n,
+        'wbc_support_palm_force_goal_n':args.support_palm_force_goal_n,
+        'wbc_elbow_hold_weight':args.elbow_hold_weight,
+        'elbow_hold_target_rad':elbow_hold_target if args.elbow_hold_weight>1. else None,
         'final_elbow_rad':float(data.qpos[elbow_qadr]),
         'final_half_second_mean_abs_elbow_rad':float(np.mean([abs(t['elbow_rad']) for t in trace[-25:]])) if trace else None,
         'online_support_quality_final':support_monitor.last_report,
@@ -470,10 +490,13 @@ stem='joint_support_pinch_staged_wbc_report' if args.staged else 'joint_support_
 if args.grasp_finger_weight!=1.:stem+=f'_fingerweight{str(args.grasp_finger_weight).replace(".","p")}'
 if args.palm_rotation_weight!=10.:stem+=f'_rotation{str(args.palm_rotation_weight).replace(".","p")}'
 if args.right_palm_position_weight!=1000.:stem+=f'_position{str(args.right_palm_position_weight).replace(".","p")}'
+if args.stage_right_palm_weight:stem+='_stageright'
 if args.analytic_grip_specialist:stem+='_specialist'
 if args.hold_s!=1.5:stem+=f'_hold{str(args.hold_s).replace(".","p")}'
 if args.support_finger_force_cap_n!=2.:stem+=f'_fingercap{str(args.support_finger_force_cap_n).replace(".","p")}'
 if args.support_total_force_cap_n!=12.:stem+=f'_totalcap{str(args.support_total_force_cap_n).replace(".","p")}'
+if args.support_palm_force_goal_n>0:stem+='_palmgoal'+str(args.support_palm_force_goal_n).replace('.','p')
+if args.elbow_hold_weight!=1.:stem+='_elbowweight'+str(args.elbow_hold_weight).replace('.','p')
 if args.spool_after:stem+='_spool'
 if args.settled_spool:stem+='_settled'
 if args.b_analytic_grip:stem+='_bfeedback'
