@@ -124,6 +124,10 @@ SELECTED = [
     'bandage_v0/joint_spool_grasp_static_z0p745_root0p55_screen.json',
     'bandage_v0/joint_spool_grasp_rrt_report.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool.json',
+    'bandage_v0/joint_spool_grasp_static_z0p73_root0p55_spoolz0p702_screen.json',
+    'bandage_v0/joint_spool_grasp_rrt_settled_report.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled.json',
+    'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_bfinger10p0_bposition2000p0.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',

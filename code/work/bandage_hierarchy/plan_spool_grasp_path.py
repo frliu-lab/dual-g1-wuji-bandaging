@@ -1,5 +1,6 @@
 """Static collision-screened B-left approach to a spool grip at x=0.55 m."""
 import json
+import argparse
 from pathlib import Path
 
 import mujoco
@@ -7,12 +8,17 @@ import numpy as np
 
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
-stem='joint_spool_grasp_static_z0p745_root0p55'
+parser=argparse.ArgumentParser()
+parser.add_argument('--settled',action='store_true',help='Plan against spool resting at z=0.702 m')
+args=parser.parse_args()
+stem=('joint_spool_grasp_static_z0p73_root0p55_spoolz0p702' if args.settled
+      else 'joint_spool_grasp_static_z0p745_root0p55')
 model=mujoco.MjModel.from_xml_path(str(OUT/f'{stem}_variant.xml'))
 data=mujoco.MjData(model)
 goal=np.load(OUT/f'{stem}_candidate.npz')['qpos']
 base=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
 base[model.joint('g1_b/floating_base').qposadr[0]]=.55
+if args.settled:base[model.joint('bandage_spool_free').qposadr[0]+2]=.702
 names=json.loads((OUT/f'{stem}_screen.json').read_text(encoding='utf8'))['joint_names']
 js=[model.joint(name).id for name in names]
 qa=np.array([model.jnt_qposadr[j] for j in js],dtype=int)
@@ -72,11 +78,12 @@ if found is not None:
     dense=all(edge(a,b) for a,b in zip(found,found[1:]))
     path=np.repeat(base[None,:],len(found),axis=0)
     for row,q in zip(path,found):row[qa]=q
-    np.savez_compressed(OUT/'joint_spool_grasp_rrt.npz',qpos=path)
+    np.savez_compressed(OUT/('joint_spool_grasp_rrt_settled.npz' if args.settled else 'joint_spool_grasp_rrt.npz'),qpos=path)
 else:raw=0;dense=False
 report={'scope':'Static B-left spool approach at fixed B-root x=0.55 m; no locomotion or dynamic grasp claim',
+        'spool_initial_z_m':.702 if args.settled else .72,
         'start_valid':start_ok,'goal_valid':goal_ok,'found_path':found is not None,
         'waypoints':len(found) if found is not None else 0,'raw_waypoints':raw,
         'dense_recheck_passed':dense,'iterations':iterations,'collision_checks':checks}
-(OUT/'joint_spool_grasp_rrt_report.json').write_text(json.dumps(report,indent=2),encoding='utf8')
+(OUT/('joint_spool_grasp_rrt_settled_report.json' if args.settled else 'joint_spool_grasp_rrt_report.json')).write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps(report))

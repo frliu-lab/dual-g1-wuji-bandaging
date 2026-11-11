@@ -1,7 +1,4 @@
-"""Dynamic double-G1 WBC screen: A-left forearm support plus A-right dressing pinch.
-
-The B robot remains standing; this is a two-hand subtask, not bandaging.
-"""
+"""Dynamic double-G1 WBC screen for forearm support, pad pinch, and optional spool grasp."""
 import json
 import argparse
 import sys
@@ -17,6 +14,8 @@ parser.add_argument('--staged',action='store_true',help='Use contact-free pregra
 parser.add_argument('--grasp-finger-weight',type=float,default=1.,help='WBC acceleration tracking weight for A-right thumb and index')
 parser.add_argument('--palm-rotation-weight',type=float,default=10.,help='WBC wrist orientation tracking weight')
 parser.add_argument('--right-palm-position-weight',type=float,default=1000.,help='WBC A-right wrist position tracking weight')
+parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WBC B-left wrist position tracking weight')
+parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--analytic-grip-specialist',action='store_true',
                     help='Route pad-relative finger corrections after support and pad touch')
 parser.add_argument('--hold-s',type=float,default=1.5,help='Final pinch hold duration')
@@ -26,13 +25,20 @@ parser.add_argument('--support-total-force-cap-n',type=float,default=12.,
                     help='Predicted total A-left contact force cap on the forearm')
 parser.add_argument('--spool-after',action='store_true',
                     help='Use the separate B-root x=0.55 m layout and append B-left spool approach')
+parser.add_argument('--settled-spool',action='store_true',help='Use z=0.702 m resting spool state and matched B-left path')
+parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
+if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
 if not 1.<=args.grasp_finger_weight<=30.:
     parser.error('Grasp finger weight must be in [1,30]')
 if not 1.<=args.palm_rotation_weight<=300.:
     parser.error('Palm rotation weight must be in [1,300]')
 if not 1000.<=args.right_palm_position_weight<=10000.:
     parser.error('A-right palm position weight must be in [1000,10000]')
+if not 1000.<=args.b_palm_position_weight<=10000.:
+    parser.error('B-left palm position weight must be in [1000,10000]')
+if not 1.<=args.b_finger_weight<=30.:
+    parser.error('B-left finger weight must be in [1,30]')
 if args.analytic_grip_specialist and not args.staged:
     parser.error('Analytic grip specialist requires staged pregrasp path')
 if not .5<=args.hold_s<=5.:
@@ -47,8 +53,10 @@ from support_quality import SupportQualityMonitor, SupportSample
 sys.path.insert(0,str(ROOT/'work/bandage_hierarchy'))
 from controller_router import HandExpertRouter, HandProposal, Observation, Mode
 
-model = mujoco.MjModel.from_xml_path(str(OUT / ('joint_spool_grasp_static_z0p745_root0p55_variant.xml'
-                                                if args.spool_after else 'joint_support_pinch_variant.xml')))
+model_name=('joint_spool_grasp_static_z0p73_root0p55_spoolz0p702_variant.xml' if args.settled_spool else
+            'joint_spool_grasp_static_z0p745_root0p55_variant.xml' if args.spool_after else
+            'joint_support_pinch_variant.xml')
+model = mujoco.MjModel.from_xml_path(str(OUT / model_name))
 data = mujoco.MjData(model)
 left_path = np.load(OUT / 'dynamic_palm_support_rrt.npz')['qpos'].copy()
 right_path = np.load(OUT / ('joint_support_pregrasp_rrt.npz' if args.staged
@@ -57,15 +65,21 @@ if args.spool_after:
     b_root_qadr=model.joint('g1_b/floating_base').qposadr[0]
     left_path[:,b_root_qadr]=.55
     right_path[:,b_root_qadr]=.55
+    if args.settled_spool:
+        spool_z_qadr=model.joint('bandage_spool_free').qposadr[0]+2
+        left_path[:,spool_z_qadr]=.702
+        right_path[:,spool_z_qadr]=.702
 if np.max(np.abs(left_path[-1] - right_path[0])) > 1e-9:
     raise RuntimeError('Support and pinch paths do not join')
 path = np.vstack([left_path, right_path[1:]])
 if args.staged:
     closure=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
     if args.spool_after:closure[b_root_qadr]=.55
+    if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/'joint_spool_grasp_rrt.npz')['qpos']
+    spool_path=np.load(OUT/('joint_spool_grasp_rrt_settled.npz' if args.settled_spool
+                            else 'joint_spool_grasp_rrt.npz'))['qpos']
     if np.max(np.abs(path[-1]-spool_path[0]))>1e-9:
         raise RuntimeError('Pinch and spool paths do not join')
     path=np.vstack([path,spool_path[1:]])
@@ -96,13 +110,18 @@ def contact_filter(m, c):
                for g in c.geom if g >= 0)
 wbc = JointWBC(model, data.qpos.copy(), palm_names=palms, contact_filter=contact_filter,
                palm_rotation_weights=[10.,args.palm_rotation_weight,10.,10.],
-               palm_position_weights=[1000.,args.right_palm_position_weight,1000.,1000.])
+               palm_position_weights=[1000.,args.right_palm_position_weight,args.b_palm_position_weight,1000.])
+wbc.backend=args.wbc_backend
 wbc.forearm_contact_force_limit_n = args.support_total_force_cap_n
 wbc.forearm_finger_force_limit_n = args.support_finger_force_cap_n
 grasp_vadr=np.array([model.jnt_dofadr[j] for j in range(model.njnt)
                     if model.joint(j).name.startswith(('g1_a/wuji_right/r_thumb_',
                                                         'g1_a/wuji_right/r_index_finger_'))],dtype=int)
 wbc.weights[grasp_vadr]=args.grasp_finger_weight
+b_grasp_vadr=np.array([model.jnt_dofadr[j] for j in range(model.njnt)
+                       if model.joint(j).name.startswith(('g1_b/wuji_left/l_thumb_',
+                                                           'g1_b/wuji_left/l_index_finger_'))],dtype=int)
+wbc.weights[b_grasp_vadr]=args.b_finger_weight
 elbow_joint = model.joint('training_elbow_hinge').id
 elbow_qadr = model.jnt_qposadr[elbow_joint]
 elbow_vadr = model.jnt_dofadr[elbow_joint]
@@ -336,11 +355,15 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
                  if args.spool_after else 'Dynamic double-G1 WBC screen: A-left support and A-right pinch; B stands; no bandaging claim'),
         'staged_pregrasp':args.staged,
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
+        'settled_spool':args.settled_spool,
         'analytic_grip_specialist':args.analytic_grip_specialist,
+        'wbc_backend':args.wbc_backend,
         'hold_s':args.hold_s,
         'router_mode_counts':router_modes,
         'router_first_hand_specialist_time_s':first_specialist_time_s,
         'grasp_finger_weight':args.grasp_finger_weight,
+        'b_finger_weight':args.b_finger_weight,
+        'b_palm_position_weight':args.b_palm_position_weight,
         'a_right_palm_rotation_weight':args.palm_rotation_weight,
         'a_right_palm_position_weight':args.right_palm_position_weight,
         'simulated_time_s':float(data.time),'planned_duration_s':sum(durations),
@@ -387,6 +410,10 @@ if args.hold_s!=1.5:stem+=f'_hold{str(args.hold_s).replace(".","p")}'
 if args.support_finger_force_cap_n!=2.:stem+=f'_fingercap{str(args.support_finger_force_cap_n).replace(".","p")}'
 if args.support_total_force_cap_n!=12.:stem+=f'_totalcap{str(args.support_total_force_cap_n).replace(".","p")}'
 if args.spool_after:stem+='_spool'
+if args.settled_spool:stem+='_settled'
+if args.b_finger_weight!=1.:stem+='_bfinger'+str(args.b_finger_weight).replace('.','p')
+if args.b_palm_position_weight!=1000.:stem+='_bposition'+str(args.b_palm_position_weight).replace('.','p')
+if args.wbc_backend!='CLARABEL':stem+='_'+args.wbc_backend.lower()
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel,reference_qpos=path[-1])
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))
