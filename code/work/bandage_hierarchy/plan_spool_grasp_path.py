@@ -18,10 +18,12 @@ parser.add_argument('--handle-layout',action='store_true',help='Use the x-axis p
 parser.add_argument('--handle-yaw-deg',choices=(-30,0,20),type=int,default=0,
                     help='Prepositioned B heading offset for handle path')
 parser.add_argument('--handle-middle-retracted',action='store_true',help='Use torque-margin screened middle-finger retraction')
+parser.add_argument('--pre-retract-middle',action='store_true',help='Preposition middle finger clear of tray before approach')
 args=parser.parse_args()
 if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
 if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_deg==-30):
     parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
+if args.pre_retract_middle and not args.handle_middle_retracted:parser.error('Pre-retraction requires retracted endpoint')
 if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
     parser.error('Handle and side-layout endpoints are mutually exclusive')
 if args.side_high and not args.side_layout:parser.error('Side-high path requires --side-layout')
@@ -48,6 +50,8 @@ if args.handle_yaw_deg:
     adr=model.joint('g1_b/floating_base').qposadr[0]
     theta=(np.pi+np.deg2rad(args.handle_yaw_deg))/2
     base[adr+3:adr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
+if args.pre_retract_middle:
+    base[model.joint('g1_b/wuji_left/l_middle_finger_mcp_abd').qposadr[0]]=.2
 if args.settled or args.side_layout or args.handle_layout:base[model.joint('bandage_spool_free').qposadr[0]+2]=.702
 names=json.loads((OUT/f'{stem}_screen.json').read_text(encoding='utf8'))['joint_names']
 if args.handle_middle_retracted:
@@ -110,7 +114,8 @@ if found is not None:
     dense=all(edge(a,b) for a,b in zip(found,found[1:]))
     path=np.repeat(base[None,:],len(found),axis=0)
     for row,q in zip(path,found):row[qa]=q
-    np.savez_compressed(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
+    np.savez_compressed(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted.npz' if args.pre_retract_middle else
+                             'joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
                              f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}.npz' if args.handle_layout and args.handle_yaw_deg else
                              'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
                              'joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
@@ -125,10 +130,12 @@ report={'scope':'Static B-left spool approach at fixed B-root x=0.55 m; no locom
         'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
         'b_root_yaw_deg':args.handle_yaw_deg,
         'handle_middle_retracted':args.handle_middle_retracted,
+        'pre_retract_middle':args.pre_retract_middle,
         'start_valid':start_ok,'goal_valid':goal_ok,'found_path':found is not None,
         'waypoints':len(found) if found is not None else 0,'raw_waypoints':raw,
         'dense_recheck_passed':dense,'iterations':iterations,'collision_checks':checks}
-(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_retracted_report.json' if args.handle_middle_retracted else
+(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted_report.json' if args.pre_retract_middle else
+      'joint_spool_grasp_rrt_handle_yaw-30_middle_retracted_report.json' if args.handle_middle_retracted else
       f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}_report.json' if args.handle_layout and args.handle_yaw_deg else
       'joint_spool_grasp_rrt_handle_report.json' if args.handle_layout else
       'joint_spool_grasp_rrt_side_mid_open_report.json' if args.side_mid_open else

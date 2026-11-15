@@ -54,6 +54,7 @@ parser.add_argument('--handle-layout',action='store_true',help='Use prototype sp
 parser.add_argument('--handle-yaw-deg',choices=(-30,0),type=int,default=0,
                     help='Prepositioned B heading offset for handle layout')
 parser.add_argument('--handle-middle-retracted',action='store_true',help='Use screened middle-finger retraction endpoint')
+parser.add_argument('--pre-retract-middle',action='store_true',help='Preposition unused middle finger clear of tray from t=0')
 parser.add_argument('--tray-clamp',action='store_true',help='Diagnostic tray fixture holds spool during finger approach')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
@@ -69,6 +70,7 @@ if args.handle_layout and (args.side_layout or args.side_high or args.side_mid o
 if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
 if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_deg==-30):
     parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
+if args.pre_retract_middle and not args.handle_middle_retracted:parser.error('Pre-retraction requires retracted endpoint')
 if args.tray_clamp and not args.handle_layout:parser.error('Tray clamp requires --handle-layout')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
@@ -143,6 +145,10 @@ if args.spool_after:
         theta=(np.pi+np.deg2rad(args.handle_yaw_deg))/2
         left_path[:,b_root_qadr+3:b_root_qadr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
         right_path[:,b_root_qadr+3:b_root_qadr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
+    if args.pre_retract_middle:
+        middle_qadr=model.joint('g1_b/wuji_left/l_middle_finger_mcp_abd').qposadr[0]
+        left_path[:,middle_qadr]=.2
+        right_path[:,middle_qadr]=.2
     if args.settled_spool:
         spool_z_qadr=model.joint('bandage_spool_free').qposadr[0]+2
         left_path[:,spool_z_qadr]=.702
@@ -155,10 +161,12 @@ if args.staged:
     if args.spool_after:closure[b_root_qadr]=.55
     if args.side_layout or args.handle_layout:closure[b_root_qadr+1]=.1
     if args.handle_yaw_deg:closure[b_root_qadr+3:b_root_qadr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
+    if args.pre_retract_middle:closure[middle_qadr]=.2
     if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
+    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted.npz' if args.pre_retract_middle else
+                            'joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
                             'joint_spool_grasp_rrt_handle_yaw-30.npz' if args.handle_layout and args.handle_yaw_deg==-30 else
                             'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
                             'joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
@@ -532,6 +540,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'tray_clamp_prototype':args.tray_clamp,
         'b_root_yaw_deg':args.handle_yaw_deg,
         'handle_middle_retracted':args.handle_middle_retracted,
+        'pre_retract_middle':args.pre_retract_middle,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
         'side_mid_open':args.side_mid_open,
@@ -615,6 +624,7 @@ if args.side_layout:stem+='_side'
 if args.handle_layout:stem+='_handle'
 if args.handle_yaw_deg:stem+='_yaw'+str(args.handle_yaw_deg).replace('-','m')
 if args.handle_middle_retracted:stem+='_middle_retracted'
+if args.pre_retract_middle:stem+='_preretracted'
 if args.tray_clamp:stem+='_clamped'
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
