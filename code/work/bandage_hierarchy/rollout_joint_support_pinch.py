@@ -356,6 +356,7 @@ for segment,k,count in schedule:
             normals={'thumb':np.zeros(3),'index':np.zeros(3)}
             b_forces={'thumb':0.,'index':0.}
             b_normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+            b_contact_details=[]
             support_force=0.
             for ci,c in enumerate(data.contact):
                 if c.geom1<0 or c.geom2<0:continue
@@ -396,6 +397,12 @@ for segment,k,count in schedule:
                             sign=1. if geoms[0] in ('bandage_roll','bandage_core') else -1.
                             b_forces[digit]+=force
                             b_normals[digit]+=sign*force*np.asarray(c.frame[:3])
+                            if force>=.05:
+                                b_contact_details.append({'digit':digit,'body':next((b for b in bodies if b.startswith('g1_b/wuji_left/')),None),
+                                                          'spool_geom':next((g for g in geoms if g in ('bandage_roll','bandage_core')),None),
+                                                          'position_m':np.asarray(c.pos).tolist(),
+                                                          'spool_to_finger_normal':(sign*np.asarray(c.frame[:3])).tolist(),
+                                                          'force_n':force})
             frame_peak=max(frame_peak,support_force)
             peak_support_force=max(peak_support_force,support_force)
             peak_thumb_force=max(peak_thumb_force,thumb_force)
@@ -433,6 +440,7 @@ for segment,k,count in schedule:
                       'index_force_n':index_force,'normal_cosine':cos,'opposed':opposed,
                       'b_thumb_force_n':b_forces['thumb'],'b_index_force_n':b_forces['index'],
                       'b_normal_cosine':bcos,'b_opposed':b_opposed,
+                      'b_contact_details':b_contact_details if b_forces['thumb']>=.05 and b_forces['index']>=.05 else [],
                       'pad_center_m':data.xpos[pad_body].tolist()})
     except Exception as exc:
         errors.append(f'{type(exc).__name__}: {exc}')

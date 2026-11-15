@@ -149,6 +149,7 @@ SELECTED = [
     'bandage_v0/joint_spool_grasp_static_z0p73_closure0p004_root0p55_spoolz0p702_dynamicwarm_jointwarm_seed2_screen.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_position1500p0_stageright_specialist_palmgoal11p5_elbowweight10p0_spool_settled_bwarm_jseed1_rewrist_roll.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_position1500p0_stageright_specialist_palmgoal11p5_elbowweight10p0_spool_settled_bwarm_bforce0p5_rewrist_roll.json',
+    'bandage_v0/joint_spool_cap_avoid_summary.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -184,6 +185,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/summarize_joint_support_pinch.py',
     'work/bandage_hierarchy/render_joint_support_pinch_diagnostic.py',
     'work/bandage_hierarchy/probe_spool_grasp.py',
+    'work/bandage_hierarchy/summarize_spool_cap_avoid.py',
     'work/bandage_hierarchy/probe_support_ring_clearance.py',
     'work/bandage_hierarchy/plan_spool_grasp_path.py',
     'work/bandage_hierarchy/summarize_side_pinch_feedback.py',

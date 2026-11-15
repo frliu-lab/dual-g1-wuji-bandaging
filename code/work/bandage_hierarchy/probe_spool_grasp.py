@@ -18,6 +18,8 @@ parser.add_argument('--spool-z',type=float,default=.72,help='World-height initia
 parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the settled-spool dynamic terminal state')
 parser.add_argument('--warm-joint',action='store_true',help='Use terminal state of staged right-palm and elbow-hold joint rollout')
 parser.add_argument('--seed-index',type=int,default=0,help='Deterministic alternate IK initialization')
+parser.add_argument('--avoid-index-cap',action='store_true',help='Penalize B index distal/middle contact on spool endcap')
+parser.add_argument('--seed-scale',type=float,default=.18,help='Alternate IK seed joint perturbation in radians')
 args=parser.parse_args()
 if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
@@ -25,6 +27,7 @@ if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
 if not .69<=args.spool_z<=.72:parser.error('Spool center z must be in [0.69,0.72] m')
 if args.warm_joint and not args.warm_dynamic:parser.error('Joint warm state requires --warm-dynamic')
 if not 0<=args.seed_index<=100:parser.error('Seed index must be in [0,100]')
+if not .05<=args.seed_scale<=.6:parser.error('Seed scale must be in [0.05,0.6] radians')
 scene=ET.parse(OUT/'joint_support_pinch_variant.xml').getroot()
 if args.b_root_x!=.7:
     scene.find(".//body[@name='g1_b/pelvis']").set('pos',f'{args.b_root_x} 0 .8')
@@ -52,7 +55,7 @@ hi=np.array([model.jnt_range[j,1]-.03 for j in joint_ids])
 start=np.clip(base[qa],lo+1e-5,hi-1e-5)
 if args.seed_index:
     rng=np.random.default_rng(20261111+args.seed_index)
-    start=np.clip(start+rng.normal(0,.18,len(start)),lo+1e-5,hi-1e-5)
+    start=np.clip(start+rng.normal(0,args.seed_scale,len(start)),lo+1e-5,hi-1e-5)
 tips=[model.body('g1_b/wuji_left/l_index_finger_tip_sensor_frame').id,
       model.body('g1_b/wuji_left/l_thumb_tip_sensor_frame').id]
 if args.warm_dynamic:
@@ -78,6 +81,7 @@ fit=least_squares(residual,start,jac=jacobian,bounds=(lo,hi),max_nfev=140)
 def objective(x):
     forward(x)
     penetration=0.
+    cap_penalty=0.
     for c in data.contact:
         if c.geom1<0 or c.geom2<0:continue
         geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
@@ -85,12 +89,17 @@ def objective(x):
                 model.body(model.geom_bodyid[c.geom2]).name)
         if 'floor' not in geoms and any(b.startswith(('g1_a/','g1_b/')) for b in bodies):
             penetration+=max(0.,-float(c.dist)-.002)**2
-    return float(1e4*np.sum((data.xpos[tips]-goals)**2)+2e5*penetration+
+        if (args.avoid_index_cap and 'bandage_roll' in geoms and
+            any(b.startswith('g1_b/wuji_left/l_index_finger_') and
+                any(s in b for s in ('distal','middle')) for b in bodies) and
+            abs(float(c.frame[2]))>.7):
+            cap_penalty+=max(0.,.002-float(c.dist))**2
+    return float(1e4*np.sum((data.xpos[tips]-goals)**2)+2e5*penetration+2e6*cap_penalty+
                  .002*np.sum((x-start)**2))
 refine=minimize(objective,fit.x,method='L-BFGS-B',bounds=list(zip(lo,hi)),
                 options={'maxiter':100,'ftol':1e-8})
 forward(refine.x)
-deep=[];forces={'thumb':0.,'index':0.};normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+deep=[];cap_contacts=[];forces={'thumb':0.,'index':0.};normals={'thumb':np.zeros(3),'index':np.zeros(3)}
 for ci,c in enumerate(data.contact):
     if c.geom1<0 or c.geom2<0:continue
     geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
@@ -99,6 +108,12 @@ for ci,c in enumerate(data.contact):
     if 'floor' not in geoms and any(b.startswith(('g1_a/','g1_b/')) for b in bodies) and c.dist<-.003:
         deep.append({'bodies':bodies,'geoms':geoms,'distance_m':float(c.dist)})
     if 'bandage_roll' in geoms or 'bandage_core' in geoms:
+        if ('bandage_roll' in geoms and
+            any(b.startswith('g1_b/wuji_left/l_index_finger_') and
+                any(s in b for s in ('distal','middle')) for b in bodies) and
+            abs(float(c.frame[2]))>.7):
+            cap_contacts.append({'body':next(b for b in bodies if b.startswith('g1_b/wuji_left/')),
+                                 'distance_m':float(c.dist),'normal':np.asarray(c.frame[:3]).tolist()})
         for digit in forces:
             if any(b.startswith(f'g1_b/wuji_left/l_{digit}_') for b in bodies):
                 wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
@@ -109,19 +124,22 @@ for ci,c in enumerate(data.contact):
 a,b=normals.values()
 cosine=(float(a@b/(np.linalg.norm(a)*np.linalg.norm(b)))
         if np.linalg.norm(a)*np.linalg.norm(b)>1e-8 else None)
-eligible=bool(not deep and all(f>.05 for f in forces.values()) and cosine is not None and cosine<-.5)
+eligible=bool(not deep and (not args.avoid_index_cap or not cap_contacts) and
+              all(f>.05 for f in forces.values()) and cosine is not None and cosine<-.5)
 report={'scope':'Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim',
         'b_root_x_m':args.b_root_x,
         'spool_initial_z_m':args.spool_z,
         'warm_dynamic':args.warm_dynamic,
         'warm_joint':args.warm_joint,
         'seed_index':args.seed_index,
+        'seed_scale_rad':args.seed_scale,
+        'avoid_index_cap':args.avoid_index_cap,
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
         'tip_errors_m':np.linalg.norm(data.xpos[tips]-goals,axis=1).tolist(),
         'least_squares_success':bool(fit.success),'collision_refine_success':bool(refine.success),
-        'deep_contacts':deep,'forces_n':forces,'normal_cosine':cosine,
+        'deep_contacts':deep,'index_cap_contacts':cap_contacts,'forces_n':forces,'normal_cosine':cosine,
         'eligible_static_endpoint':eligible}
 stem='joint_spool_grasp_static'+('' if args.goal_z==.72 else '_z'+str(args.goal_z).replace('.','p'))
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
@@ -130,6 +148,8 @@ if args.spool_z!=.72:stem+='_spoolz'+str(args.spool_z).replace('.','p')
 if args.warm_dynamic:stem+='_dynamicwarm'
 if args.warm_joint:stem+='_jointwarm'
 if args.seed_index:stem+='_seed'+str(args.seed_index)
+if args.seed_index and args.seed_scale!=.18:stem+='_scale'+str(args.seed_scale).replace('.','p')
+if args.avoid_index_cap:stem+='_capavoid'
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())
