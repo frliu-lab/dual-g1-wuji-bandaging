@@ -17,8 +17,11 @@ parser.add_argument('--side-mid-open',action='store_true',help='Use z=0.725 m si
 parser.add_argument('--handle-layout',action='store_true',help='Use the x-axis prototype handle at z=0.78 m')
 parser.add_argument('--handle-yaw-deg',choices=(-30,0,20),type=int,default=0,
                     help='Prepositioned B heading offset for handle path')
+parser.add_argument('--handle-middle-retracted',action='store_true',help='Use torque-margin screened middle-finger retraction')
 args=parser.parse_args()
 if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
+if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_deg==-30):
+    parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
 if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
     parser.error('Handle and side-layout endpoints are mutually exclusive')
 if args.side_high and not args.side_layout:parser.error('Side-high path requires --side-layout')
@@ -37,7 +40,7 @@ stem=(('joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1'+
       else 'joint_spool_grasp_static_z0p745_root0p55')
 model=mujoco.MjModel.from_xml_path(str(OUT/f'{stem}_variant.xml'))
 data=mujoco.MjData(model)
-goal=np.load(OUT/f'{stem}_candidate.npz')['qpos']
+goal=np.load(OUT/f'{stem}{"_middle_retracted" if args.handle_middle_retracted else ""}_candidate.npz')['qpos']
 base=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
 base[model.joint('g1_b/floating_base').qposadr[0]]=.55
 if args.side_layout or args.handle_layout:base[model.joint('g1_b/floating_base').qposadr[0]+1]=.1
@@ -47,6 +50,8 @@ if args.handle_yaw_deg:
     base[adr+3:adr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
 if args.settled or args.side_layout or args.handle_layout:base[model.joint('bandage_spool_free').qposadr[0]+2]=.702
 names=json.loads((OUT/f'{stem}_screen.json').read_text(encoding='utf8'))['joint_names']
+if args.handle_middle_retracted:
+    names += [f'g1_b/wuji_left/l_middle_finger_{joint}' for joint in ('mcp_flex','mcp_abd','pip','dip')]
 js=[model.joint(name).id for name in names]
 qa=np.array([model.jnt_qposadr[j] for j in js],dtype=int)
 lo=np.array([model.jnt_range[j,0]+.03 for j in js])
@@ -105,7 +110,8 @@ if found is not None:
     dense=all(edge(a,b) for a,b in zip(found,found[1:]))
     path=np.repeat(base[None,:],len(found),axis=0)
     for row,q in zip(path,found):row[qa]=q
-    np.savez_compressed(OUT/(f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}.npz' if args.handle_layout and args.handle_yaw_deg else
+    np.savez_compressed(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
+                             f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}.npz' if args.handle_layout and args.handle_yaw_deg else
                              'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
                              'joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
                              'joint_spool_grasp_rrt_side_mid.npz' if args.side_mid else
@@ -118,10 +124,12 @@ report={'scope':'Static B-left spool approach at fixed B-root x=0.55 m; no locom
         'spool_initial_z_m':.702 if args.settled or args.side_layout or args.handle_layout else .72,
         'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
         'b_root_yaw_deg':args.handle_yaw_deg,
+        'handle_middle_retracted':args.handle_middle_retracted,
         'start_valid':start_ok,'goal_valid':goal_ok,'found_path':found is not None,
         'waypoints':len(found) if found is not None else 0,'raw_waypoints':raw,
         'dense_recheck_passed':dense,'iterations':iterations,'collision_checks':checks}
-(OUT/(f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}_report.json' if args.handle_layout and args.handle_yaw_deg else
+(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_retracted_report.json' if args.handle_middle_retracted else
+      f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}_report.json' if args.handle_layout and args.handle_yaw_deg else
       'joint_spool_grasp_rrt_handle_report.json' if args.handle_layout else
       'joint_spool_grasp_rrt_side_mid_open_report.json' if args.side_mid_open else
       'joint_spool_grasp_rrt_side_mid_report.json' if args.side_mid else

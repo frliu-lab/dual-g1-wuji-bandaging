@@ -1,0 +1,515 @@
+{
+  "scope": "Single static frame WBC inverse-dynamics feasibility only; no trajectory or hardware claim",
+  "cases": [
+    {
+      "stem": "joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle",
+      "qp_feasible": true,
+      "qp": {
+        "status": "optimal",
+        "contacts": 32,
+        "qp_wall_s": 0.06629180000163615,
+        "solver_time_s": 0.0120636,
+        "backend": "CLARABEL",
+        "dynamics_residual_N": 1.4243660070856201e-11,
+        "max_abs_predicted_acceleration": 27.836445547115805,
+        "contact_acceleration_task_residual_m_s2": 3.1510235352169538,
+        "max_hand_torque_adjustment_Nm": 0.0,
+        "torque_limit_violation_Nm": 0.0
+      },
+      "b_hand_contacts": [
+        {
+          "bodies": [
+            "world",
+            "g1_b/wuji_left/l_middle_finger_distal"
+          ],
+          "geoms": [
+            "equipment_tray",
+            ""
+          ],
+          "distance_m": -0.0019802147307842466,
+          "normal_force_n": 3.6711782360460665
+        },
+        {
+          "bodies": [
+            "world",
+            "g1_b/wuji_left/l_middle_finger_distal"
+          ],
+          "geoms": [
+            "equipment_tray",
+            ""
+          ],
+          "distance_m": -0.0019109510550976427,
+          "normal_force_n": 3.5843649490525853
+        },
+        {
+          "bodies": [
+            "world",
+            "g1_b/wuji_left/l_middle_finger_tip_sensor_frame"
+          ],
+          "geoms": [
+            "equipment_tray",
+            ""
+          ],
+          "distance_m": -0.0007837268428498856,
+          "normal_force_n": 1.0847993223493038
+        },
+        {
+          "bodies": [
+            "world",
+            "g1_b/wuji_left/l_middle_finger_tip_sensor_frame"
+          ],
+          "geoms": [
+            "equipment_tray",
+            ""
+          ],
+          "distance_m": -0.0007920260997150708,
+          "normal_force_n": 1.123343639477234
+        },
+        {
+          "bodies": [
+            "world",
+            "g1_b/wuji_left/l_middle_finger_tip_sensor_frame"
+          ],
+          "geoms": [
+            "equipment_tray",
+            ""
+          ],
+          "distance_m": -0.0007833954542025845,
+          "normal_force_n": 1.0681095191470802
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_thumb_tip_sensor_frame"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.00049337796672079,
+          "normal_force_n": 0.7087415038586798
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_index_finger_distal"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.0005417652370374075,
+          "normal_force_n": 0.1269568183716785
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_middle_finger_proximal_abd"
+          ],
+          "geoms": [
+            "bandage_roll",
+            ""
+          ],
+          "distance_m": -0.0007731742649219599,
+          "normal_force_n": 0.0
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_middle_finger_middle"
+          ],
+          "geoms": [
+            "bandage_roll",
+            ""
+          ],
+          "distance_m": -0.00200013896062349,
+          "normal_force_n": 1.0809730273465612
+        }
+      ],
+      "b_actuator_margin_min_fraction": 7.414428099261627e-09,
+      "b_actuator_margin_10_percent_pass": false,
+      "b_smallest_actuator_margins": [
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ1",
+          "torque_nm": -0.1999999985171144,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 1.4828856198523255e-09,
+          "limit_margin_fraction_of_half_range": 7.414428099261627e-09
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ0",
+          "torque_nm": -0.38603867231147954,
+          "lower_nm": -0.386038687737787,
+          "upper_nm": 0.5788736769324982,
+          "limit_margin_nm": 1.5426307453658694e-08,
+          "limit_margin_fraction_of_half_range": 3.197452539418941e-08
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_THJ0",
+          "torque_nm": 0.19626861626940625,
+          "lower_nm": -0.6,
+          "upper_nm": 0.19626866726495257,
+          "limit_margin_nm": 5.099554631349257e-08,
+          "limit_margin_fraction_of_half_range": 1.2808628145234848e-07
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ2",
+          "torque_nm": -0.17187328410376232,
+          "lower_nm": -0.23262882054655962,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.0607555364427973,
+          "limit_margin_fraction_of_half_range": 0.2281346187029561
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ1",
+          "torque_nm": -0.09834745817638671,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.1016525418236133,
+          "limit_margin_fraction_of_half_range": 0.5082627091180665
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ0",
+          "torque_nm": 0.06524571577811474,
+          "lower_nm": -0.7444548211575781,
+          "upper_nm": 0.23305272798128002,
+          "limit_margin_nm": 0.1678070122031653,
+          "limit_margin_fraction_of_half_range": 0.34333650384796727
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ3",
+          "torque_nm": -0.03179180012989073,
+          "lower_nm": -0.20340703557408546,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.1716152354441947,
+          "limit_margin_fraction_of_half_range": 0.6818150058172496
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_RFJ1",
+          "torque_nm": 0.013677882413042223,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.1863221175869578,
+          "limit_margin_fraction_of_half_range": 0.9316105879347889
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_LFJ1",
+          "torque_nm": 0.013447205417087174,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.18655279458291285,
+          "limit_margin_fraction_of_half_range": 0.9327639729145643
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ3",
+          "torque_nm": -0.0010276907828182338,
+          "lower_nm": -0.18874238993948825,
+          "upper_nm": 0.28302345005252777,
+          "limit_margin_nm": 0.18771469915667002,
+          "limit_margin_fraction_of_half_range": 0.7957960634023303
+        }
+      ]
+    },
+    {
+      "stem": "joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_middle_retracted",
+      "qp_feasible": true,
+      "qp": {
+        "status": "optimal",
+        "contacts": 25,
+        "qp_wall_s": 0.048421300016343594,
+        "solver_time_s": 0.0097024,
+        "backend": "CLARABEL",
+        "dynamics_residual_N": 2.1603552280424765e-13,
+        "max_abs_predicted_acceleration": 27.836445671352806,
+        "contact_acceleration_task_residual_m_s2": 3.151023536365466,
+        "max_hand_torque_adjustment_Nm": 0.0,
+        "torque_limit_violation_Nm": 0.0
+      },
+      "b_hand_contacts": [
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_thumb_tip_sensor_frame"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.00049337796672079,
+          "normal_force_n": 0.38449991901059044
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_index_finger_distal"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.0005417652370374075,
+          "normal_force_n": 0.4286698424788448
+        }
+      ],
+      "b_actuator_margin_min_fraction": 0.2647731902985141,
+      "b_actuator_margin_10_percent_pass": true,
+      "b_smallest_actuator_margins": [
+        {
+          "actuator": "g1_b/wuji_left/l_THJ0",
+          "torque_nm": 0.09085336958170882,
+          "lower_nm": -0.6,
+          "upper_nm": 0.19626866726495257,
+          "limit_margin_nm": 0.10541529768324374,
+          "limit_margin_fraction_of_half_range": 0.2647731902985141
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ1",
+          "torque_nm": -0.034623699925531534,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.16537630007446846,
+          "limit_margin_fraction_of_half_range": 0.8268815003723423
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ0",
+          "torque_nm": 0.056652335618759965,
+          "lower_nm": -0.7444548211575781,
+          "upper_nm": 0.23305272798128002,
+          "limit_margin_nm": 0.17640039236252006,
+          "limit_margin_fraction_of_half_range": 0.36091873155950804
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ3",
+          "torque_nm": -0.0020734333812846917,
+          "lower_nm": -0.18874238993948825,
+          "upper_nm": 0.28302345005252777,
+          "limit_margin_nm": 0.18666895655820356,
+          "limit_margin_fraction_of_half_range": 0.7913627513232525
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ1",
+          "torque_nm": 0.012811141388051481,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.18718885861194853,
+          "limit_margin_fraction_of_half_range": 0.9359442930597426
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_RFJ1",
+          "torque_nm": 0.012658531193728681,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.18734146880627134,
+          "limit_margin_fraction_of_half_range": 0.9367073440313567
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_LFJ1",
+          "torque_nm": 0.012540482261337763,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.18745951773866226,
+          "limit_margin_fraction_of_half_range": 0.9372975886933113
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ3",
+          "torque_nm": 0.0003886264278789587,
+          "lower_nm": -0.20340703557408546,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.20379566200196442,
+          "limit_margin_fraction_of_half_range": 0.8096655294837342
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_LFJ3",
+          "torque_nm": 0.0003402819734427033,
+          "lower_nm": -0.2057065557207881,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.20604683769423082,
+          "limit_margin_fraction_of_half_range": 0.8148869551455604
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_THJ3",
+          "torque_nm": 0.010949639978544918,
+          "lower_nm": -0.21143159778748563,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.22238123776603055,
+          "limit_margin_fraction_of_half_range": 0.8696421524523649
+        }
+      ]
+    },
+    {
+      "stem": "joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyaw20p0_spoolz0p702_handle",
+      "qp_feasible": true,
+      "qp": {
+        "status": "optimal",
+        "contacts": 29,
+        "qp_wall_s": 0.059109299967531115,
+        "solver_time_s": 0.0124491,
+        "backend": "CLARABEL",
+        "dynamics_residual_N": 2.3706800411638085e-12,
+        "max_abs_predicted_acceleration": 27.83644570379727,
+        "contact_acceleration_task_residual_m_s2": 3.151023537997248,
+        "max_hand_torque_adjustment_Nm": 0.0,
+        "torque_limit_violation_Nm": 0.0
+      },
+      "b_hand_contacts": [
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_thumb_distal"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.0002882077913491389,
+          "normal_force_n": 0.0
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_thumb_distal"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.00028578270040436005,
+          "normal_force_n": 0.0
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_thumb_tip_sensor_frame"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.0020014090822477763,
+          "normal_force_n": 0.4684090761647944
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_thumb_tip_sensor_frame"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.0020025257903640223,
+          "normal_force_n": 0.46020816363416533
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_index_finger_tip_sensor_frame"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.002003951221196193,
+          "normal_force_n": 0.2789408647953096
+        },
+        {
+          "bodies": [
+            "bandage_spool",
+            "g1_b/wuji_left/l_index_finger_tip_sensor_frame"
+          ],
+          "geoms": [
+            "bandage_handle_prototype",
+            ""
+          ],
+          "distance_m": -0.0020039011093510566,
+          "normal_force_n": 0.07925397471158721
+        }
+      ],
+      "b_actuator_margin_min_fraction": 2.2220023453698348e-11,
+      "b_actuator_margin_10_percent_pass": false,
+      "b_smallest_actuator_margins": [
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ1",
+          "torque_nm": -0.013677734670334424,
+          "lower_nm": -0.013677734672708386,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 2.3739621379803566e-12,
+          "limit_margin_fraction_of_half_range": 2.2220023453698348e-11
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ2",
+          "torque_nm": 0.017546680313242722,
+          "lower_nm": -0.3,
+          "upper_nm": 0.07530200473204351,
+          "limit_margin_nm": 0.057755324418800796,
+          "limit_margin_fraction_of_half_range": 0.3077805270986319
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_THJ0",
+          "torque_nm": -0.017203566926799984,
+          "lower_nm": -0.6,
+          "upper_nm": 0.044263033654155126,
+          "limit_margin_nm": 0.061466600580955114,
+          "limit_margin_fraction_of_half_range": 0.1908121291154222
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ3",
+          "torque_nm": 0.00045175027571649017,
+          "lower_nm": -0.1720102389765335,
+          "upper_nm": 0.29975560101548254,
+          "limit_margin_nm": 0.17246198925224998,
+          "limit_margin_fraction_of_half_range": 0.7311338576577255
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ1",
+          "torque_nm": 0.01725264323220233,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.1827473567677977,
+          "limit_margin_fraction_of_half_range": 0.9137367838389884
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_RFJ1",
+          "torque_nm": 0.01715950440377901,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.182840495596221,
+          "limit_margin_fraction_of_half_range": 0.914202477981105
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_LFJ1",
+          "torque_nm": 0.013860459691216947,
+          "lower_nm": -0.2,
+          "upper_nm": 0.2,
+          "limit_margin_nm": 0.18613954030878307,
+          "limit_margin_fraction_of_half_range": 0.9306977015439153
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_MFJ3",
+          "torque_nm": -0.0005191381930510069,
+          "lower_nm": -0.20340703557408546,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.20288789738103447,
+          "limit_margin_fraction_of_half_range": 0.8060590458361835
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_LFJ3",
+          "torque_nm": -0.0005716425462248643,
+          "lower_nm": -0.2057065557207881,
+          "upper_nm": 0.3,
+          "limit_margin_nm": 0.20513491317456325,
+          "limit_margin_fraction_of_half_range": 0.8112804188673514
+        },
+        {
+          "actuator": "g1_b/wuji_left/l_FFJ0",
+          "torque_nm": 0.05445959853855963,
+          "lower_nm": -0.15624912364111354,
+          "upper_nm": 0.8212584254977445,
+          "limit_margin_nm": 0.21070872217967318,
+          "limit_margin_fraction_of_half_range": 0.4311142606833031
+        }
+      ]
+    }
+  ]
+}

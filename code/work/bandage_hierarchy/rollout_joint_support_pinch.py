@@ -53,6 +53,7 @@ parser.add_argument('--side-mid-open',action='store_true',help='Use z=0.725 m si
 parser.add_argument('--handle-layout',action='store_true',help='Use prototype spool core handle with x-axis opposed grip')
 parser.add_argument('--handle-yaw-deg',choices=(-30,0),type=int,default=0,
                     help='Prepositioned B heading offset for handle layout')
+parser.add_argument('--handle-middle-retracted',action='store_true',help='Use screened middle-finger retraction endpoint')
 parser.add_argument('--tray-clamp',action='store_true',help='Diagnostic tray fixture holds spool during finger approach')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
@@ -66,6 +67,8 @@ if args.handle_layout and not (args.spool_after and args.settled_spool):
 if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
     parser.error('Handle and side-layout endpoints are mutually exclusive')
 if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
+if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_deg==-30):
+    parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
 if args.tray_clamp and not args.handle_layout:parser.error('Tray clamp requires --handle-layout')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
@@ -155,7 +158,8 @@ if args.staged:
     if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle_yaw-30.npz' if args.handle_layout and args.handle_yaw_deg==-30 else
+    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
+                            'joint_spool_grasp_rrt_handle_yaw-30.npz' if args.handle_layout and args.handle_yaw_deg==-30 else
                             'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
                             'joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
                             'joint_spool_grasp_rrt_side_mid.npz' if args.side_mid else
@@ -527,6 +531,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'spool_handle_prototype':args.handle_layout,
         'tray_clamp_prototype':args.tray_clamp,
         'b_root_yaw_deg':args.handle_yaw_deg,
+        'handle_middle_retracted':args.handle_middle_retracted,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
         'side_mid_open':args.side_mid_open,
@@ -609,6 +614,7 @@ if args.settled_spool:stem+='_settled'
 if args.side_layout:stem+='_side'
 if args.handle_layout:stem+='_handle'
 if args.handle_yaw_deg:stem+='_yaw'+str(args.handle_yaw_deg).replace('-','m')
+if args.handle_middle_retracted:stem+='_middle_retracted'
 if args.tray_clamp:stem+='_clamped'
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
