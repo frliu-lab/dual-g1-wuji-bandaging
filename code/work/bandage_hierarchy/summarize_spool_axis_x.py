@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'outputs/wuji_multiagent/bandage_v0'
 rows = []
-for path in sorted(OUT.glob('joint_spool_grasp_static*axisx*spoolz0p702_screen.json')):
+for path in sorted(OUT.glob('joint_spool_grasp_static*axisx*spoolz0p702*_screen.json')):
     d = json.loads(path.read_text(encoding='utf8'))
     rows.append({
         'file': path.name,
@@ -19,6 +19,9 @@ for path in sorted(OUT.glob('joint_spool_grasp_static*axisx*spoolz0p702_screen.j
         'deep_contact_count': len(d['deep_contacts']),
         'index_cap_contact_count': len(d['index_cap_contacts']),
         'strict_static_endpoint': d['strict_static_endpoint'],
+        'low_force_refine': d.get('low_force_refine', False),
+        'avoid_index_cap': d.get('avoid_index_cap', False),
+        'collision_refine_success': d['collision_refine_success'],
     })
 report = {
     'scope': 'Static x-axis B-left opposed-grip probes on the upright spool; no path, dynamic grasp or bandaging claim',

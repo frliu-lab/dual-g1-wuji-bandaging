@@ -21,6 +21,7 @@ parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the se
 parser.add_argument('--warm-joint',action='store_true',help='Use terminal state of staged right-palm and elbow-hold joint rollout')
 parser.add_argument('--seed-index',type=int,default=0,help='Deterministic alternate IK initialization')
 parser.add_argument('--avoid-index-cap',action='store_true',help='Penalize B index distal/middle contact on spool endcap')
+parser.add_argument('--low-force-refine',action='store_true',help='Include MuJoCo contact-force and opposed-normal terms in static refinement')
 parser.add_argument('--seed-scale',type=float,default=.18,help='Alternate IK seed joint perturbation in radians')
 args=parser.parse_args()
 if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
@@ -90,7 +91,9 @@ def objective(x):
     forward(x)
     penetration=0.
     cap_penalty=0.
-    for c in data.contact:
+    contact_forces={'thumb':0.,'index':0.}
+    contact_normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+    for ci,c in enumerate(data.contact):
         if c.geom1<0 or c.geom2<0:continue
         geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
         bodies=(model.body(model.geom_bodyid[c.geom1]).name,
@@ -102,7 +105,23 @@ def objective(x):
                 any(s in b for s in ('distal','middle')) for b in bodies) and
             abs(float(c.frame[2]))>.7):
             cap_penalty+=max(0.,.002-float(c.dist))**2
-    return float(1e4*np.sum((data.xpos[tips]-goals)**2)+2e5*penetration+2e6*cap_penalty+
+        if args.low_force_refine and ('bandage_roll' in geoms or 'bandage_core' in geoms):
+            for digit in contact_forces:
+                if any(b.startswith(f'g1_b/wuji_left/l_{digit}_') for b in bodies):
+                    wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
+                    force=max(0.,float(wrench[0]))
+                    contact_forces[digit]+=force
+                    sign=1. if geoms[0] in ('bandage_roll','bandage_core') else -1.
+                    contact_normals[digit]+=sign*force*np.asarray(c.frame[:3])
+    force_penalty=0.
+    if args.low_force_refine:
+        force_penalty=sum(2e2*max(0.,f-1.5)**2 + 5e2*max(0.,.15-f)**2
+                          for f in contact_forces.values())
+        a,b=contact_normals.values()
+        denom=np.linalg.norm(a)*np.linalg.norm(b)
+        if denom>1e-8:
+            force_penalty+=3e2*max(0.,float(a@b/denom)+.6)**2
+    return float(1e4*np.sum((data.xpos[tips]-goals)**2)+2e5*penetration+2e6*cap_penalty+force_penalty+
                  .002*np.sum((x-start)**2))
 refine=minimize(objective,fit.x,method='L-BFGS-B',bounds=list(zip(lo,hi)),
                 options={'maxiter':100,'ftol':1e-8})
@@ -147,6 +166,7 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'seed_index':args.seed_index,
         'seed_scale_rad':args.seed_scale,
         'avoid_index_cap':args.avoid_index_cap,
+        'low_force_refine':args.low_force_refine,
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
@@ -168,6 +188,7 @@ if args.warm_joint:stem+='_jointwarm'
 if args.seed_index:stem+='_seed'+str(args.seed_index)
 if args.seed_index and args.seed_scale!=.18:stem+='_scale'+str(args.seed_scale).replace('.','p')
 if args.avoid_index_cap:stem+='_capavoid'
+if args.low_force_refine:stem+='_forceopt'
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())
