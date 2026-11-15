@@ -13,6 +13,7 @@ OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser()
 parser.add_argument('--goal-z',type=float,default=.72)
 parser.add_argument('--grasp-axis',choices=('x','y'),default='y',help='Opposed fingertip target axis around the upright spool')
+parser.add_argument('--partner-digit',choices=('index','middle'),default='index',help='Finger opposed to the thumb')
 parser.add_argument('--y-closure',type=float,default=0.)
 parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--b-root-y',type=float,default=0.)
@@ -59,7 +60,7 @@ joint_ids=[j for j in range(model.njnt)
            if (model.joint(j).name.startswith('g1_b/left_') and
                any(s in model.joint(j).name for s in ('shoulder','elbow','wrist')))
            or model.joint(j).name.startswith(('g1_b/wuji_left/l_thumb_',
-                                               'g1_b/wuji_left/l_index_finger_'))]
+                                               f'g1_b/wuji_left/l_{args.partner_digit}_finger_'))]
 qa=np.array([model.jnt_qposadr[j] for j in joint_ids],dtype=int)
 va=np.array([model.jnt_dofadr[j] for j in joint_ids],dtype=int)
 lo=np.array([model.jnt_range[j,0]+.03 for j in joint_ids])
@@ -68,7 +69,7 @@ start=np.clip(base[qa],lo+1e-5,hi-1e-5)
 if args.seed_index:
     rng=np.random.default_rng(20261111+args.seed_index)
     start=np.clip(start+rng.normal(0,args.seed_scale,len(start)),lo+1e-5,hi-1e-5)
-tips=[model.body('g1_b/wuji_left/l_index_finger_tip_sensor_frame').id,
+tips=[model.body(f'g1_b/wuji_left/l_{args.partner_digit}_finger_tip_sensor_frame').id,
       model.body('g1_b/wuji_left/l_thumb_tip_sensor_frame').id]
 if args.warm_dynamic:
     data.qpos[:]=base;mujoco.mj_forward(model,data)
@@ -98,8 +99,8 @@ def objective(x):
     forward(x)
     penetration=0.
     cap_penalty=0.
-    contact_forces={'thumb':0.,'index':0.}
-    contact_normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+    contact_forces={'thumb':0.,args.partner_digit:0.}
+    contact_normals={'thumb':np.zeros(3),args.partner_digit:np.zeros(3)}
     for ci,c in enumerate(data.contact):
         if c.geom1<0 or c.geom2<0:continue
         geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
@@ -108,7 +109,7 @@ def objective(x):
         if 'floor' not in geoms and any(b.startswith(('g1_a/','g1_b/')) for b in bodies):
             penetration+=max(0.,-float(c.dist)-.002)**2
         if (args.avoid_index_cap and 'bandage_roll' in geoms and
-            any(b.startswith('g1_b/wuji_left/l_index_finger_') and
+            any(b.startswith(f'g1_b/wuji_left/l_{args.partner_digit}_finger_') and
                 any(s in b for s in ('distal','middle')) for b in bodies) and
             abs(float(c.frame[2]))>.7):
             cap_penalty+=max(0.,.002-float(c.dist))**2
@@ -133,7 +134,7 @@ def objective(x):
 refine=minimize(objective,fit.x,method='L-BFGS-B',bounds=list(zip(lo,hi)),
                 options={'maxiter':100,'ftol':1e-8})
 forward(refine.x)
-deep=[];cap_contacts=[];forces={'thumb':0.,'index':0.};normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+deep=[];cap_contacts=[];forces={'thumb':0.,args.partner_digit:0.};normals={'thumb':np.zeros(3),args.partner_digit:np.zeros(3)}
 for ci,c in enumerate(data.contact):
     if c.geom1<0 or c.geom2<0:continue
     geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
@@ -143,7 +144,7 @@ for ci,c in enumerate(data.contact):
         deep.append({'bodies':bodies,'geoms':geoms,'distance_m':float(c.dist)})
     if 'bandage_roll' in geoms or 'bandage_core' in geoms:
         if ('bandage_roll' in geoms and
-            any(b.startswith('g1_b/wuji_left/l_index_finger_') and
+            any(b.startswith(f'g1_b/wuji_left/l_{args.partner_digit}_finger_') and
                 any(s in b for s in ('distal','middle')) for b in bodies) and
             abs(float(c.frame[2]))>.7):
             cap_contacts.append({'body':next(b for b in bodies if b.startswith('g1_b/wuji_left/')),
@@ -167,6 +168,7 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'b_root_x_m':args.b_root_x,
         'b_root_y_m':args.b_root_y,
         'grasp_axis':args.grasp_axis,
+        'partner_digit':args.partner_digit,
         'spool_initial_z_m':args.spool_z,
         'raised_spool_prototype':args.raised_spool,
         'warm_dynamic':args.warm_dynamic,
@@ -180,13 +182,15 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'tip_positions_m':data.xpos[tips].tolist(),
         'tip_errors_m':tip_errors.tolist(),
         'least_squares_success':bool(fit.success),'collision_refine_success':bool(refine.success),
-        'deep_contacts':deep,'index_cap_contacts':cap_contacts,'forces_n':forces,'normal_cosine':cosine,
+        'deep_contacts':deep,'index_cap_contacts':cap_contacts,
+        'partner_cap_contacts':cap_contacts,'forces_n':forces,'normal_cosine':cosine,
         'eligible_static_endpoint':eligible,
         'strict_static_endpoint':strict_eligible,
         'strict_screen_limits':{'max_tip_goal_error_m':.01,'max_normal_force_per_digit_n':2.,
                                 'no_index_endcap_contact':True}}
 stem='joint_spool_grasp_static'+('' if args.goal_z==.72 else '_z'+str(args.goal_z).replace('.','p'))
 if args.grasp_axis!='y':stem+='_axis'+args.grasp_axis
+if args.partner_digit!='index':stem+='_partner_'+args.partner_digit
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
 if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 if args.b_root_y:stem+='_rooty'+str(args.b_root_y).replace('-','m').replace('.','p')
