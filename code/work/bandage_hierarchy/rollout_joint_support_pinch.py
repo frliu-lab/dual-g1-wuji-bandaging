@@ -42,9 +42,19 @@ parser.add_argument('--elbow-hold-weight',type=float,default=1.,
 parser.add_argument('--spool-after',action='store_true',
                     help='Use the separate B-root x=0.55 m layout and append B-left spool approach')
 parser.add_argument('--settled-spool',action='store_true',help='Use z=0.702 m resting spool state and matched B-left path')
+parser.add_argument('--side-layout',action='store_true',help='Preposition B root at x=0.55, y=0.10 m for lower side grip')
+parser.add_argument('--side-high',action='store_true',help='Use z=0.73 m higher side-grip path')
+parser.add_argument('--side-mid',action='store_true',help='Use z=0.725 m intermediate side-grip path')
+parser.add_argument('--side-mid-open',action='store_true',help='Use z=0.725 m side-grip path without extra closure')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
+if args.side_layout and not (args.spool_after and args.settled_spool):parser.error('Side layout requires --spool-after --settled-spool')
+if args.side_high and not args.side_layout:parser.error('Side-high requires --side-layout')
+if args.side_mid and not args.side_layout:parser.error('Side-mid requires --side-layout')
+if args.side_mid_open and not args.side_layout:parser.error('Side-mid-open requires --side-layout')
+if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
+if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
 if args.b_warm_reference and not args.settled_spool:parser.error('B warm reference requires --settled-spool')
 if args.b_warm_joint_seed and not args.b_warm_reference:parser.error('B joint seed requires --b-warm-reference')
@@ -77,7 +87,11 @@ from support_quality import SupportQualityMonitor, SupportSample
 sys.path.insert(0,str(ROOT/'work/bandage_hierarchy'))
 from controller_router import HandExpertRouter, HandProposal, Observation, Mode
 
-model_name=('joint_spool_grasp_static_z0p73_root0p55_spoolz0p702_variant.xml' if args.settled_spool else
+model_name=('joint_spool_grasp_static_z0p725_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid_open else
+            'joint_spool_grasp_static_z0p725_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid else
+            'joint_spool_grasp_static_z0p73_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_high else
+            'joint_spool_grasp_static_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_layout else
+            'joint_spool_grasp_static_z0p73_root0p55_spoolz0p702_variant.xml' if args.settled_spool else
             'joint_spool_grasp_static_z0p745_root0p55_variant.xml' if args.spool_after else
             'joint_support_pinch_variant.xml')
 model = mujoco.MjModel.from_xml_path(str(OUT / model_name))
@@ -89,6 +103,9 @@ if args.spool_after:
     b_root_qadr=model.joint('g1_b/floating_base').qposadr[0]
     left_path[:,b_root_qadr]=.55
     right_path[:,b_root_qadr]=.55
+    if args.side_layout:
+        left_path[:,b_root_qadr+1]=.1
+        right_path[:,b_root_qadr+1]=.1
     if args.settled_spool:
         spool_z_qadr=model.joint('bandage_spool_free').qposadr[0]+2
         left_path[:,spool_z_qadr]=.702
@@ -99,10 +116,15 @@ path = np.vstack([left_path, right_path[1:]])
 if args.staged:
     closure=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
     if args.spool_after:closure[b_root_qadr]=.55
+    if args.side_layout:closure[b_root_qadr+1]=.1
     if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/('joint_spool_grasp_rrt_settled.npz' if args.settled_spool
+    spool_path=np.load(OUT/('joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
+                            'joint_spool_grasp_rrt_side_mid.npz' if args.side_mid else
+                            'joint_spool_grasp_rrt_side_high.npz' if args.side_high else
+                            'joint_spool_grasp_rrt_side.npz' if args.side_layout else
+                            'joint_spool_grasp_rrt_settled.npz' if args.settled_spool
                             else 'joint_spool_grasp_rrt.npz'))['qpos']
     if np.max(np.abs(path[-1]-spool_path[0]))>1e-9:
         raise RuntimeError('Pinch and spool paths do not join')
@@ -449,6 +471,10 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
                  if args.spool_after else 'Dynamic double-G1 WBC screen: A-left support and A-right pinch; B stands; no bandaging claim'),
         'staged_pregrasp':args.staged,
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
+        'b_root_y_m':.1 if args.side_layout else 0.,
+        'side_high':args.side_high,
+        'side_mid':args.side_mid,
+        'side_mid_open':args.side_mid_open,
         'settled_spool':args.settled_spool,
         'analytic_grip_specialist':args.analytic_grip_specialist,
         'b_analytic_grip':args.b_analytic_grip,
@@ -521,6 +547,10 @@ if args.support_palm_force_goal_n>0:stem+='_palmgoal'+str(args.support_palm_forc
 if args.elbow_hold_weight!=1.:stem+='_elbowweight'+str(args.elbow_hold_weight).replace('.','p')
 if args.spool_after:stem+='_spool'
 if args.settled_spool:stem+='_settled'
+if args.side_layout:stem+='_side'
+if args.side_high:stem+='_high'
+if args.side_mid:stem+='_mid'
+if args.side_mid_open:stem+='_midopen'
 if args.b_analytic_grip:stem+='_bfeedback'
 if args.b_warm_reference:stem+='_bwarm'
 if args.b_warm_reference and args.b_warm_closure!='0p004':stem+='_closure'+args.b_warm_closure
