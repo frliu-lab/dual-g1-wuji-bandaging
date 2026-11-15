@@ -17,6 +17,7 @@ parser.add_argument('--y-closure',type=float,default=0.)
 parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--b-root-y',type=float,default=0.)
 parser.add_argument('--spool-z',type=float,default=.72,help='World-height initial state for spool free joint')
+parser.add_argument('--raised-spool',action='store_true',help='Prototype 60-mm tray pedestal with spool center at z=0.76 m')
 parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the settled-spool dynamic terminal state')
 parser.add_argument('--warm-joint',action='store_true',help='Use terminal state of staged right-palm and elbow-hold joint rollout')
 parser.add_argument('--seed-index',type=int,default=0,help='Deterministic alternate IK initialization')
@@ -24,15 +25,21 @@ parser.add_argument('--avoid-index-cap',action='store_true',help='Penalize B ind
 parser.add_argument('--low-force-refine',action='store_true',help='Include MuJoCo contact-force and opposed-normal terms in static refinement')
 parser.add_argument('--seed-scale',type=float,default=.18,help='Alternate IK seed joint perturbation in radians')
 args=parser.parse_args()
-if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
+if not .70<=args.goal_z<=.80:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
 if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
 if not -.25<=args.b_root_y<=.15:parser.error('B root y must be in [-0.25,0.15] m')
-if not .69<=args.spool_z<=.72:parser.error('Spool center z must be in [0.69,0.72] m')
+if not .69<=args.spool_z<=.80:parser.error('Spool center z must be in [0.69,0.80] m')
+if args.raised_spool and abs(args.spool_z-.76)>1e-9:parser.error('Raised prototype requires --spool-z 0.76')
 if args.warm_joint and not args.warm_dynamic:parser.error('Joint warm state requires --warm-dynamic')
 if not 0<=args.seed_index<=100:parser.error('Seed index must be in [0,100]')
 if not .05<=args.seed_scale<=.6:parser.error('Seed scale must be in [0.05,0.6] radians')
 scene=ET.parse(OUT/'joint_support_pinch_variant.xml').getroot()
+if args.raised_spool:
+    ET.SubElement(scene.find('worldbody'),'geom',{
+        'name':'spool_pedestal_prototype','type':'box','pos':'.38 -.44 .705',
+        'size':'.035 .035 .030','rgba':'.52 .56 .61 1',
+        'friction':'1 .005 .0001'})
 if args.b_root_x!=.7 or args.b_root_y!=0.:
     scene.find(".//body[@name='g1_b/pelvis']").set('pos',f'{args.b_root_x} {args.b_root_y} .8')
 model=mujoco.MjModel.from_xml_string(ET.tostring(scene,encoding='unicode'))
@@ -161,6 +168,7 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'b_root_y_m':args.b_root_y,
         'grasp_axis':args.grasp_axis,
         'spool_initial_z_m':args.spool_z,
+        'raised_spool_prototype':args.raised_spool,
         'warm_dynamic':args.warm_dynamic,
         'warm_joint':args.warm_joint,
         'seed_index':args.seed_index,
@@ -189,6 +197,7 @@ if args.seed_index:stem+='_seed'+str(args.seed_index)
 if args.seed_index and args.seed_scale!=.18:stem+='_scale'+str(args.seed_scale).replace('.','p')
 if args.avoid_index_cap:stem+='_capavoid'
 if args.low_force_refine:stem+='_forceopt'
+if args.raised_spool:stem+='_pedestal'
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())
