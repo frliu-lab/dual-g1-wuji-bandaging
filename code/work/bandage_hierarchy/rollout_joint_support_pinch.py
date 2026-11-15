@@ -31,6 +31,7 @@ parser.add_argument('--support-wrist-scale',type=float,default=1.)
 parser.add_argument('--analytic-grip-specialist',action='store_true',
                     help='Route pad-relative finger corrections after support and pad touch')
 parser.add_argument('--hold-s',type=float,default=1.5,help='Final pinch hold duration')
+parser.add_argument('--approach-segment-s',type=float,default=.8,help='Seconds per intermediate path segment')
 parser.add_argument('--support-finger-force-cap-n',type=float,default=2.,
                     help='Predicted A-left finger contact force cap on the forearm')
 parser.add_argument('--support-total-force-cap-n',type=float,default=12.,
@@ -47,6 +48,8 @@ parser.add_argument('--side-high',action='store_true',help='Use z=0.73 m higher 
 parser.add_argument('--side-mid',action='store_true',help='Use z=0.725 m intermediate side-grip path')
 parser.add_argument('--side-mid-open',action='store_true',help='Use z=0.725 m side-grip path without extra closure')
 parser.add_argument('--handle-layout',action='store_true',help='Use prototype spool core handle with x-axis opposed grip')
+parser.add_argument('--handle-yaw-deg',choices=(-30,0),type=int,default=0,
+                    help='Prepositioned B heading offset for handle layout')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
@@ -58,6 +61,7 @@ if args.handle_layout and not (args.spool_after and args.settled_spool):
     parser.error('Handle layout requires --spool-after --settled-spool')
 if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
     parser.error('Handle and side-layout endpoints are mutually exclusive')
+if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
@@ -79,6 +83,8 @@ if args.analytic_grip_specialist and not args.staged:
     parser.error('Analytic grip specialist requires staged pregrasp path')
 if not .5<=args.hold_s<=5.:
     parser.error('Hold duration must be in [0.5,5] seconds')
+if not .8<=args.approach_segment_s<=3.:
+    parser.error('Approach segment duration must be in [0.8,3] seconds')
 if not .2<=args.support_finger_force_cap_n<=2.:
     parser.error('Support finger force cap must be in [0.2,2] N')
 if not 5.<=args.support_total_force_cap_n<=15.:
@@ -92,7 +98,8 @@ from support_quality import SupportQualityMonitor, SupportSample
 sys.path.insert(0,str(ROOT/'work/bandage_hierarchy'))
 from controller_router import HandExpertRouter, HandProposal, Observation, Mode
 
-model_name=('joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_spoolz0p702_handle_variant.xml' if args.handle_layout else
+model_name=('joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml' if args.handle_layout and args.handle_yaw_deg==-30 else
+            'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_spoolz0p702_handle_variant.xml' if args.handle_layout else
             'joint_spool_grasp_static_z0p725_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid_open else
             'joint_spool_grasp_static_z0p725_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid else
             'joint_spool_grasp_static_z0p73_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_high else
@@ -112,6 +119,10 @@ if args.spool_after:
     if args.side_layout or args.handle_layout:
         left_path[:,b_root_qadr+1]=.1
         right_path[:,b_root_qadr+1]=.1
+    if args.handle_yaw_deg:
+        theta=(np.pi+np.deg2rad(args.handle_yaw_deg))/2
+        left_path[:,b_root_qadr+3:b_root_qadr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
+        right_path[:,b_root_qadr+3:b_root_qadr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
     if args.settled_spool:
         spool_z_qadr=model.joint('bandage_spool_free').qposadr[0]+2
         left_path[:,spool_z_qadr]=.702
@@ -123,10 +134,12 @@ if args.staged:
     closure=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
     if args.spool_after:closure[b_root_qadr]=.55
     if args.side_layout or args.handle_layout:closure[b_root_qadr+1]=.1
+    if args.handle_yaw_deg:closure[b_root_qadr+3:b_root_qadr+7]=[np.cos(theta),0.,0.,np.sin(theta)]
     if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
+    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle_yaw-30.npz' if args.handle_layout and args.handle_yaw_deg==-30 else
+                            'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
                             'joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
                             'joint_spool_grasp_rrt_side_mid.npz' if args.side_mid else
                             'joint_spool_grasp_rrt_side_high.npz' if args.side_high else
@@ -235,7 +248,7 @@ hz = 50
 interval = round(1/hz/model.opt.timestep)
 if abs(interval*model.opt.timestep-1/hz)>1e-9:
     raise ValueError('Simulation step does not divide 50 Hz')
-durations = [1.2] + [.8]*(len(path)-2) + [args.hold_s]
+durations = [1.2] + [args.approach_segment_s]*(len(path)-2) + [args.hold_s]
 schedule = []
 for segment, duration in enumerate(durations[:-1],start=1):
     schedule.extend((segment,k+1,round(duration*hz)) for k in range(round(duration*hz)))
@@ -481,6 +494,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
         'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
         'spool_handle_prototype':args.handle_layout,
+        'b_root_yaw_deg':args.handle_yaw_deg,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
         'side_mid_open':args.side_mid_open,
@@ -497,6 +511,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'support_wrist_scale':args.support_wrist_scale if args.support_wrist_reorient else None,
         'wbc_backend':args.wbc_backend,
         'hold_s':args.hold_s,
+        'approach_segment_s':args.approach_segment_s,
         'router_mode_counts':router_modes,
         'router_first_hand_specialist_time_s':first_specialist_time_s,
         'grasp_finger_weight':args.grasp_finger_weight,
@@ -550,6 +565,7 @@ if args.right_palm_position_weight!=1000.:stem+=f'_position{str(args.right_palm_
 if args.stage_right_palm_weight:stem+='_stageright'
 if args.analytic_grip_specialist:stem+='_specialist'
 if args.hold_s!=1.5:stem+=f'_hold{str(args.hold_s).replace(".","p")}'
+if args.approach_segment_s!=.8:stem+=f'_approach{str(args.approach_segment_s).replace(".","p")}'
 if args.support_finger_force_cap_n!=2.:stem+=f'_fingercap{str(args.support_finger_force_cap_n).replace(".","p")}'
 if args.support_total_force_cap_n!=12.:stem+=f'_totalcap{str(args.support_total_force_cap_n).replace(".","p")}'
 if args.support_palm_force_goal_n>0:stem+='_palmgoal'+str(args.support_palm_force_goal_n).replace('.','p')
@@ -558,6 +574,7 @@ if args.spool_after:stem+='_spool'
 if args.settled_spool:stem+='_settled'
 if args.side_layout:stem+='_side'
 if args.handle_layout:stem+='_handle'
+if args.handle_yaw_deg:stem+='_yaw'+str(args.handle_yaw_deg).replace('-','m')
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'

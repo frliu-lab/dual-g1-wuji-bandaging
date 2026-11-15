@@ -17,6 +17,7 @@ parser.add_argument('--partner-digit',choices=('index','middle'),default='index'
 parser.add_argument('--y-closure',type=float,default=0.)
 parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--b-root-y',type=float,default=0.)
+parser.add_argument('--b-root-yaw-deg',type=float,default=0.,help='Prepositioned B-base heading in degrees')
 parser.add_argument('--spool-z',type=float,default=.72,help='World-height initial state for spool free joint')
 parser.add_argument('--raised-spool',action='store_true',help='Prototype 60-mm tray pedestal with spool center at z=0.76 m')
 parser.add_argument('--spool-handle',action='store_true',help='Prototype a grip handle rigidly fixed to the spool core')
@@ -34,6 +35,7 @@ if not .70<=args.goal_z<=.80:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
 if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
 if not -.25<=args.b_root_y<=.15:parser.error('B root y must be in [-0.25,0.15] m')
+if not -45.<=args.b_root_yaw_deg<=45.:parser.error('B heading must be in [-45,45] degrees')
 if not .69<=args.spool_z<=.80:parser.error('Spool center z must be in [0.69,0.80] m')
 if args.raised_spool and abs(args.spool_z-.76)>1e-9:parser.error('Raised prototype requires --spool-z 0.76')
 if args.handle_solref_time and not (args.spool_handle and .01<=args.handle_solref_time<=.08):
@@ -72,6 +74,10 @@ if args.warm_dynamic:
 else:
     base[model.joint('g1_b/floating_base').qposadr[0]]=args.b_root_x
     base[model.joint('g1_b/floating_base').qposadr[0]+1]=args.b_root_y
+    if args.b_root_yaw_deg:
+        yaw=(np.pi+np.deg2rad(args.b_root_yaw_deg))/2
+        adr=model.joint('g1_b/floating_base').qposadr[0]
+        base[adr+3:adr+7]=[np.cos(yaw),0.,0.,np.sin(yaw)]
     base[model.joint('bandage_spool_free').qposadr[0]+2]=args.spool_z
 joint_ids=[j for j in range(model.njnt)
            if (model.joint(j).name.startswith('g1_b/left_') and
@@ -195,6 +201,7 @@ strict_eligible=bool(eligible and np.max(tip_errors)<=.01 and
 report={'scope':'Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim',
         'b_root_x_m':args.b_root_x,
         'b_root_y_m':args.b_root_y,
+        'b_root_yaw_deg':args.b_root_yaw_deg,
         'grasp_axis':args.grasp_axis,
         'partner_digit':args.partner_digit,
         'spool_initial_z_m':args.spool_z,
@@ -227,6 +234,7 @@ if args.partner_digit!='index':stem+='_partner_'+args.partner_digit
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
 if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 if args.b_root_y:stem+='_rooty'+str(args.b_root_y).replace('-','m').replace('.','p')
+if args.b_root_yaw_deg:stem+='_rootyaw'+str(args.b_root_yaw_deg).replace('-','m').replace('.','p')
 if args.spool_z!=.72:stem+='_spoolz'+str(args.spool_z).replace('.','p')
 if args.warm_dynamic:stem+='_dynamicwarm'
 if args.warm_joint:stem+='_jointwarm'

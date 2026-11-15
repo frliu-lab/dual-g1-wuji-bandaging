@@ -1,0 +1,197 @@
+{
+  "scope": "Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim",
+  "b_root_x_m": 0.55,
+  "b_root_y_m": 0.1,
+  "b_root_yaw_deg": 20.0,
+  "grasp_axis": "x",
+  "partner_digit": "index",
+  "spool_initial_z_m": 0.702,
+  "raised_spool_prototype": false,
+  "spool_handle_prototype": true,
+  "handle_radius_m": 0.012,
+  "handle_clearance_m": 0.01,
+  "handle_solref_time_s": 0.0,
+  "warm_dynamic": false,
+  "warm_joint": false,
+  "seed_index": 0,
+  "seed_scale_rad": 0.18,
+  "avoid_index_cap": false,
+  "low_force_refine": false,
+  "goals_m": [
+    [
+      0.358,
+      -0.44,
+      0.78
+    ],
+    [
+      0.402,
+      -0.44,
+      0.78
+    ]
+  ],
+  "joint_names": [
+    "g1_b/left_shoulder_pitch_joint",
+    "g1_b/left_shoulder_roll_joint",
+    "g1_b/left_shoulder_yaw_joint",
+    "g1_b/left_elbow_joint",
+    "g1_b/left_wrist_roll_joint",
+    "g1_b/left_wrist_pitch_joint",
+    "g1_b/left_wrist_yaw_joint",
+    "g1_b/wuji_left/l_thumb_cmc_flex",
+    "g1_b/wuji_left/l_thumb_cmc_abd",
+    "g1_b/wuji_left/l_thumb_mcp",
+    "g1_b/wuji_left/l_thumb_ip",
+    "g1_b/wuji_left/l_index_finger_mcp_flex",
+    "g1_b/wuji_left/l_index_finger_mcp_abd",
+    "g1_b/wuji_left/l_index_finger_pip",
+    "g1_b/wuji_left/l_index_finger_dip"
+  ],
+  "spool_center_m": [
+    0.38,
+    -0.44,
+    0.702
+  ],
+  "tip_positions_m": [
+    [
+      0.3577844897769239,
+      -0.44004428618527663,
+      0.7800692508891046
+    ],
+    [
+      0.40499545016500355,
+      -0.43383137206028366,
+      0.7845615880708925
+    ]
+  ],
+  "tip_errors_m": [
+    0.00023065473786254025,
+    0.008236065691710887
+  ],
+  "least_squares_success": false,
+  "collision_refine_success": true,
+  "deep_contacts": [],
+  "index_cap_contacts": [],
+  "partner_cap_contacts": [],
+  "spool_contacts": [
+    {
+      "digit": "thumb",
+      "bodies": [
+        "bandage_spool",
+        "g1_b/wuji_left/l_thumb_distal"
+      ],
+      "geoms": [
+        "bandage_handle_prototype",
+        ""
+      ],
+      "distance_m": -0.0002882077913491389,
+      "force_n": 0.0,
+      "spool_to_finger_normal": [
+        0.9326048955446931,
+        -0.3591519799335652,
+        -0.03546778983630539
+      ]
+    },
+    {
+      "digit": "thumb",
+      "bodies": [
+        "bandage_spool",
+        "g1_b/wuji_left/l_thumb_distal"
+      ],
+      "geoms": [
+        "bandage_handle_prototype",
+        ""
+      ],
+      "distance_m": -0.00028578270040436005,
+      "force_n": 0.0,
+      "spool_to_finger_normal": [
+        0.9326048955447215,
+        -0.35915197993347536,
+        -0.03546778983646599
+      ]
+    },
+    {
+      "digit": "thumb",
+      "bodies": [
+        "bandage_spool",
+        "g1_b/wuji_left/l_thumb_tip_sensor_frame"
+      ],
+      "geoms": [
+        "bandage_handle_prototype",
+        ""
+      ],
+      "distance_m": -0.0020014090822477763,
+      "force_n": 0.4684090761647944,
+      "spool_to_finger_normal": [
+        0.9306673656015684,
+        -0.36439226802965974,
+        0.032810510578739537
+      ]
+    },
+    {
+      "digit": "thumb",
+      "bodies": [
+        "bandage_spool",
+        "g1_b/wuji_left/l_thumb_tip_sensor_frame"
+      ],
+      "geoms": [
+        "bandage_handle_prototype",
+        ""
+      ],
+      "distance_m": -0.0020025257903640223,
+      "force_n": 0.46020816363416533,
+      "spool_to_finger_normal": [
+        0.9306673656015619,
+        -0.3643922680296765,
+        0.03281051057873145
+      ]
+    },
+    {
+      "digit": "index",
+      "bodies": [
+        "bandage_spool",
+        "g1_b/wuji_left/l_index_finger_tip_sensor_frame"
+      ],
+      "geoms": [
+        "bandage_handle_prototype",
+        ""
+      ],
+      "distance_m": -0.002003951221196193,
+      "force_n": 0.2789408647953096,
+      "spool_to_finger_normal": [
+        -0.9557887109036032,
+        -0.2940542727008602,
+        0.00015752966885581904
+      ]
+    },
+    {
+      "digit": "index",
+      "bodies": [
+        "bandage_spool",
+        "g1_b/wuji_left/l_index_finger_tip_sensor_frame"
+      ],
+      "geoms": [
+        "bandage_handle_prototype",
+        ""
+      ],
+      "distance_m": -0.0020039011093510566,
+      "force_n": 0.07925397471158721,
+      "spool_to_finger_normal": [
+        -0.955788710903603,
+        -0.29405427270086143,
+        0.00015752966884213635
+      ]
+    }
+  ],
+  "forces_n": {
+    "thumb": 0.9286172397989597,
+    "index": 0.3581948395068968
+  },
+  "normal_cosine": -0.7823650896662251,
+  "eligible_static_endpoint": true,
+  "strict_static_endpoint": true,
+  "strict_screen_limits": {
+    "max_tip_goal_error_m": 0.01,
+    "max_normal_force_per_digit_n": 2.0,
+    "no_index_endcap_contact": true
+  }
+}
