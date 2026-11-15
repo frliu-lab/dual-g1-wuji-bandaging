@@ -20,6 +20,7 @@ parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WB
 parser.add_argument('--b-palm-rotation-weight',type=float,default=10.,help='WBC B-left wrist orientation tracking weight')
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
+parser.add_argument('--b-object-follow',action='store_true',help='Shift B-left arm reference with spool motion during hold')
 parser.add_argument('--b-warm-reference',action='store_true',help='Blend B-left joints toward contact-screened dynamic terminal pose')
 parser.add_argument('--b-warm-closure',choices=('0p004','0p008'),default='0p004')
 parser.add_argument('--b-warm-joint-seed',choices=(0,1,2),type=int,default=0,
@@ -69,6 +70,7 @@ if args.tray_clamp and not args.handle_layout:parser.error('Tray clamp requires 
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
+if args.b_object_follow and not args.handle_layout:parser.error('B object follow requires --handle-layout')
 if args.b_warm_reference and not args.settled_spool:parser.error('B warm reference requires --settled-spool')
 if args.b_warm_joint_seed and not args.b_warm_reference:parser.error('B joint seed requires --b-warm-reference')
 if not 0.<=args.b_spool_force_goal_n<=2.:parser.error('B spool force goal must be in [0,2] N')
@@ -203,6 +205,11 @@ b_grasp_vadr=np.array([model.jnt_dofadr[j] for j in range(model.njnt)
                        if model.joint(j).name.startswith(('g1_b/wuji_left/l_thumb_',
                                                            'g1_b/wuji_left/l_index_finger_'))],dtype=int)
 wbc.weights[b_grasp_vadr]=args.b_finger_weight
+b_arm_joints=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/left_') and
+              any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
+b_arm_qadr=np.array([model.jnt_qposadr[j] for j in b_arm_joints],dtype=int)
+b_arm_vadr=np.array([model.jnt_dofadr[j] for j in b_arm_joints],dtype=int)
+b_wrist_body=model.body('g1_b/wuji_left/l_wrist').id
 b_warm_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
                        if (model.joint(j).name.startswith('g1_b/left_') and
                            any(s in model.joint(j).name for s in ('shoulder','elbow','wrist')))
@@ -361,6 +368,15 @@ for segment,k,count in schedule:
         delta={'near':[-.045,0.,.09],'roll':[-.135,-.045,0.],
                'roll_yaw':[-.135,-.045,.045]}[args.support_wrist_candidate]
         wbc.qref[support_wrist_qadr]+=blend*args.support_wrist_scale*np.array(delta)
+    if args.b_object_follow and segment==len(path)-1 and k==count:
+        goal_data.qpos[:]=wbc.qref
+        mujoco.mj_forward(model,goal_data)
+        jac=np.zeros((3,model.nv))
+        mujoco.mj_jac(model,goal_data,jac,None,goal_data.xpos[b_wrist_body],b_wrist_body)
+        J=jac[:,b_arm_vadr]
+        shift=data.xpos[spool_body]-spool_start
+        correction=J.T@np.linalg.solve(J@J.T+1e-4*np.eye(3),shift)
+        wbc.qref[b_arm_qadr]+=np.clip(correction,-.12,.12)
     if b_digit_info and segment>=len(path)-2:
         spool_rot=data.xmat[spool_body].reshape(3,3)
         for info in b_digit_info.values():
@@ -517,6 +533,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'settled_spool':args.settled_spool,
         'analytic_grip_specialist':args.analytic_grip_specialist,
         'b_analytic_grip':args.b_analytic_grip,
+        'b_object_follow':args.b_object_follow,
         'b_warm_reference':args.b_warm_reference,
         'b_warm_closure':args.b_warm_closure if args.b_warm_reference else None,
         'b_warm_joint_seed':args.b_warm_joint_seed,
@@ -597,6 +614,7 @@ if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'
 if args.b_analytic_grip:stem+='_bfeedback'
+if args.b_object_follow:stem+='_bfollow'
 if args.b_warm_reference:stem+='_bwarm'
 if args.b_warm_reference and args.b_warm_closure!='0p004':stem+='_closure'+args.b_warm_closure
 if args.b_warm_joint_seed:stem+='_jseed'+str(args.b_warm_joint_seed)

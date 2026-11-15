@@ -145,7 +145,7 @@ class JointWBC:
     raise ValueError('Spool contact normal goal must be finite and nonnegative')
    spool_contacts={digit:[] for digit in ('thumb','index_finger')}
    for k,(ga,gb) in enumerate(ids):
-    if not any(m.geom(g).name in ('bandage_roll','bandage_core') for g in (ga,gb)):continue
+    if not any(m.geom(g).name in ('bandage_roll','bandage_core','bandage_handle_prototype') for g in (ga,gb)):continue
     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
     for digit in spool_contacts:
      if any(n.startswith(f'g1_b/wuji_left/l_{digit}_') for n in names):spool_contacts[digit].append(k)
