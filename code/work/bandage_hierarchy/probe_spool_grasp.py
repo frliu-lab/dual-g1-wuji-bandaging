@@ -12,6 +12,7 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser()
 parser.add_argument('--goal-z',type=float,default=.72)
+parser.add_argument('--grasp-axis',choices=('x','y'),default='y',help='Opposed fingertip target axis around the upright spool')
 parser.add_argument('--y-closure',type=float,default=0.)
 parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--b-root-y',type=float,default=0.)
@@ -67,8 +68,12 @@ if args.warm_dynamic:
     goals=np.array([[spool_center[0],spool_center[1]-.06+args.y_closure,spool_center[2]+args.goal_z-.702],
                     [spool_center[0],spool_center[1]+.06-args.y_closure,spool_center[2]+args.goal_z-.702]])
 else:
-    goals=np.array([[.38,-.50+args.y_closure,args.goal_z],
-                    [.38,-.38-args.y_closure,args.goal_z]])
+    if args.grasp_axis=='x':
+        goals=np.array([[.38-.06+args.y_closure,-.44,args.goal_z],
+                        [.38+.06-args.y_closure,-.44,args.goal_z]])
+    else:
+        goals=np.array([[.38,-.50+args.y_closure,args.goal_z],
+                        [.38,-.38-args.y_closure,args.goal_z]])
 def forward(x):
     data.qpos[:]=base;data.qpos[qa]=x;mujoco.mj_forward(model,data)
 def residual(x):
@@ -135,6 +140,7 @@ strict_eligible=bool(eligible and np.max(tip_errors)<=.01 and
 report={'scope':'Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim',
         'b_root_x_m':args.b_root_x,
         'b_root_y_m':args.b_root_y,
+        'grasp_axis':args.grasp_axis,
         'spool_initial_z_m':args.spool_z,
         'warm_dynamic':args.warm_dynamic,
         'warm_joint':args.warm_joint,
@@ -152,6 +158,7 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'strict_screen_limits':{'max_tip_goal_error_m':.01,'max_normal_force_per_digit_n':2.,
                                 'no_index_endcap_contact':True}}
 stem='joint_spool_grasp_static'+('' if args.goal_z==.72 else '_z'+str(args.goal_z).replace('.','p'))
+if args.grasp_axis!='y':stem+='_axis'+args.grasp_axis
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
 if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 if args.b_root_y:stem+='_rooty'+str(args.b_root_y).replace('-','m').replace('.','p')
