@@ -46,6 +46,7 @@ parser.add_argument('--side-layout',action='store_true',help='Preposition B root
 parser.add_argument('--side-high',action='store_true',help='Use z=0.73 m higher side-grip path')
 parser.add_argument('--side-mid',action='store_true',help='Use z=0.725 m intermediate side-grip path')
 parser.add_argument('--side-mid-open',action='store_true',help='Use z=0.725 m side-grip path without extra closure')
+parser.add_argument('--handle-layout',action='store_true',help='Use prototype spool core handle with x-axis opposed grip')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
@@ -53,6 +54,10 @@ if args.side_layout and not (args.spool_after and args.settled_spool):parser.err
 if args.side_high and not args.side_layout:parser.error('Side-high requires --side-layout')
 if args.side_mid and not args.side_layout:parser.error('Side-mid requires --side-layout')
 if args.side_mid_open and not args.side_layout:parser.error('Side-mid-open requires --side-layout')
+if args.handle_layout and not (args.spool_after and args.settled_spool):
+    parser.error('Handle layout requires --spool-after --settled-spool')
+if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
+    parser.error('Handle and side-layout endpoints are mutually exclusive')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
@@ -87,7 +92,8 @@ from support_quality import SupportQualityMonitor, SupportSample
 sys.path.insert(0,str(ROOT/'work/bandage_hierarchy'))
 from controller_router import HandExpertRouter, HandProposal, Observation, Mode
 
-model_name=('joint_spool_grasp_static_z0p725_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid_open else
+model_name=('joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_spoolz0p702_handle_variant.xml' if args.handle_layout else
+            'joint_spool_grasp_static_z0p725_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid_open else
             'joint_spool_grasp_static_z0p725_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_mid else
             'joint_spool_grasp_static_z0p73_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_high else
             'joint_spool_grasp_static_closure0p004_root0p55_rooty0p1_spoolz0p702_variant.xml' if args.side_layout else
@@ -103,7 +109,7 @@ if args.spool_after:
     b_root_qadr=model.joint('g1_b/floating_base').qposadr[0]
     left_path[:,b_root_qadr]=.55
     right_path[:,b_root_qadr]=.55
-    if args.side_layout:
+    if args.side_layout or args.handle_layout:
         left_path[:,b_root_qadr+1]=.1
         right_path[:,b_root_qadr+1]=.1
     if args.settled_spool:
@@ -116,11 +122,12 @@ path = np.vstack([left_path, right_path[1:]])
 if args.staged:
     closure=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
     if args.spool_after:closure[b_root_qadr]=.55
-    if args.side_layout:closure[b_root_qadr+1]=.1
+    if args.side_layout or args.handle_layout:closure[b_root_qadr+1]=.1
     if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/('joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
+    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
+                            'joint_spool_grasp_rrt_side_mid_open.npz' if args.side_mid_open else
                             'joint_spool_grasp_rrt_side_mid.npz' if args.side_mid else
                             'joint_spool_grasp_rrt_side_high.npz' if args.side_high else
                             'joint_spool_grasp_rrt_side.npz' if args.side_layout else
@@ -295,7 +302,8 @@ if args.b_analytic_grip:
         joints=[j for j in range(model.njnt)
                 if model.joint(j).name.startswith(f'g1_b/wuji_left/l_{digit if digit=="thumb" else "index_finger"}_')]
         local=goal_spool_rot.T@(goal_data.xpos[bid]-goal_data.xpos[spool_body])
-        local[1]+=(-.008 if digit=='thumb' else .005)
+        if not args.handle_layout:
+            local[1]+=(-.008 if digit=='thumb' else .005)
         b_digit_info[digit]={'body':bid,'qadr':np.array([model.jnt_qposadr[j] for j in joints],dtype=int),
                              'vadr':np.array([model.jnt_dofadr[j] for j in joints],dtype=int),
                              'spool_local':local}
@@ -411,17 +419,17 @@ for segment,k,count in schedule:
                             normals[digit]+=sign*force*np.asarray(c.frame[:3])
                             if digit=='thumb':thumb_force+=force
                             else:index_force+=force
-                if 'bandage_roll' in geoms or 'bandage_core' in geoms:
+                if any(g in geoms for g in ('bandage_roll','bandage_core','bandage_handle_prototype')):
                     for digit in b_forces:
                         if any(b.startswith(f'g1_b/wuji_left/l_{digit}_') for b in bodies):
                             wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
                             force=max(0.,float(wrench[0]))
-                            sign=1. if geoms[0] in ('bandage_roll','bandage_core') else -1.
+                            sign=1. if geoms[0] in ('bandage_roll','bandage_core','bandage_handle_prototype') else -1.
                             b_forces[digit]+=force
                             b_normals[digit]+=sign*force*np.asarray(c.frame[:3])
                             if force>=.05:
                                 b_contact_details.append({'digit':digit,'body':next((b for b in bodies if b.startswith('g1_b/wuji_left/')),None),
-                                                          'spool_geom':next((g for g in geoms if g in ('bandage_roll','bandage_core')),None),
+                                                          'spool_geom':next((g for g in geoms if g in ('bandage_roll','bandage_core','bandage_handle_prototype')),None),
                                                           'position_m':np.asarray(c.pos).tolist(),
                                                           'spool_to_finger_normal':(sign*np.asarray(c.frame[:3])).tolist(),
                                                           'force_n':force})
@@ -471,7 +479,8 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
                  if args.spool_after else 'Dynamic double-G1 WBC screen: A-left support and A-right pinch; B stands; no bandaging claim'),
         'staged_pregrasp':args.staged,
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
-        'b_root_y_m':.1 if args.side_layout else 0.,
+        'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
+        'spool_handle_prototype':args.handle_layout,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
         'side_mid_open':args.side_mid_open,
@@ -548,6 +557,7 @@ if args.elbow_hold_weight!=1.:stem+='_elbowweight'+str(args.elbow_hold_weight).r
 if args.spool_after:stem+='_spool'
 if args.settled_spool:stem+='_settled'
 if args.side_layout:stem+='_side'
+if args.handle_layout:stem+='_handle'
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'

@@ -19,6 +19,10 @@ parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--b-root-y',type=float,default=0.)
 parser.add_argument('--spool-z',type=float,default=.72,help='World-height initial state for spool free joint')
 parser.add_argument('--raised-spool',action='store_true',help='Prototype 60-mm tray pedestal with spool center at z=0.76 m')
+parser.add_argument('--spool-handle',action='store_true',help='Prototype a grip handle rigidly fixed to the spool core')
+parser.add_argument('--handle-radius',type=float,default=.012,help='Prototype handle radius in meters')
+parser.add_argument('--handle-clearance',type=float,default=.010,help='Target sensor-frame offset outside handle radius')
+parser.add_argument('--handle-solref-time',type=float,default=0.,help='Optional contact time constant for compliant prototype handle')
 parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the settled-spool dynamic terminal state')
 parser.add_argument('--warm-joint',action='store_true',help='Use terminal state of staged right-palm and elbow-hold joint rollout')
 parser.add_argument('--seed-index',type=int,default=0,help='Deterministic alternate IK initialization')
@@ -32,6 +36,12 @@ if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
 if not -.25<=args.b_root_y<=.15:parser.error('B root y must be in [-0.25,0.15] m')
 if not .69<=args.spool_z<=.80:parser.error('Spool center z must be in [0.69,0.80] m')
 if args.raised_spool and abs(args.spool_z-.76)>1e-9:parser.error('Raised prototype requires --spool-z 0.76')
+if args.handle_solref_time and not (args.spool_handle and .01<=args.handle_solref_time<=.08):
+    parser.error('Handle solref time requires --spool-handle and must be in [0.01,0.08] s')
+if not .012<=args.handle_radius<=.025 or (args.handle_radius!=.012 and not args.spool_handle):
+    parser.error('Handle radius must be in [0.012,0.025] m and requires --spool-handle')
+if not 0.<=args.handle_clearance<=.015 or (args.handle_clearance!=.010 and not args.spool_handle):
+    parser.error('Handle clearance must be in [0,0.015] m and requires --spool-handle')
 if args.warm_joint and not args.warm_dynamic:parser.error('Joint warm state requires --warm-dynamic')
 if not 0<=args.seed_index<=100:parser.error('Seed index must be in [0,100]')
 if not .05<=args.seed_scale<=.6:parser.error('Seed scale must be in [0.05,0.6] radians')
@@ -41,6 +51,13 @@ if args.raised_spool:
         'name':'spool_pedestal_prototype','type':'box','pos':'.38 -.44 .705',
         'size':'.035 .035 .030','rgba':'.52 .56 .61 1',
         'friction':'1 .005 .0001'})
+if args.spool_handle:
+    handle_attrs={
+        'name':'bandage_handle_prototype','type':'cylinder','pos':'0 0 .065',
+        'size':f'{args.handle_radius} .040','mass':'.03','rgba':'.45 .47 .50 1',
+        'friction':'1 .005 .0001'}
+    if args.handle_solref_time:handle_attrs['solref']=f'{args.handle_solref_time} 1'
+    ET.SubElement(scene.find(".//body[@name='bandage_spool']"),'geom',handle_attrs)
 if args.b_root_x!=.7 or args.b_root_y!=0.:
     scene.find(".//body[@name='g1_b/pelvis']").set('pos',f'{args.b_root_x} {args.b_root_y} .8')
 model=mujoco.MjModel.from_xml_string(ET.tostring(scene,encoding='unicode'))
@@ -77,7 +94,15 @@ if args.warm_dynamic:
     goals=np.array([[spool_center[0],spool_center[1]-.06+args.y_closure,spool_center[2]+args.goal_z-.702],
                     [spool_center[0],spool_center[1]+.06-args.y_closure,spool_center[2]+args.goal_z-.702]])
 else:
-    if args.grasp_axis=='x':
+    if args.spool_handle and args.grasp_axis=='x':
+        gap=args.handle_radius+args.handle_clearance
+        goals=np.array([[.38-gap+args.y_closure,-.44,args.goal_z],
+                        [.38+gap-args.y_closure,-.44,args.goal_z]])
+    elif args.spool_handle:
+        gap=args.handle_radius+args.handle_clearance
+        goals=np.array([[.38,-.44-gap+args.y_closure,args.goal_z],
+                        [.38,-.44+gap-args.y_closure,args.goal_z]])
+    elif args.grasp_axis=='x':
         goals=np.array([[.38-.06+args.y_closure,-.44,args.goal_z],
                         [.38+.06-args.y_closure,-.44,args.goal_z]])
     else:
@@ -113,13 +138,13 @@ def objective(x):
                 any(s in b for s in ('distal','middle')) for b in bodies) and
             abs(float(c.frame[2]))>.7):
             cap_penalty+=max(0.,.002-float(c.dist))**2
-        if args.low_force_refine and ('bandage_roll' in geoms or 'bandage_core' in geoms):
+        if args.low_force_refine and any(g in geoms for g in ('bandage_roll','bandage_core','bandage_handle_prototype')):
             for digit in contact_forces:
                 if any(b.startswith(f'g1_b/wuji_left/l_{digit}_') for b in bodies):
                     wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
                     force=max(0.,float(wrench[0]))
                     contact_forces[digit]+=force
-                    sign=1. if geoms[0] in ('bandage_roll','bandage_core') else -1.
+                    sign=1. if geoms[0] in ('bandage_roll','bandage_core','bandage_handle_prototype') else -1.
                     contact_normals[digit]+=sign*force*np.asarray(c.frame[:3])
     force_penalty=0.
     if args.low_force_refine:
@@ -134,7 +159,7 @@ def objective(x):
 refine=minimize(objective,fit.x,method='L-BFGS-B',bounds=list(zip(lo,hi)),
                 options={'maxiter':100,'ftol':1e-8})
 forward(refine.x)
-deep=[];cap_contacts=[];forces={'thumb':0.,args.partner_digit:0.};normals={'thumb':np.zeros(3),args.partner_digit:np.zeros(3)}
+deep=[];cap_contacts=[];spool_contacts=[];forces={'thumb':0.,args.partner_digit:0.};normals={'thumb':np.zeros(3),args.partner_digit:np.zeros(3)}
 for ci,c in enumerate(data.contact):
     if c.geom1<0 or c.geom2<0:continue
     geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
@@ -142,7 +167,7 @@ for ci,c in enumerate(data.contact):
             model.body(model.geom_bodyid[c.geom2]).name)
     if 'floor' not in geoms and any(b.startswith(('g1_a/','g1_b/')) for b in bodies) and c.dist<-.003:
         deep.append({'bodies':bodies,'geoms':geoms,'distance_m':float(c.dist)})
-    if 'bandage_roll' in geoms or 'bandage_core' in geoms:
+    if any(g in geoms for g in ('bandage_roll','bandage_core','bandage_handle_prototype')):
         if ('bandage_roll' in geoms and
             any(b.startswith(f'g1_b/wuji_left/l_{args.partner_digit}_finger_') and
                 any(s in b for s in ('distal','middle')) for b in bodies) and
@@ -154,8 +179,11 @@ for ci,c in enumerate(data.contact):
                 wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
                 force=max(0.,float(wrench[0]))
                 forces[digit]+=force
-                sign=1. if any(g in ('bandage_roll','bandage_core') for g in geoms[:1]) else -1.
+                sign=1. if geoms[0] in ('bandage_roll','bandage_core','bandage_handle_prototype') else -1.
                 normals[digit]+=sign*force*np.asarray(c.frame[:3])
+                spool_contacts.append({'digit':digit,'bodies':bodies,'geoms':geoms,
+                                       'distance_m':float(c.dist),'force_n':force,
+                                       'spool_to_finger_normal':(sign*np.asarray(c.frame[:3])).tolist()})
 a,b=normals.values()
 cosine=(float(a@b/(np.linalg.norm(a)*np.linalg.norm(b)))
         if np.linalg.norm(a)*np.linalg.norm(b)>1e-8 else None)
@@ -171,6 +199,10 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'partner_digit':args.partner_digit,
         'spool_initial_z_m':args.spool_z,
         'raised_spool_prototype':args.raised_spool,
+        'spool_handle_prototype':args.spool_handle,
+        'handle_radius_m':args.handle_radius if args.spool_handle else None,
+        'handle_clearance_m':args.handle_clearance if args.spool_handle else None,
+        'handle_solref_time_s':args.handle_solref_time,
         'warm_dynamic':args.warm_dynamic,
         'warm_joint':args.warm_joint,
         'seed_index':args.seed_index,
@@ -183,7 +215,8 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'tip_errors_m':tip_errors.tolist(),
         'least_squares_success':bool(fit.success),'collision_refine_success':bool(refine.success),
         'deep_contacts':deep,'index_cap_contacts':cap_contacts,
-        'partner_cap_contacts':cap_contacts,'forces_n':forces,'normal_cosine':cosine,
+        'partner_cap_contacts':cap_contacts,'spool_contacts':spool_contacts,
+        'forces_n':forces,'normal_cosine':cosine,
         'eligible_static_endpoint':eligible,
         'strict_static_endpoint':strict_eligible,
         'strict_screen_limits':{'max_tip_goal_error_m':.01,'max_normal_force_per_digit_n':2.,
@@ -202,6 +235,10 @@ if args.seed_index and args.seed_scale!=.18:stem+='_scale'+str(args.seed_scale).
 if args.avoid_index_cap:stem+='_capavoid'
 if args.low_force_refine:stem+='_forceopt'
 if args.raised_spool:stem+='_pedestal'
+if args.spool_handle:stem+='_handle'
+if args.spool_handle and args.handle_radius!=.012:stem+='_radius'+str(args.handle_radius).replace('.','p')
+if args.spool_handle and args.handle_clearance!=.010:stem+='_clear'+str(args.handle_clearance).replace('.','p')
+if args.handle_solref_time:stem+='_solref'+str(args.handle_solref_time).replace('.','p')
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())
