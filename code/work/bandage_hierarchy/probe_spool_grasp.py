@@ -129,6 +129,9 @@ cosine=(float(a@b/(np.linalg.norm(a)*np.linalg.norm(b)))
         if np.linalg.norm(a)*np.linalg.norm(b)>1e-8 else None)
 eligible=bool(not deep and (not args.avoid_index_cap or not cap_contacts) and
               all(f>.05 for f in forces.values()) and cosine is not None and cosine<-.5)
+tip_errors=np.linalg.norm(data.xpos[tips]-goals,axis=1)
+strict_eligible=bool(eligible and np.max(tip_errors)<=.01 and
+                     all(.05<f<=2. for f in forces.values()) and not cap_contacts)
 report={'scope':'Static B-left spool-contact IK in composite scene; no path, dynamic grasp, or bandaging claim',
         'b_root_x_m':args.b_root_x,
         'b_root_y_m':args.b_root_y,
@@ -141,10 +144,13 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
-        'tip_errors_m':np.linalg.norm(data.xpos[tips]-goals,axis=1).tolist(),
+        'tip_errors_m':tip_errors.tolist(),
         'least_squares_success':bool(fit.success),'collision_refine_success':bool(refine.success),
         'deep_contacts':deep,'index_cap_contacts':cap_contacts,'forces_n':forces,'normal_cosine':cosine,
-        'eligible_static_endpoint':eligible}
+        'eligible_static_endpoint':eligible,
+        'strict_static_endpoint':strict_eligible,
+        'strict_screen_limits':{'max_tip_goal_error_m':.01,'max_normal_force_per_digit_n':2.,
+                                'no_index_endcap_contact':True}}
 stem='joint_spool_grasp_static'+('' if args.goal_z==.72 else '_z'+str(args.goal_z).replace('.','p'))
 if args.y_closure:stem+='_closure'+str(args.y_closure).replace('.','p')
 if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
