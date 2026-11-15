@@ -2,6 +2,7 @@
 import json
 import argparse
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import mujoco
@@ -16,6 +17,7 @@ parser.add_argument('--palm-rotation-weight',type=float,default=10.,help='WBC wr
 parser.add_argument('--right-palm-position-weight',type=float,default=1000.,help='WBC A-right wrist position tracking weight')
 parser.add_argument('--stage-right-palm-weight',action='store_true',help='Use baseline A-right weight until pinch approach')
 parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WBC B-left wrist position tracking weight')
+parser.add_argument('--b-palm-rotation-weight',type=float,default=10.,help='WBC B-left wrist orientation tracking weight')
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
 parser.add_argument('--b-warm-reference',action='store_true',help='Blend B-left joints toward contact-screened dynamic terminal pose')
@@ -50,6 +52,7 @@ parser.add_argument('--side-mid-open',action='store_true',help='Use z=0.725 m si
 parser.add_argument('--handle-layout',action='store_true',help='Use prototype spool core handle with x-axis opposed grip')
 parser.add_argument('--handle-yaw-deg',choices=(-30,0),type=int,default=0,
                     help='Prepositioned B heading offset for handle layout')
+parser.add_argument('--tray-clamp',action='store_true',help='Diagnostic tray fixture holds spool during finger approach')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
@@ -62,6 +65,7 @@ if args.handle_layout and not (args.spool_after and args.settled_spool):
 if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
     parser.error('Handle and side-layout endpoints are mutually exclusive')
 if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
+if args.tray_clamp and not args.handle_layout:parser.error('Tray clamp requires --handle-layout')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
@@ -76,6 +80,8 @@ if not 1000.<=args.right_palm_position_weight<=10000.:
     parser.error('A-right palm position weight must be in [1000,10000]')
 if not 1000.<=args.b_palm_position_weight<=10000.:
     parser.error('B-left palm position weight must be in [1000,10000]')
+if not 10.<=args.b_palm_rotation_weight<=300.:
+    parser.error('B-left palm rotation weight must be in [10,300]')
 if not 1.<=args.b_finger_weight<=30.:
     parser.error('B-left finger weight must be in [1,30]')
 if not .5<=args.support_wrist_scale<=1.5:parser.error('Support wrist scale must be in [0.5,1.5]')
@@ -107,7 +113,16 @@ model_name=('joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0
             'joint_spool_grasp_static_z0p73_root0p55_spoolz0p702_variant.xml' if args.settled_spool else
             'joint_spool_grasp_static_z0p745_root0p55_variant.xml' if args.spool_after else
             'joint_support_pinch_variant.xml')
-model = mujoco.MjModel.from_xml_path(str(OUT / model_name))
+if args.tray_clamp:
+    scene=ET.parse(OUT/model_name).getroot()
+    scene.find(".//body[@name='bandage_spool']").set('pos','.38 -.44 .702')
+    equality=scene.find('equality')
+    if equality is None:equality=ET.SubElement(scene,'equality')
+    ET.SubElement(equality,'weld',{'name':'spool_tray_clamp_prototype',
+                                  'body1':'bandage_spool','body2':'world'})
+    model=mujoco.MjModel.from_xml_string(ET.tostring(scene,encoding='unicode'))
+else:
+    model = mujoco.MjModel.from_xml_path(str(OUT / model_name))
 data = mujoco.MjData(model)
 left_path = np.load(OUT / 'dynamic_palm_support_rrt.npz')['qpos'].copy()
 right_path = np.load(OUT / ('joint_support_pregrasp_rrt.npz' if args.staged
@@ -175,7 +190,7 @@ def contact_filter(m, c):
     return any(m.body(m.geom_bodyid[int(g)]).name.startswith(('g1_a/', 'g1_b/'))
                for g in c.geom if g >= 0)
 wbc = JointWBC(model, data.qpos.copy(), palm_names=palms, contact_filter=contact_filter,
-               palm_rotation_weights=[10.,args.palm_rotation_weight,10.,10.],
+               palm_rotation_weights=[10.,args.palm_rotation_weight,args.b_palm_rotation_weight,10.],
                palm_position_weights=[1000.,args.right_palm_position_weight,args.b_palm_position_weight,1000.])
 wbc.backend=args.wbc_backend
 wbc.forearm_contact_force_limit_n = args.support_total_force_cap_n
@@ -494,6 +509,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
         'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
         'spool_handle_prototype':args.handle_layout,
+        'tray_clamp_prototype':args.tray_clamp,
         'b_root_yaw_deg':args.handle_yaw_deg,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
@@ -517,6 +533,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'grasp_finger_weight':args.grasp_finger_weight,
         'b_finger_weight':args.b_finger_weight,
         'b_palm_position_weight':args.b_palm_position_weight,
+        'b_palm_rotation_weight':args.b_palm_rotation_weight,
         'a_right_palm_rotation_weight':args.palm_rotation_weight,
         'a_right_palm_position_weight':args.right_palm_position_weight,
         'stage_right_palm_weight':args.stage_right_palm_weight,
@@ -575,6 +592,7 @@ if args.settled_spool:stem+='_settled'
 if args.side_layout:stem+='_side'
 if args.handle_layout:stem+='_handle'
 if args.handle_yaw_deg:stem+='_yaw'+str(args.handle_yaw_deg).replace('-','m')
+if args.tray_clamp:stem+='_clamped'
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'
@@ -589,6 +607,7 @@ if args.support_wrist_reorient and args.support_wrist_candidate!='near':stem+='_
 if args.support_wrist_reorient and args.support_wrist_scale!=1.:stem+='_scale'+str(args.support_wrist_scale).replace('.','p')
 if args.b_finger_weight!=1.:stem+='_bfinger'+str(args.b_finger_weight).replace('.','p')
 if args.b_palm_position_weight!=1000.:stem+='_bposition'+str(args.b_palm_position_weight).replace('.','p')
+if args.b_palm_rotation_weight!=10.:stem+='_brotation'+str(args.b_palm_rotation_weight).replace('.','p')
 if args.wbc_backend!='CLARABEL':stem+='_'+args.wbc_backend.lower()
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel,reference_qpos=path[-1])
