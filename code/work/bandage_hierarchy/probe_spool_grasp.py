@@ -17,12 +17,14 @@ parser.add_argument('--b-root-x',type=float,default=.7)
 parser.add_argument('--spool-z',type=float,default=.72,help='World-height initial state for spool free joint')
 parser.add_argument('--warm-dynamic',action='store_true',help='Solve from the settled-spool dynamic terminal state')
 parser.add_argument('--warm-joint',action='store_true',help='Use terminal state of staged right-palm and elbow-hold joint rollout')
+parser.add_argument('--seed-index',type=int,default=0,help='Deterministic alternate IK initialization')
 args=parser.parse_args()
 if not .70<=args.goal_z<=.77:parser.error('Goal height outside spool vicinity')
 if not 0.<=args.y_closure<=.008:parser.error('Y closure must be in [0,0.008] m')
 if not .5<=args.b_root_x<=.7:parser.error('B root x must be in [0.5,0.7] m')
 if not .69<=args.spool_z<=.72:parser.error('Spool center z must be in [0.69,0.72] m')
 if args.warm_joint and not args.warm_dynamic:parser.error('Joint warm state requires --warm-dynamic')
+if not 0<=args.seed_index<=100:parser.error('Seed index must be in [0,100]')
 scene=ET.parse(OUT/'joint_support_pinch_variant.xml').getroot()
 if args.b_root_x!=.7:
     scene.find(".//body[@name='g1_b/pelvis']").set('pos',f'{args.b_root_x} 0 .8')
@@ -48,6 +50,9 @@ va=np.array([model.jnt_dofadr[j] for j in joint_ids],dtype=int)
 lo=np.array([model.jnt_range[j,0]+.03 for j in joint_ids])
 hi=np.array([model.jnt_range[j,1]-.03 for j in joint_ids])
 start=np.clip(base[qa],lo+1e-5,hi-1e-5)
+if args.seed_index:
+    rng=np.random.default_rng(20261111+args.seed_index)
+    start=np.clip(start+rng.normal(0,.18,len(start)),lo+1e-5,hi-1e-5)
 tips=[model.body('g1_b/wuji_left/l_index_finger_tip_sensor_frame').id,
       model.body('g1_b/wuji_left/l_thumb_tip_sensor_frame').id]
 if args.warm_dynamic:
@@ -110,6 +115,7 @@ report={'scope':'Static B-left spool-contact IK in composite scene; no path, dyn
         'spool_initial_z_m':args.spool_z,
         'warm_dynamic':args.warm_dynamic,
         'warm_joint':args.warm_joint,
+        'seed_index':args.seed_index,
         'goals_m':goals.tolist(),'joint_names':[model.joint(j).name for j in joint_ids],
         'spool_center_m':data.xpos[model.body('bandage_spool').id].tolist(),
         'tip_positions_m':data.xpos[tips].tolist(),
@@ -123,6 +129,7 @@ if args.b_root_x!=.7:stem+='_root'+str(args.b_root_x).replace('.','p')
 if args.spool_z!=.72:stem+='_spoolz'+str(args.spool_z).replace('.','p')
 if args.warm_dynamic:stem+='_dynamicwarm'
 if args.warm_joint:stem+='_jointwarm'
+if args.seed_index:stem+='_seed'+str(args.seed_index)
 (OUT/f'{stem}_screen.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 if eligible:
     np.savez_compressed(OUT/f'{stem}_candidate.npz',qpos=data.qpos.copy())

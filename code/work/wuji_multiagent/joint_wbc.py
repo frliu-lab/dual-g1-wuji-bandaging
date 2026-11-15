@@ -18,6 +18,7 @@ class JointWBC:
   self.forearm_finger_force_limit_n=None
   self.support_palm_force_goal_n=None
   self.dressing_contact_normal_goal_n=None
+  self.spool_contact_normal_goal_n=None
   self.hand_position_mode=False;self.hand_indices=np.array([i for i in range(m.nu) if '/wuji_' in m.actuator(i).name]);self.hand_commands=np.zeros(m.nu);self.hand_tau_correction=np.zeros(m.nu);self.hand_admittance_offset=np.zeros(m.nu);self.last_pad_force_targets={}
   self.pressure_cmd={};self.pressure_time=None
   self.reference_data=mujoco.MjData(m);palm_names=palm_names or ('g1_a/wuji_right/r_wrist','g1_b/wuji_left/l_wrist');self.palm_ids=[m.body(name).id for name in palm_names];self.task_dim=6*len(self.palm_ids);self.act_qadr=np.array([m.jnt_qposadr[j] for j in m.actuator_trnid[:,0]]);self.act_vadr=np.array([m.jnt_dofadr[j] for j in m.actuator_trnid[:,0]]);self.act_gear=m.actuator_gear[:,0].copy()
@@ -139,6 +140,17 @@ class JointWBC:
      if any(n.startswith(f'g1_a/wuji_right/r_{digit}_') for n in names):dressing_contacts[digit].append(k)
    for entries in dressing_contacts.values():
     for k in entries:goals[k*3]=self.dressing_contact_normal_goal_n/len(entries);forceweight[k*3]=5.
+  if self.spool_contact_normal_goal_n is not None:
+   if not np.isfinite(self.spool_contact_normal_goal_n) or self.spool_contact_normal_goal_n<0:
+    raise ValueError('Spool contact normal goal must be finite and nonnegative')
+   spool_contacts={digit:[] for digit in ('thumb','index_finger')}
+   for k,(ga,gb) in enumerate(ids):
+    if not any(m.geom(g).name in ('bandage_roll','bandage_core') for g in (ga,gb)):continue
+    names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
+    for digit in spool_contacts:
+     if any(n.startswith(f'g1_b/wuji_left/l_{digit}_') for n in names):spool_contacts[digit].append(k)
+   for entries in spool_contacts.values():
+    for k in entries:goals[k*3]=self.spool_contact_normal_goal_n/len(entries);forceweight[k*3]=5.
   pad_contacts={robot:[] for robot in ('g1_a','g1_b')}
   for k,(geom_a,geom_b) in enumerate(ids):
    names=[m.body(m.geom_bodyid[g]).name for g in (geom_a,geom_b)]
