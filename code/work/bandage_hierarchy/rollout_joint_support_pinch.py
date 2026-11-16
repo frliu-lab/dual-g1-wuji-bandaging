@@ -58,6 +58,7 @@ parser.add_argument('--handle-yaw-deg',choices=(-30,0),type=int,default=0,
 parser.add_argument('--handle-middle-retracted',action='store_true',help='Use screened middle-finger retraction endpoint')
 parser.add_argument('--pre-retract-middle',action='store_true',help='Preposition unused middle finger clear of tray from t=0')
 parser.add_argument('--tray-clamp',action='store_true',help='Diagnostic tray fixture holds spool during finger approach')
+parser.add_argument('--abort-on-grasp-fault',action='store_true',help='Stop simulated replay on B-grasp force, displacement, or collision fault')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
@@ -74,6 +75,7 @@ if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_
     parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
 if args.pre_retract_middle and not args.handle_middle_retracted:parser.error('Pre-retraction requires retracted endpoint')
 if args.tray_clamp and not args.handle_layout:parser.error('Tray clamp requires --handle-layout')
+if args.abort_on_grasp_fault and not args.spool_after:parser.error('Grasp fault stop requires --spool-after')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
@@ -562,6 +564,12 @@ for segment,k,count in schedule:
                       'b_handle_side_forces_n':b_side_forces if args.handle_layout else None,
                       'b_contact_details':b_contact_details if b_forces['thumb']>=.05 and b_forces['index']>=.05 else [],
                       'pad_center_m':data.xpos[pad_body].tolist()})
+        if args.abort_on_grasp_fault and segment>=len(path)-2:
+            faults=[]
+            if frame_deep:faults.append('deep_nonfloor_robot_contact')
+            if max_spool_displacement>.005:faults.append('spool_displacement_over_5mm')
+            if max(b_forces.values())>2.:faults.append('b_digit_force_over_2N')
+            if faults:raise RuntimeError('B grasp safety gate: '+','.join(faults))
     except Exception as exc:
         errors.append(f'{type(exc).__name__}: {exc}')
         break
@@ -571,6 +579,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'spool_after':args.spool_after,'b_root_x_m':.55 if args.spool_after else .7,
         'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
         'spool_handle_prototype':args.handle_layout,
+        'abort_on_grasp_fault':args.abort_on_grasp_fault,
         'tray_clamp_prototype':args.tray_clamp,
         'b_root_yaw_deg':args.handle_yaw_deg,
         'handle_middle_retracted':args.handle_middle_retracted,
@@ -664,6 +673,7 @@ if args.handle_yaw_deg:stem+='_yaw'+str(args.handle_yaw_deg).replace('-','m')
 if args.handle_middle_retracted:stem+='_middle_retracted'
 if args.pre_retract_middle:stem+='_preretracted'
 if args.tray_clamp:stem+='_clamped'
+if args.abort_on_grasp_fault:stem+='_faultstop'
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'
