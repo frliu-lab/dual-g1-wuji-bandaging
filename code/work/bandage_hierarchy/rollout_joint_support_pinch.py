@@ -503,7 +503,10 @@ for segment,k,count in schedule:
                             normal=sign*np.asarray(c.frame[:3])
                             b_normals[digit]+=force*normal
                             if args.handle_layout and 'bandage_handle_prototype' in geoms:
-                                if abs(float(normal[2]))<.5:
+                                handle_id=model.geom('bandage_handle_prototype').id
+                                handle_axis=data.geom_xmat[handle_id].reshape(3,3)[:,2]
+                                radial_contact=abs(float(normal@handle_axis))<.5
+                                if radial_contact:
                                     b_side_forces[digit]+=force
                                     b_side_normals[digit]+=force*normal
                                 elif force>=.05:b_cap_contact=True
@@ -512,7 +515,8 @@ for segment,k,count in schedule:
                                                           'spool_geom':next((g for g in geoms if g in ('bandage_roll','bandage_core','bandage_handle_prototype')),None),
                                                           'position_m':np.asarray(c.pos).tolist(),
                                                           'spool_to_finger_normal':normal.tolist(),
-                                                          'handle_side_contact':bool(args.handle_layout and 'bandage_handle_prototype' in geoms and abs(float(normal[2]))<.5),
+                                                          'handle_side_contact':bool(args.handle_layout and 'bandage_handle_prototype' in geoms and radial_contact),
+                                                          'handle_axis_world':handle_axis.tolist() if args.handle_layout and 'bandage_handle_prototype' in geoms else None,
                                                           'force_n':force})
             frame_peak=max(frame_peak,support_force)
             peak_support_force=max(peak_support_force,support_force)
