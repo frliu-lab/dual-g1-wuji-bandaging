@@ -21,6 +21,8 @@ parser.add_argument('--b-palm-rotation-weight',type=float,default=10.,help='WBC 
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
 parser.add_argument('--b-object-follow',action='store_true',help='Shift B-left arm reference with spool motion during hold')
+parser.add_argument('--b-wrist-lift-m',type=float,default=0.,help='Final B-left wrist upward correction after low handle-edge contact')
+parser.add_argument('--b-wrist-lift-early',action='store_true',help='Ramp B wrist lift during last approach segment')
 parser.add_argument('--b-warm-reference',action='store_true',help='Blend B-left joints toward contact-screened dynamic terminal pose')
 parser.add_argument('--b-warm-closure',choices=('0p004','0p008'),default='0p004')
 parser.add_argument('--b-warm-joint-seed',choices=(0,1,2),type=int,default=0,
@@ -76,6 +78,9 @@ if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
 if args.b_object_follow and not args.handle_layout:parser.error('B object follow requires --handle-layout')
+if args.b_wrist_lift_m and not (args.handle_layout and 0.<=args.b_wrist_lift_m<=.05):
+    parser.error('B wrist lift requires handle layout and must be in [0,0.05] m')
+if args.b_wrist_lift_early and not args.b_wrist_lift_m:parser.error('Early lift requires --b-wrist-lift-m')
 if args.b_warm_reference and not args.settled_spool:parser.error('B warm reference requires --settled-spool')
 if args.b_warm_joint_seed and not args.b_warm_reference:parser.error('B joint seed requires --b-warm-reference')
 if not 0.<=args.b_spool_force_goal_n<=2.:parser.error('B spool force goal must be in [0,2] N')
@@ -308,6 +313,8 @@ peak_b_thumb_force=0.
 peak_b_index_force=0.
 b_opposed_run=0
 b_longest_opposed_run=0
+b_handle_cap_control_steps=0
+b_handle_side_both_control_steps=0
 thumb_tip=model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id
 index_tip=model.body('g1_a/wuji_right/r_index_finger_tip_sensor_frame').id
 right_arm_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
@@ -380,13 +387,19 @@ for segment,k,count in schedule:
         delta={'near':[-.045,0.,.09],'roll':[-.135,-.045,0.],
                'roll_yaw':[-.135,-.045,.045]}[args.support_wrist_candidate]
         wbc.qref[support_wrist_qadr]+=blend*args.support_wrist_scale*np.array(delta)
-    if args.b_object_follow and segment==len(path)-1 and k==count:
+    if (args.b_object_follow and segment==len(path)-1 and k==count) or (args.b_wrist_lift_m and
+        (segment==len(path)-1 and k==count or args.b_wrist_lift_early and segment==len(path)-2)):
         goal_data.qpos[:]=wbc.qref
         mujoco.mj_forward(model,goal_data)
         jac=np.zeros((3,model.nv))
         mujoco.mj_jac(model,goal_data,jac,None,goal_data.xpos[b_wrist_body],b_wrist_body)
         J=jac[:,b_arm_vadr]
-        shift=data.xpos[spool_body]-spool_start
+        shift=(data.xpos[spool_body]-spool_start if args.b_object_follow else np.zeros(3))
+        if args.b_wrist_lift_m:
+            blend=(u if args.b_wrist_lift_early and segment==len(path)-2 else
+                   1. if args.b_wrist_lift_early else
+                   min(1.,max(0.,(float(data.time)-sum(durations[:-1]))/.5)))
+            shift=shift+np.array([0.,0.,blend*args.b_wrist_lift_m])
         correction=J.T@np.linalg.solve(J@J.T+1e-4*np.eye(3),shift)
         wbc.qref[b_arm_qadr]+=np.clip(correction,-.12,.12)
     if b_digit_info and segment>=len(path)-2:
@@ -442,6 +455,9 @@ for segment,k,count in schedule:
             normals={'thumb':np.zeros(3),'index':np.zeros(3)}
             b_forces={'thumb':0.,'index':0.}
             b_normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+            b_side_forces={'thumb':0.,'index':0.}
+            b_side_normals={'thumb':np.zeros(3),'index':np.zeros(3)}
+            b_cap_contact=False
             b_contact_details=[]
             support_force=0.
             for ci,c in enumerate(data.contact):
@@ -482,12 +498,19 @@ for segment,k,count in schedule:
                             force=max(0.,float(wrench[0]))
                             sign=1. if geoms[0] in ('bandage_roll','bandage_core','bandage_handle_prototype') else -1.
                             b_forces[digit]+=force
-                            b_normals[digit]+=sign*force*np.asarray(c.frame[:3])
+                            normal=sign*np.asarray(c.frame[:3])
+                            b_normals[digit]+=force*normal
+                            if args.handle_layout and 'bandage_handle_prototype' in geoms:
+                                if abs(float(normal[2]))<.5:
+                                    b_side_forces[digit]+=force
+                                    b_side_normals[digit]+=force*normal
+                                elif force>=.05:b_cap_contact=True
                             if force>=.05:
                                 b_contact_details.append({'digit':digit,'body':next((b for b in bodies if b.startswith('g1_b/wuji_left/')),None),
                                                           'spool_geom':next((g for g in geoms if g in ('bandage_roll','bandage_core','bandage_handle_prototype')),None),
                                                           'position_m':np.asarray(c.pos).tolist(),
-                                                          'spool_to_finger_normal':(sign*np.asarray(c.frame[:3])).tolist(),
+                                                          'spool_to_finger_normal':normal.tolist(),
+                                                          'handle_side_contact':bool(args.handle_layout and 'bandage_handle_prototype' in geoms and abs(float(normal[2]))<.5),
                                                           'force_n':force})
             frame_peak=max(frame_peak,support_force)
             peak_support_force=max(peak_support_force,support_force)
@@ -517,7 +540,16 @@ for segment,k,count in schedule:
         both_digits_opposed_steps+=int(opposed)
         ba,bb=b_normals.values()
         bcos=float(ba@bb/(np.linalg.norm(ba)*np.linalg.norm(bb))) if np.linalg.norm(ba)*np.linalg.norm(bb)>1e-8 else None
-        b_opposed=bool(b_forces['thumb']>=.05 and b_forces['index']>=.05 and bcos is not None and bcos<-.5)
+        side_a,side_b=b_side_normals.values()
+        side_cos=(float(side_a@side_b/(np.linalg.norm(side_a)*np.linalg.norm(side_b)))
+                  if np.linalg.norm(side_a)*np.linalg.norm(side_b)>1e-8 else None)
+        if args.handle_layout:
+            b_opposed=bool(b_side_forces['thumb']>=.05 and b_side_forces['index']>=.05 and
+                           side_cos is not None and side_cos<-.5)
+            b_handle_cap_control_steps+=int(b_cap_contact)
+            b_handle_side_both_control_steps+=int(all(f>=.05 for f in b_side_forces.values()))
+        else:
+            b_opposed=bool(b_forces['thumb']>=.05 and b_forces['index']>=.05 and bcos is not None and bcos<-.5)
         b_opposed_run=b_opposed_run+1 if b_opposed else 0
         b_longest_opposed_run=max(b_longest_opposed_run,b_opposed_run)
         trace.append({'time_s':float(data.time),'segment':segment,'elbow_rad':float(data.qpos[elbow_qadr]),
@@ -526,6 +558,8 @@ for segment,k,count in schedule:
                       'index_force_n':index_force,'normal_cosine':cos,'opposed':opposed,
                       'b_thumb_force_n':b_forces['thumb'],'b_index_force_n':b_forces['index'],
                       'b_normal_cosine':bcos,'b_opposed':b_opposed,
+                      'b_handle_side_normal_cosine':side_cos if args.handle_layout else None,
+                      'b_handle_side_forces_n':b_side_forces if args.handle_layout else None,
                       'b_contact_details':b_contact_details if b_forces['thumb']>=.05 and b_forces['index']>=.05 else [],
                       'pad_center_m':data.xpos[pad_body].tolist()})
     except Exception as exc:
@@ -548,6 +582,8 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'analytic_grip_specialist':args.analytic_grip_specialist,
         'b_analytic_grip':args.b_analytic_grip,
         'b_object_follow':args.b_object_follow,
+        'b_wrist_lift_m':args.b_wrist_lift_m,
+        'b_wrist_lift_early':args.b_wrist_lift_early,
         'b_warm_reference':args.b_warm_reference,
         'b_warm_closure':args.b_warm_closure if args.b_warm_reference else None,
         'b_warm_joint_seed':args.b_warm_joint_seed,
@@ -592,6 +628,8 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'peak_b_left_thumb_force_n':peak_b_thumb_force,
         'peak_b_left_index_force_n':peak_b_index_force,
         'longest_b_left_opposed_spool_contact_s':b_longest_opposed_run/hz,
+        'b_handle_cap_contact_control_steps':b_handle_cap_control_steps if args.handle_layout else None,
+        'b_handle_side_both_control_steps':b_handle_side_both_control_steps if args.handle_layout else None,
         'final_pad_center_m':data.xpos[pad_body].tolist(),
         'final_thumb_tip_m':data.xpos[thumb_tip].tolist(),
         'final_index_tip_m':data.xpos[index_tip].tolist(),
@@ -631,6 +669,8 @@ if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'
 if args.b_analytic_grip:stem+='_bfeedback'
 if args.b_object_follow:stem+='_bfollow'
+if args.b_wrist_lift_m:stem+='_blift'+str(args.b_wrist_lift_m).replace('.','p')
+if args.b_wrist_lift_early:stem+='_early'
 if args.b_warm_reference:stem+='_bwarm'
 if args.b_warm_reference and args.b_warm_closure!='0p004':stem+='_closure'+args.b_warm_closure
 if args.b_warm_joint_seed:stem+='_jseed'+str(args.b_warm_joint_seed)
