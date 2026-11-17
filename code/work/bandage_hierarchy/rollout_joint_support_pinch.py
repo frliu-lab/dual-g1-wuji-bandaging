@@ -1,6 +1,7 @@
 """Dynamic double-G1 WBC screen for forearm support, pad pinch, and optional spool grasp."""
 import json
 import argparse
+import hashlib
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -20,8 +21,14 @@ parser.add_argument('--b-palm-position-weight',type=float,default=1000.,help='WB
 parser.add_argument('--b-palm-rotation-weight',type=float,default=10.,help='WBC B-left wrist orientation tracking weight')
 parser.add_argument('--b-finger-weight',type=float,default=1.,help='WBC B-left thumb and index acceleration tracking weight')
 parser.add_argument('--b-analytic-grip',action='store_true',help='Track live spool pose with B-left digit Jacobian feedback')
+parser.add_argument('--b-hold-closure-m',type=float,default=0.,help='Move B thumb/index sensor targets inward on the handle during final hold')
+parser.add_argument('--b-handle-force-cap-n',type=float,default=0.,help='Hard WBC predicted normal-force cap per B digit on prototype handle')
+parser.add_argument('--b-lift-grip-cap-increase-n',type=float,default=0.,help='Extra predicted per-digit cap ramped only during diagnostic lift')
+parser.add_argument('--b-lift-closure-increase-m',type=float,default=0.,help='Extra B fingertip inward target ramped during diagnostic lift')
+parser.add_argument('--b-lift-force-goal-n',type=float,default=0.,help='Total upward spool force requested through B handle tangential contacts during lift')
 parser.add_argument('--b-object-follow',action='store_true',help='Shift B-left arm reference with spool motion during hold')
 parser.add_argument('--b-wrist-lift-m',type=float,default=0.,help='Final B-left wrist upward correction after low handle-edge contact')
+parser.add_argument('--b-lift-after-grasp-m',type=float,default=0.,help='Diagnostic post-grasp B arm lift over 1 s')
 parser.add_argument('--b-wrist-lift-early',action='store_true',help='Ramp B wrist lift during last approach segment')
 parser.add_argument('--b-warm-reference',action='store_true',help='Blend B-left joints toward contact-screened dynamic terminal pose')
 parser.add_argument('--b-warm-closure',choices=('0p004','0p008'),default='0p004')
@@ -57,8 +64,14 @@ parser.add_argument('--handle-yaw-deg',choices=(-30,0),type=int,default=0,
                     help='Prepositioned B heading offset for handle layout')
 parser.add_argument('--handle-middle-retracted',action='store_true',help='Use screened middle-finger retraction endpoint')
 parser.add_argument('--pre-retract-middle',action='store_true',help='Preposition unused middle finger clear of tray from t=0')
+parser.add_argument('--clear-pregrasp-spool',action='store_true',help='Use planned B path with roll/core contact excluded')
+parser.add_argument('--pregrasp-clearance-m',type=float,default=0.,help='Use clearance-screened B approach path')
 parser.add_argument('--tray-clamp',action='store_true',help='Diagnostic tray fixture holds spool during finger approach')
 parser.add_argument('--abort-on-grasp-fault',action='store_true',help='Stop simulated replay on B-grasp force, displacement, or collision fault')
+parser.add_argument('--diagnose-b-hand',action='store_true',help='Record B-left joint tracking, fingertip, and actuator margins during approach')
+parser.add_argument('--record-qpos',action='store_true',help='Store all 50 Hz states in trace for visual review')
+parser.add_argument('--b-stage-thumb',action='store_true',help='Hold B thumb open until final B path segment, then close with index in place')
+parser.add_argument('--b-thumb-clearance-offset',action='store_true',help='Apply saved precontact B-thumb clearance posture during approach')
 parser.add_argument('--wbc-backend',choices=('CLARABEL','DIRECT','OSQP'),default='CLARABEL')
 args=parser.parse_args()
 if args.settled_spool and not args.spool_after:parser.error('Settled spool requires --spool-after')
@@ -74,14 +87,30 @@ if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading r
 if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_deg==-30):
     parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
 if args.pre_retract_middle and not args.handle_middle_retracted:parser.error('Pre-retraction requires retracted endpoint')
+if args.clear_pregrasp_spool and not args.handle_middle_retracted:parser.error('Clear spool path requires middle-retracted handle layout')
+if args.pregrasp_clearance_m and not args.clear_pregrasp_spool:parser.error('Clearance path requires --clear-pregrasp-spool')
 if args.tray_clamp and not args.handle_layout:parser.error('Tray clamp requires --handle-layout')
 if args.abort_on_grasp_fault and not args.spool_after:parser.error('Grasp fault stop requires --spool-after')
 if args.side_high and args.side_mid:parser.error('Choose one side-grip height')
 if args.side_mid_open and (args.side_high or args.side_mid):parser.error('Choose one side-grip endpoint')
 if args.b_analytic_grip and not args.settled_spool:parser.error('B analytic grip requires --settled-spool')
+if args.b_hold_closure_m and not (args.b_analytic_grip and args.handle_layout and 0.<=args.b_hold_closure_m<=.008):
+    parser.error('B hold closure requires analytic grip and handle layout; range [0,0.008] m')
+if args.b_handle_force_cap_n and not (args.handle_layout and .2<=args.b_handle_force_cap_n<=2.):
+    parser.error('B handle force cap requires handle layout and range [0.2,2] N')
+if args.b_lift_grip_cap_increase_n and not (args.b_lift_after_grasp_m and args.b_handle_force_cap_n and 0.<=args.b_lift_grip_cap_increase_n<=.4):
+    parser.error('Lift grip cap increase requires lift and base force cap; range [0,0.4] N')
+if args.b_lift_closure_increase_m and not (args.b_lift_after_grasp_m and args.b_hold_closure_m and 0.<=args.b_lift_closure_increase_m<=.003):
+    parser.error('Lift closure increase requires lift and hold closure; range [0,0.003] m')
+if args.b_lift_force_goal_n and not (args.b_lift_after_grasp_m and args.b_handle_force_cap_n and 0.<=args.b_lift_force_goal_n<=2.):
+    parser.error('Lift force goal requires lift and handle force cap; range [0,2] N')
 if args.b_object_follow and not args.handle_layout:parser.error('B object follow requires --handle-layout')
+if args.b_stage_thumb and not args.handle_layout:parser.error('B thumb staging requires handle layout')
+if args.b_thumb_clearance_offset and not args.clear_pregrasp_spool:parser.error('B thumb clearance offset requires clear spool path')
 if args.b_wrist_lift_m and not (args.handle_layout and 0.<=args.b_wrist_lift_m<=.05):
     parser.error('B wrist lift requires handle layout and must be in [0,0.05] m')
+if args.b_lift_after_grasp_m and not (args.handle_layout and args.b_analytic_grip and 0.<=args.b_lift_after_grasp_m<=.03):
+    parser.error('Post-grasp lift requires handle layout and analytic grip; range [0,0.03] m')
 if args.b_wrist_lift_early and not args.b_wrist_lift_m:parser.error('Early lift requires --b-wrist-lift-m')
 if args.b_warm_reference and not args.settled_spool:parser.error('B warm reference requires --settled-spool')
 if args.b_warm_joint_seed and not args.b_warm_reference:parser.error('B joint seed requires --b-warm-reference')
@@ -172,7 +201,8 @@ if args.staged:
     if args.settled_spool:closure[spool_z_qadr]=.702
     path=np.vstack([path,closure])
 if args.spool_after:
-    spool_path=np.load(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted.npz' if args.pre_retract_middle else
+    b_path_start_segment=len(path)-1
+    spool_path_name=('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted.npz' if args.pre_retract_middle else
                             'joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
                             'joint_spool_grasp_rrt_handle_yaw-30.npz' if args.handle_layout and args.handle_yaw_deg==-30 else
                             'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
@@ -181,7 +211,10 @@ if args.spool_after:
                             'joint_spool_grasp_rrt_side_high.npz' if args.side_high else
                             'joint_spool_grasp_rrt_side.npz' if args.side_layout else
                             'joint_spool_grasp_rrt_settled.npz' if args.settled_spool
-                            else 'joint_spool_grasp_rrt.npz'))['qpos']
+                            else 'joint_spool_grasp_rrt.npz')
+    if args.clear_pregrasp_spool:spool_path_name=spool_path_name.replace('.npz','_clearspool.npz')
+    if args.pregrasp_clearance_m:spool_path_name=spool_path_name.replace('.npz',f'_gap{round(args.pregrasp_clearance_m*1000)}mm.npz')
+    spool_path=np.load(OUT/spool_path_name)['qpos']
     if np.max(np.abs(path[-1]-spool_path[0]))>1e-9:
         raise RuntimeError('Pinch and spool paths do not join')
     path=np.vstack([path,spool_path[1:]])
@@ -216,6 +249,7 @@ wbc = JointWBC(model, data.qpos.copy(), palm_names=palms, contact_filter=contact
 wbc.backend=args.wbc_backend
 wbc.forearm_contact_force_limit_n = args.support_total_force_cap_n
 wbc.forearm_finger_force_limit_n = args.support_finger_force_cap_n
+wbc.b_spool_contact_force_cap_n = args.b_handle_force_cap_n or None
 grasp_vadr=np.array([model.jnt_dofadr[j] for j in range(model.njnt)
                     if model.joint(j).name.startswith(('g1_a/wuji_right/r_thumb_',
                                                         'g1_a/wuji_right/r_index_finger_'))],dtype=int)
@@ -224,6 +258,11 @@ b_grasp_vadr=np.array([model.jnt_dofadr[j] for j in range(model.njnt)
                        if model.joint(j).name.startswith(('g1_b/wuji_left/l_thumb_',
                                                            'g1_b/wuji_left/l_index_finger_'))],dtype=int)
 wbc.weights[b_grasp_vadr]=args.b_finger_weight
+b_thumb_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
+                      if model.joint(j).name.startswith('g1_b/wuji_left/l_thumb_')],dtype=int)
+b_thumb_open=path[b_path_start_segment,b_thumb_qadr].copy() if args.spool_after else None
+b_thumb_clearance=(np.array(json.loads((OUT/'joint_spool_dynamic_thumb_clearance_search.json').read_text(encoding='utf8'))['best'][0]['offset_rad'])
+                   if args.b_thumb_clearance_offset else None)
 b_arm_joints=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/left_') and
               any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
 b_arm_qadr=np.array([model.jnt_qposadr[j] for j in b_arm_joints],dtype=int)
@@ -289,7 +328,7 @@ hz = 50
 interval = round(1/hz/model.opt.timestep)
 if abs(interval*model.opt.timestep-1/hz)>1e-9:
     raise ValueError('Simulation step does not divide 50 Hz')
-durations = [1.2] + [args.approach_segment_s]*(len(path)-2) + [args.hold_s]
+durations = [1.2] + [args.approach_segment_s]*(len(path)-2) + [args.hold_s+(1. if args.b_lift_after_grasp_m else 0.)]
 schedule = []
 for segment, duration in enumerate(durations[:-1],start=1):
     schedule.extend((segment,k+1,round(duration*hz)) for k in range(round(duration*hz)))
@@ -317,6 +356,12 @@ b_opposed_run=0
 b_longest_opposed_run=0
 b_handle_cap_control_steps=0
 b_handle_side_both_control_steps=0
+b_hand_actuators=np.array([i for i in range(model.nu)
+                           if model.actuator(i).name.startswith('g1_b/wuji_left/')],dtype=int)
+b_hand_joints=np.array([model.actuator_trnid[i,0] for i in b_hand_actuators],dtype=int)
+b_hand_qadr=np.array([model.jnt_qposadr[j] for j in b_hand_joints],dtype=int)
+b_tip_ids={digit:model.body(f'g1_b/wuji_left/l_{digit if digit=="thumb" else "index_finger"}_tip_sensor_frame').id
+           for digit in ('thumb','index')}
 thumb_tip=model.body('g1_a/wuji_right/r_thumb_tip_sensor_frame').id
 index_tip=model.body('g1_a/wuji_right/r_index_finger_tip_sensor_frame').id
 right_arm_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
@@ -364,6 +409,12 @@ if args.b_analytic_grip:
                              'vadr':np.array([model.jnt_dofadr[j] for j in joints],dtype=int),
                              'spool_local':local}
 for segment,k,count in schedule:
+    if args.b_lift_force_goal_n:
+        lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
+        wbc.b_handle_lift_force_goal_n=min(1.,lift_time/.2)*args.b_lift_force_goal_n if lift_time>0 else None
+    if args.b_lift_grip_cap_increase_n:
+        lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
+        wbc.b_spool_contact_force_cap_n=args.b_handle_force_cap_n+min(1.,lift_time)*args.b_lift_grip_cap_increase_n
     wbc.weights[elbow_vadr]=(args.elbow_hold_weight if segment>=3 else 1.)
     wbc.spool_contact_normal_goal_n=(args.b_spool_force_goal_n
                                      if args.b_spool_force_goal_n>0 and segment==len(path)-1 and k==count
@@ -374,6 +425,13 @@ for segment,k,count in schedule:
                                    else None)
     u=(k/count)**2*(3-2*k/count)
     wbc.qref[:]=(1-u)*path[segment-1]+u*path[segment]
+    if args.b_stage_thumb and segment>=b_path_start_segment+1:
+        if segment<len(path)-1:wbc.qref[b_thumb_qadr]=b_thumb_open
+        else:wbc.qref[b_thumb_qadr]=(1-u)*b_thumb_open+u*path[-1,b_thumb_qadr]
+    if b_thumb_clearance is not None and segment>=b_path_start_segment+1:
+        blend=(min(1.,u*3) if segment==b_path_start_segment+1 else
+               1.-u if segment==len(path)-1 else 1.)
+        wbc.qref[b_thumb_qadr]+=blend*b_thumb_clearance
     if segment>=2:
         follow_forearm(wbc.qref)
     if args.elbow_hold_weight>1. and segment>=3:
@@ -389,7 +447,7 @@ for segment,k,count in schedule:
         delta={'near':[-.045,0.,.09],'roll':[-.135,-.045,0.],
                'roll_yaw':[-.135,-.045,.045]}[args.support_wrist_candidate]
         wbc.qref[support_wrist_qadr]+=blend*args.support_wrist_scale*np.array(delta)
-    if (args.b_object_follow and segment==len(path)-1 and k==count) or (args.b_wrist_lift_m and
+    if (args.b_object_follow and segment==len(path)-1 and k==count) or (args.b_lift_after_grasp_m and segment==len(path)-1 and k==count) or (args.b_wrist_lift_m and
         (segment==len(path)-1 and k==count or args.b_wrist_lift_early and segment==len(path)-2)):
         goal_data.qpos[:]=wbc.qref
         mujoco.mj_forward(model,goal_data)
@@ -397,6 +455,9 @@ for segment,k,count in schedule:
         mujoco.mj_jac(model,goal_data,jac,None,goal_data.xpos[b_wrist_body],b_wrist_body)
         J=jac[:,b_arm_vadr]
         shift=(data.xpos[spool_body]-spool_start if args.b_object_follow else np.zeros(3))
+        if args.b_lift_after_grasp_m:
+            lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
+            shift=shift+np.array([0.,0.,min(1.,lift_time)*args.b_lift_after_grasp_m])
         if args.b_wrist_lift_m:
             blend=(u if args.b_wrist_lift_early and segment==len(path)-2 else
                    1. if args.b_wrist_lift_early else
@@ -406,9 +467,15 @@ for segment,k,count in schedule:
         wbc.qref[b_arm_qadr]+=np.clip(correction,-.12,.12)
     if b_digit_info and segment>=len(path)-2:
         spool_rot=data.xmat[spool_body].reshape(3,3)
-        for info in b_digit_info.values():
+        for digit,info in b_digit_info.items():
             bid=info['body'];vadr=info['vadr'];qadr=info['qadr']
-            target=data.xpos[spool_body]+spool_rot@info['spool_local']
+            local=info['spool_local'].copy()
+            if args.b_hold_closure_m and segment==len(path)-1 and k==count:
+                blend=min(1.,max(0.,(float(data.time)-sum(durations[:-1]))/.5))
+                lift_blend=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s))
+                closure=blend*args.b_hold_closure_m+lift_blend*args.b_lift_closure_increase_m
+                local[0]+=closure*(1. if digit=='index' else -1.)
+            target=data.xpos[spool_body]+spool_rot@local
             jac=np.zeros((3,model.nv))
             mujoco.mj_jac(model,data,jac,None,data.xpos[bid],bid)
             J=jac[:,vadr]
@@ -566,12 +633,32 @@ for segment,k,count in schedule:
                       'b_normal_cosine':bcos,'b_opposed':b_opposed,
                       'b_handle_side_normal_cosine':side_cos if args.handle_layout else None,
                       'b_handle_side_forces_n':b_side_forces if args.handle_layout else None,
-                      'b_contact_details':b_contact_details if b_forces['thumb']>=.05 and b_forces['index']>=.05 else [],
-                      'pad_center_m':data.xpos[pad_body].tolist()})
+                      'b_contact_details':b_contact_details if (args.diagnose_b_hand or
+                          b_forces['thumb']>=.05 and b_forces['index']>=.05) else [],
+                      'pad_center_m':data.xpos[pad_body].tolist(),
+                      'qpos':data.qpos.tolist() if args.record_qpos else None,
+                      'b_hand_diagnostic':({
+                          'joint_error_rad':{model.joint(j).name:float(data.qpos[a]-wbc.qref[a])
+                                             for j,a in zip(b_hand_joints,b_hand_qadr)},
+                          'actuator_margin_fraction':{model.actuator(i).name:float(min(
+                              data.ctrl[i]-model.actuator_ctrlrange[i,0],
+                              model.actuator_ctrlrange[i,1]-data.ctrl[i])/
+                              max(1e-12,model.actuator_ctrlrange[i,1]-model.actuator_ctrlrange[i,0]))
+                              for i in b_hand_actuators},
+                          'tip_world_m':{digit:data.xpos[bid].tolist() for digit,bid in b_tip_ids.items()},
+                          'spool_world_m':data.xpos[spool_body].tolist(),
+                          'qpos':data.qpos.tolist()}
+                          if args.diagnose_b_hand and segment>=len(path)-2 else None)})
         if args.abort_on_grasp_fault and segment>=len(path)-2:
             faults=[]
             if frame_deep:faults.append('deep_nonfloor_robot_contact')
-            if max_spool_displacement>.005:faults.append('spool_displacement_over_5mm')
+            if not args.b_lift_after_grasp_m or data.time<sum(durations[:-1])+args.hold_s:
+                if max_spool_displacement>.005:faults.append('spool_displacement_over_5mm')
+            else:
+                planned_lift=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s))*args.b_lift_after_grasp_m
+                relative=data.xpos[spool_body]-spool_start
+                if np.linalg.norm(relative[:2])>.005:faults.append('spool_lateral_displacement_over_5mm')
+                if abs(float(relative[2])-planned_lift)>.005:faults.append('spool_lift_tracking_error_over_5mm')
             if max(b_forces.values())>2.:faults.append('b_digit_force_over_2N')
             if faults:raise RuntimeError('B grasp safety gate: '+','.join(faults))
     except Exception as exc:
@@ -587,6 +674,17 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'tray_clamp_prototype':args.tray_clamp,
         'b_root_yaw_deg':args.handle_yaw_deg,
         'handle_middle_retracted':args.handle_middle_retracted,
+        'clear_pregrasp_spool':args.clear_pregrasp_spool,
+        'pregrasp_clearance_m':args.pregrasp_clearance_m,
+        'b_stage_thumb':args.b_stage_thumb,
+        'b_thumb_clearance_offset':args.b_thumb_clearance_offset,
+        'record_qpos':args.record_qpos,
+        'b_hold_closure_m':args.b_hold_closure_m,
+        'b_lift_after_grasp_m':args.b_lift_after_grasp_m,
+        'b_handle_force_cap_n':args.b_handle_force_cap_n,
+        'b_lift_grip_cap_increase_n':args.b_lift_grip_cap_increase_n,
+        'b_lift_closure_increase_m':args.b_lift_closure_increase_m,
+        'b_lift_force_goal_n':args.b_lift_force_goal_n,
         'pre_retract_middle':args.pre_retract_middle,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
@@ -675,9 +773,21 @@ if args.side_layout:stem+='_side'
 if args.handle_layout:stem+='_handle'
 if args.handle_yaw_deg:stem+='_yaw'+str(args.handle_yaw_deg).replace('-','m')
 if args.handle_middle_retracted:stem+='_middle_retracted'
+if args.clear_pregrasp_spool:stem+='_clearspool'
+if args.pregrasp_clearance_m:stem+=f'_gap{round(args.pregrasp_clearance_m*1000)}mm'
+if args.b_stage_thumb:stem+='_bthumbstaged'
+if args.b_thumb_clearance_offset:stem+='_bthumbclear'
+if args.b_hold_closure_m:stem+='_bclose'+str(args.b_hold_closure_m).replace('.','p')
+if args.b_lift_after_grasp_m:stem+='_bliftafter'+str(args.b_lift_after_grasp_m).replace('.','p')
+if args.b_handle_force_cap_n:stem+='_bcap'+str(args.b_handle_force_cap_n).replace('.','p')
+if args.b_lift_grip_cap_increase_n:stem+='_liftcapplus'+str(args.b_lift_grip_cap_increase_n).replace('.','p')
+if args.b_lift_closure_increase_m:stem+='_liftcloseplus'+str(args.b_lift_closure_increase_m).replace('.','p')
+if args.b_lift_force_goal_n:stem+='_liftforce'+str(args.b_lift_force_goal_n).replace('.','p')
 if args.pre_retract_middle:stem+='_preretracted'
 if args.tray_clamp:stem+='_clamped'
 if args.abort_on_grasp_fault:stem+='_faultstop'
+if args.diagnose_b_hand:stem+='_bhanddiag'
+if args.record_qpos:stem+='_qpos'
 if args.side_high:stem+='_high'
 if args.side_mid:stem+='_mid'
 if args.side_mid_open:stem+='_midopen'
@@ -697,6 +807,10 @@ if args.b_finger_weight!=1.:stem+='_bfinger'+str(args.b_finger_weight).replace('
 if args.b_palm_position_weight!=1000.:stem+='_bposition'+str(args.b_palm_position_weight).replace('.','p')
 if args.b_palm_rotation_weight!=10.:stem+='_brotation'+str(args.b_palm_rotation_weight).replace('.','p')
 if args.wbc_backend!='CLARABEL':stem+='_'+args.wbc_backend.lower()
+if len(str(OUT/f'{stem}_final_state.npz'))>240:
+    report['full_artifact_stem']=stem
+    stem=('joint_support_pinch_staged_wbc_report_spool_settled_handle_'
+          if args.handle_layout else 'joint_support_pinch_wbc_report_')+hashlib.sha256(stem.encode()).hexdigest()[:12]
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel,reference_qpos=path[-1])
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))

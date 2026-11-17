@@ -19,11 +19,15 @@ parser.add_argument('--handle-yaw-deg',choices=(-30,0,20),type=int,default=0,
                     help='Prepositioned B heading offset for handle path')
 parser.add_argument('--handle-middle-retracted',action='store_true',help='Use torque-margin screened middle-finger retraction')
 parser.add_argument('--pre-retract-middle',action='store_true',help='Preposition middle finger clear of tray before approach')
+parser.add_argument('--clear-pregrasp-spool',action='store_true',help='Exclude all B-hand roll/core contacts along the static approach')
+parser.add_argument('--pregrasp-clearance-m',type=float,default=0.,help='Require B-hand clearance from spool and handle until final contact')
 args=parser.parse_args()
 if args.handle_yaw_deg and not args.handle_layout:parser.error('Handle heading requires --handle-layout')
 if args.handle_middle_retracted and not (args.handle_layout and args.handle_yaw_deg==-30):
     parser.error('Middle retraction currently requires --handle-layout --handle-yaw-deg -30')
 if args.pre_retract_middle and not args.handle_middle_retracted:parser.error('Pre-retraction requires retracted endpoint')
+if args.pregrasp_clearance_m and not (args.clear_pregrasp_spool and 0.<=args.pregrasp_clearance_m<=.03):
+    parser.error('Clearance requires --clear-pregrasp-spool and must be at most 0.03 m')
 if args.handle_layout and (args.side_layout or args.side_high or args.side_mid or args.side_mid_open):
     parser.error('Handle and side-layout endpoints are mutually exclusive')
 if args.side_high and not args.side_layout:parser.error('Side-high path requires --side-layout')
@@ -41,6 +45,9 @@ stem=(('joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1'+
       'joint_spool_grasp_static_z0p73_root0p55_spoolz0p702' if args.settled
       else 'joint_spool_grasp_static_z0p745_root0p55')
 model=mujoco.MjModel.from_xml_path(str(OUT/f'{stem}_variant.xml'))
+if args.pregrasp_clearance_m:
+    for geom_name in ('bandage_roll','bandage_core','bandage_handle_prototype'):
+        model.geom_margin[model.geom(geom_name).id]=args.pregrasp_clearance_m+.002
 data=mujoco.MjData(model)
 goal=np.load(OUT/f'{stem}{"_middle_retracted" if args.handle_middle_retracted else ""}_candidate.npz')['qpos']
 base=np.load(OUT/'joint_support_pinch_static_candidate.npz')['qpos'].copy()
@@ -73,6 +80,17 @@ def clear(q):
         bodies=(model.body(model.geom_bodyid[c.geom1]).name,
                 model.body(model.geom_bodyid[c.geom2]).name)
         if 'floor' not in geoms and any(b.startswith(('g1_a/','g1_b/')) for b in bodies):return False
+    if args.clear_pregrasp_spool:
+        for c in data.contact:
+            if c.geom1<0 or c.geom2<0:continue
+            geoms=(model.geom(c.geom1).name,model.geom(c.geom2).name)
+            bodies=(model.body(model.geom_bodyid[c.geom1]).name,
+                    model.body(model.geom_bodyid[c.geom2]).name)
+            if any(b.startswith('g1_b/wuji_left/') for b in bodies):
+                if any(g in ('bandage_roll','bandage_core') for g in geoms) and \
+                   c.dist<(args.pregrasp_clearance_m if np.linalg.norm(q-end)>.12 else 0.):return False
+                if 'bandage_handle_prototype' in geoms and args.pregrasp_clearance_m and \
+                   np.linalg.norm(q-end)>.12 and c.dist<args.pregrasp_clearance_m:return False
     return True
 def edge(a,b):
     n=max(2,int(np.ceil(np.linalg.norm(b-a)/.04)))
@@ -114,7 +132,7 @@ if found is not None:
     dense=all(edge(a,b) for a,b in zip(found,found[1:]))
     path=np.repeat(base[None,:],len(found),axis=0)
     for row,q in zip(path,found):row[qa]=q
-    np.savez_compressed(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted.npz' if args.pre_retract_middle else
+    output_name=('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted.npz' if args.pre_retract_middle else
                              'joint_spool_grasp_rrt_handle_yaw-30_middle_retracted.npz' if args.handle_middle_retracted else
                              f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}.npz' if args.handle_layout and args.handle_yaw_deg else
                              'joint_spool_grasp_rrt_handle.npz' if args.handle_layout else
@@ -123,18 +141,23 @@ if found is not None:
                              'joint_spool_grasp_rrt_side_high.npz' if args.side_high else
                              'joint_spool_grasp_rrt_side.npz' if args.side_layout else
                              'joint_spool_grasp_rrt_settled.npz' if args.settled else
-                             'joint_spool_grasp_rrt.npz'),qpos=path)
+                             'joint_spool_grasp_rrt.npz')
+    if args.clear_pregrasp_spool:output_name=output_name.replace('.npz','_clearspool.npz')
+    if args.pregrasp_clearance_m:output_name=output_name.replace('.npz',f'_gap{round(args.pregrasp_clearance_m*1000)}mm.npz')
+    np.savez_compressed(OUT/output_name,qpos=path)
 else:raw=0;dense=False
 report={'scope':'Static B-left spool approach at fixed B-root x=0.55 m; no locomotion or dynamic grasp claim',
         'spool_initial_z_m':.702 if args.settled or args.side_layout or args.handle_layout else .72,
         'b_root_y_m':.1 if args.side_layout or args.handle_layout else 0.,
         'b_root_yaw_deg':args.handle_yaw_deg,
         'handle_middle_retracted':args.handle_middle_retracted,
+        'clear_pregrasp_spool':args.clear_pregrasp_spool,
+        'pregrasp_clearance_m':args.pregrasp_clearance_m,
         'pre_retract_middle':args.pre_retract_middle,
         'start_valid':start_ok,'goal_valid':goal_ok,'found_path':found is not None,
         'waypoints':len(found) if found is not None else 0,'raw_waypoints':raw,
         'dense_recheck_passed':dense,'iterations':iterations,'collision_checks':checks}
-(OUT/('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted_report.json' if args.pre_retract_middle else
+report_name=('joint_spool_grasp_rrt_handle_yaw-30_middle_preretracted_report.json' if args.pre_retract_middle else
       'joint_spool_grasp_rrt_handle_yaw-30_middle_retracted_report.json' if args.handle_middle_retracted else
       f'joint_spool_grasp_rrt_handle_yaw{args.handle_yaw_deg}_report.json' if args.handle_layout and args.handle_yaw_deg else
       'joint_spool_grasp_rrt_handle_report.json' if args.handle_layout else
@@ -143,5 +166,8 @@ report={'scope':'Static B-left spool approach at fixed B-root x=0.55 m; no locom
       'joint_spool_grasp_rrt_side_high_report.json' if args.side_high else
       'joint_spool_grasp_rrt_side_report.json' if args.side_layout else
       'joint_spool_grasp_rrt_settled_report.json' if args.settled else
-      'joint_spool_grasp_rrt_report.json')).write_text(json.dumps(report,indent=2),encoding='utf8')
+      'joint_spool_grasp_rrt_report.json')
+if args.clear_pregrasp_spool:report_name=report_name.replace('_report.json','_clearspool_report.json')
+if args.pregrasp_clearance_m:report_name=report_name.replace('_report.json',f'_gap{round(args.pregrasp_clearance_m*1000)}mm_report.json')
+(OUT/report_name).write_text(json.dumps(report,indent=2),encoding='utf8')
 print(json.dumps(report))

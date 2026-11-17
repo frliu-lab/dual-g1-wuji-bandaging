@@ -19,6 +19,8 @@ class JointWBC:
   self.support_palm_force_goal_n=None
   self.dressing_contact_normal_goal_n=None
   self.spool_contact_normal_goal_n=None
+  self.b_spool_contact_force_cap_n=None
+  self.b_handle_lift_force_goal_n=None
   self.hand_position_mode=False;self.hand_indices=np.array([i for i in range(m.nu) if '/wuji_' in m.actuator(i).name]);self.hand_commands=np.zeros(m.nu);self.hand_tau_correction=np.zeros(m.nu);self.hand_admittance_offset=np.zeros(m.nu);self.last_pad_force_targets={}
   self.pressure_cmd={};self.pressure_time=None
   self.reference_data=mujoco.MjData(m);palm_names=palm_names or ('g1_a/wuji_right/r_wrist','g1_b/wuji_left/l_wrist');self.palm_ids=[m.body(name).id for name in palm_names];self.task_dim=6*len(self.palm_ids);self.act_qadr=np.array([m.jnt_qposadr[j] for j in m.actuator_trnid[:,0]]);self.act_vadr=np.array([m.jnt_dofadr[j] for j in m.actuator_trnid[:,0]]);self.act_gear=m.actuator_gear[:,0].copy()
@@ -81,10 +83,10 @@ class JointWBC:
  def solve(self,d):
   m=self.m;J,target,mus,ids=self.contacts(d);nc=len(ids)
   if nc==0:raise RuntimeError('No physical supporting contacts')
-  mask=np.flatnonzero(np.isfinite(target));pad_flags=tuple(any(m.body(m.geom_bodyid[g]).name.endswith('_tip_sensor_frame') for g in (a,b)) and any(m.body(m.geom_bodyid[g]).name.startswith('shared_joystick') for g in (a,b)) for a,b in ids);fixed_hand=np.array([i for i in self.hand_indices if i not in self.force_control_indices],dtype=int);hard_hand=np.array(sorted(self.hard_hand_indices),dtype=int);forearm_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any(m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') for g in (a,b)) for a,b in ids) if self.forearm_contact_force_limit_n is not None else tuple();finger_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any('finger' in m.body(m.geom_bodyid[g]).name and m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') for g in (a,b)) for a,b in ids) if self.forearm_finger_force_limit_n is not None else tuple();key=(nc,tuple(mask),self.hand_position_mode,tuple(fixed_hand),tuple(hard_hand),pad_flags,forearm_flags,finger_flags)
+  mask=np.flatnonzero(np.isfinite(target));pad_flags=tuple(any(m.body(m.geom_bodyid[g]).name.endswith('_tip_sensor_frame') for g in (a,b)) and any(m.body(m.geom_bodyid[g]).name.startswith('shared_joystick') for g in (a,b)) for a,b in ids);fixed_hand=np.array([i for i in self.hand_indices if i not in self.force_control_indices],dtype=int);hard_hand=np.array(sorted(self.hard_hand_indices),dtype=int);forearm_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any(m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') for g in (a,b)) for a,b in ids) if self.forearm_contact_force_limit_n is not None else tuple();finger_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any('finger' in m.body(m.geom_bodyid[g]).name and m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') for g in (a,b)) for a,b in ids) if self.forearm_finger_force_limit_n is not None else tuple();b_spool_flags=tuple(tuple('bandage_handle_prototype' in (m.geom(a).name,m.geom(b).name) and any(m.body(m.geom_bodyid[g]).name.startswith(f'g1_b/wuji_left/l_{digit}_') for g in (a,b)) for a,b in ids) for digit in ('thumb','index_finger')) if self.b_spool_contact_force_cap_n is not None else tuple();key=(nc,tuple(mask),self.hand_position_mode,tuple(fixed_hand),tuple(hard_hand),pad_flags,forearm_flags,finger_flags,b_spool_flags)
   if key not in self.cache:
    a=cp.Variable(m.nv);tau=cp.Variable(m.nu);f=cp.Variable(3*nc)
-   P={name:cp.Parameter(shape) for name,shape in [('M',(m.nv,m.nv)),('h',(m.nv,)),('J',(3*nc,m.nv)),('target',(len(mask),)),('desired',(m.nv,)),('lo',(m.nu,)),('hi',(m.nu,)),('mu',(nc,)),('forcegoal',(3*nc,)),('forceweight',(3*nc,)),('acc_weight',(m.nv,)),('acc_lo',(m.nv,)),('acc_hi',(m.nv,)),('taskJ',(self.task_dim,m.nv)),('tasktarget',(self.task_dim,)),('task_weight',(self.task_dim,)),('fixed_hand_tau',(len(self.hand_indices),)),('forearm_cap',()),('finger_forearm_cap',())]}
+   P={name:cp.Parameter(shape) for name,shape in [('M',(m.nv,m.nv)),('h',(m.nv,)),('J',(3*nc,m.nv)),('target',(len(mask),)),('desired',(m.nv,)),('lo',(m.nu,)),('hi',(m.nu,)),('mu',(nc,)),('forcegoal',(3*nc,)),('forceweight',(3*nc,)),('acc_weight',(m.nv,)),('acc_lo',(m.nv,)),('acc_hi',(m.nv,)),('taskJ',(self.task_dim,m.nv)),('tasktarget',(self.task_dim,)),('task_weight',(self.task_dim,)),('fixed_hand_tau',(len(self.hand_indices),)),('forearm_cap',()),('finger_forearm_cap',()),('b_spool_cap',())]}
    constraints=[P['M']@a+P['h']==self.B@tau+P['J'].T@f,tau>=P['lo'],tau<=P['hi'],a>=P['acc_lo'],a<=P['acc_hi']]
 
    if self.hand_position_mode and len(hard_hand):constraints.append(tau[hard_hand]==P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in hard_hand]])
@@ -92,6 +94,8 @@ class JointWBC:
     normal=f[c*3];tang=f[c*3+1:c*3+3];constraints.extend([normal>=0,normal<=1000,cp.norm1(tang)<=P['mu'][c]*normal])
    if any(forearm_flags):constraints.append(cp.sum(cp.hstack([f[3*c] for c,flag in enumerate(forearm_flags) if flag]))<=P['forearm_cap'])
    if any(finger_flags):constraints.append(cp.sum(cp.hstack([f[3*c] for c,flag in enumerate(finger_flags) if flag]))<=P['finger_forearm_cap'])
+   for flags in b_spool_flags:
+    if any(flags):constraints.append(cp.sum(cp.hstack([f[3*c] for c,flag in enumerate(flags) if flag]))<=P['b_spool_cap'])
    objective=cp.sum_squares(cp.multiply(P['task_weight'],P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(P['acc_weight'],a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
    if self.hand_position_mode and len(fixed_hand):objective+=1e4*cp.sum_squares(tau[fixed_hand]-P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in fixed_hand]])
    self.cache[key]=(cp.Problem(cp.Minimize(objective),constraints),P,a,tau,f)
@@ -151,6 +155,20 @@ class JointWBC:
      if any(n.startswith(f'g1_b/wuji_left/l_{digit}_') for n in names):spool_contacts[digit].append(k)
    for entries in spool_contacts.values():
     for k in entries:goals[k*3]=self.spool_contact_normal_goal_n/len(entries);forceweight[k*3]=5.
+  if self.b_handle_lift_force_goal_n is not None:
+   if not np.isfinite(self.b_handle_lift_force_goal_n) or self.b_handle_lift_force_goal_n<0:
+    raise ValueError('B handle lift force goal must be finite and nonnegative')
+   entries=[]
+   for k,(ga,gb) in enumerate(ids):
+    if 'bandage_handle_prototype' not in (m.geom(ga).name,m.geom(gb).name):continue
+    names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
+    if any(n.startswith(('g1_b/wuji_left/l_thumb_','g1_b/wuji_left/l_index_finger_')) for n in names):entries.append((k,ga,gb))
+   for k,ga,gb in entries:
+    sign=-1. if m.geom(ga).name=='bandage_handle_prototype' else 1.
+    desired_world=np.array([0.,0.,sign*self.b_handle_lift_force_goal_n/len(entries)])
+    local=d.contact[self.contact_indices[k]].frame.reshape(3,3)@desired_world
+    goals[k*3+1:k*3+3]=local[1:]
+    forceweight[k*3+1:k*3+3]=5.
   pad_contacts={robot:[] for robot in ('g1_a','g1_b')}
   for k,(geom_a,geom_b) in enumerate(ids):
    names=[m.body(m.geom_bodyid[g]).name for g in (geom_a,geom_b)]
@@ -188,7 +206,7 @@ class JointWBC:
    taskJs.append(Jtask);taskTargets.append(80*error_task+18*(Jref@self.vref-Jtask@d.qvel)+Jref@self.aref+Jrefdot@self.vref-Jdot@d.qvel)
   taskJ=np.concatenate(taskJs);tasktarget=np.concatenate(taskTargets)
   task_weights=np.concatenate([np.r_[np.full(3,np.sqrt(pos)),np.full(3,np.sqrt(rot))] for pos,rot in zip(self.palm_position_weights,self.palm_rotation_weights)])
-  for k,v in {'M':M,'h':h,'J':J,'target':target[mask],'desired':desired,'lo':lo,'hi':hi,'mu':mus,'forcegoal':forceweight*goals,'forceweight':forceweight,'acc_weight':self.weights,'acc_lo':acc_lo,'acc_hi':acc_hi,'taskJ':taskJ,'tasktarget':tasktarget,'task_weight':task_weights,'fixed_hand_tau':requested_hand_tau,'forearm_cap':float(self.forearm_contact_force_limit_n) if self.forearm_contact_force_limit_n is not None else 1000.,'finger_forearm_cap':float(self.forearm_finger_force_limit_n) if self.forearm_finger_force_limit_n is not None else 1000.}.items():P[k].value=v
+  for k,v in {'M':M,'h':h,'J':J,'target':target[mask],'desired':desired,'lo':lo,'hi':hi,'mu':mus,'forcegoal':forceweight*goals,'forceweight':forceweight,'acc_weight':self.weights,'acc_lo':acc_lo,'acc_hi':acc_hi,'taskJ':taskJ,'tasktarget':tasktarget,'task_weight':task_weights,'fixed_hand_tau':requested_hand_tau,'forearm_cap':float(self.forearm_contact_force_limit_n) if self.forearm_contact_force_limit_n is not None else 1000.,'finger_forearm_cap':float(self.forearm_finger_force_limit_n) if self.forearm_finger_force_limit_n is not None else 1000.,'b_spool_cap':float(self.b_spool_contact_force_cap_n) if self.b_spool_contact_force_cap_n is not None else 1000.}.items():P[k].value=v
   self.last_numeric={'M':M.copy(),'B':self.B.copy(),'J':J.copy(),'h':h.copy(),'mask':mask.copy(),'target':target.copy(),'pad_flags':pad_flags,'weights':self.weights.copy(),'desired':desired.copy(),'taskJ':taskJ.copy(),'tasktarget':tasktarget.copy(),'forceweight':forceweight.copy(),'force_goal_weighted':(forceweight*goals).copy(),'mu':mus.copy(),'acc_lo':acc_lo.copy(),'acc_hi':acc_hi.copy(),'lo':lo.copy(),'hi':hi.copy(),'hard_hand':hard_hand.copy() if self.hand_position_mode else np.array([],dtype=int),'hard_tau':np.array([requested_hand_tau[int(np.flatnonzero(self.hand_indices==i)[0])] for i in hard_hand]) if self.hand_position_mode else np.array([]),'fixed_hand':fixed_hand.copy() if self.hand_position_mode else np.array([],dtype=int),'fixed_tau':P['fixed_hand_tau'].value[[int(np.flatnonzero(self.hand_indices==i)[0]) for i in fixed_hand]].copy() if self.hand_position_mode else np.array([])}
   solve_started=time.perf_counter();used_backend=self.backend;fallback=False;direct_success=False;direct_report=None
   def clarabel_solve():problem.solve(solver='CLARABEL',tol_gap_abs=1e-8,tol_feas=1e-9,tol_gap_rel=1e-8,max_iter=120,warm_start=True)
