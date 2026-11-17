@@ -19,6 +19,8 @@ from support_quality import SupportQualityMonitor, SupportSample
 p=argparse.ArgumentParser()
 p.add_argument('--lift-m',type=float,default=.01)
 p.add_argument('--duration-s',type=float,default=1.)
+p.add_argument('--motion-end-s',type=float,default=None,
+               help='End arm translation before the pilot ends, then hold the lifted pose')
 p.add_argument('--dressing-force-goal-n',type=float,default=.7)
 p.add_argument('--index-closure-m',type=float,default=0.)
 p.add_argument('--index-pregrasp-candidate',type=int,default=-1)
@@ -27,6 +29,7 @@ p.add_argument('--index-preposition-s',type=float,default=.5)
 p.add_argument('--index-weight',type=float,default=1.)
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
+p.add_argument('--dressing-force-end-s',type=float,default=None)
 p.add_argument('--track-pad-pose',action='store_true')
 p.add_argument('--track-pad-orientation',action='store_true')
 p.add_argument('--pad-pose-weight',type=float,default=10.)
@@ -36,9 +39,13 @@ p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
+p.add_argument('--b-hold-min-force-n',type=float,default=.35)
+p.add_argument('--b-hold-force-goal-n',type=float,default=.45)
 args=p.parse_args()
 if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=3. or args.index_preposition_s>=args.duration_s:
     p.error('Lift range (0,.06] m; duration [.5,3] s; preposition shorter than duration')
+motion_end=args.motion_end_s if args.motion_end_s is not None else args.duration_s
+if not args.index_preposition_s<motion_end<=args.duration_s:p.error('motion end must follow preposition and precede duration')
 model=mujoco.MjModel.from_xml_path(str(OUT/'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml'))
 data=mujoco.MjData(model)
 state=np.load(OUT/f'joint_support_pinch_staged_wbc_report_spool_settled_handle_{args.start_state_token}_final_state.npz')
@@ -57,8 +64,8 @@ wbc.b_spool_contact_force_cap_n=1.5
 wbc.dressing_contact_normal_goal_n=args.dressing_force_goal_n
 if args.start_state_token=='947858479e10':
     wbc.b_handle_stick=True
-    wbc.b_handle_lift_min_n=.35
-    wbc.b_handle_lift_force_goal_n=.45
+    wbc.b_handle_lift_min_n=args.b_hold_min_force_n or None
+    wbc.b_handle_lift_force_goal_n=args.b_hold_force_goal_n or None
 arm_joints=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/right_') and
             any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
 arm_qa=np.array([model.jnt_qposadr[j] for j in arm_joints])
@@ -115,17 +122,18 @@ elbow=model.joint('training_elbow_hinge')
 for step in range(round(args.duration_s*50)):
     t=step*.02
     lift_elapsed=max(0.,t-(args.index_preposition_s if pregrasp_candidate is not None else 0.))
-    lift_duration=args.duration_s-(args.index_preposition_s if pregrasp_candidate is not None else 0.)
+    lift_duration=motion_end-(args.index_preposition_s if pregrasp_candidate is not None else 0.)
     planned=args.lift_m*min(1.,lift_elapsed/lift_duration)
     force_elapsed=max(0.,t-args.dressing_force_start_s)
     wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,force_elapsed/.2)
-                              if args.dressing_lift_min_n and force_elapsed>0. else None)
+                              if args.dressing_lift_min_n and force_elapsed>0. and
+                              (args.dressing_force_end_s is None or t<args.dressing_force_end_s) else None)
     if args.start_state_token=='947858479e10':
         spool_velocity=float(data.qvel[spool_free.dofadr[0]+2])
         spool_error=float(start_spool[2]-data.xpos[spool,2])
         hold_force=float(np.clip(spool_mass*abs(model.opt.gravity[2])+60.*spool_error-2.*spool_velocity,0.,1.5))
-        wbc.b_handle_lift_min_n=max(0.,hold_force-.05)
-        wbc.b_handle_lift_force_goal_n=hold_force
+        wbc.b_handle_lift_min_n=(max(0.,hold_force-.05) if args.b_hold_min_force_n else None)
+        wbc.b_handle_lift_force_goal_n=hold_force if args.b_hold_force_goal_n else None
         wbc.b_handle_lateral_force_target_n=np.clip(-40.*(data.xpos[spool,:2]-start_spool[:2])-
             2.*data.qvel[spool_free.dofadr[0]:spool_free.dofadr[0]+2],-1.,1.)
     wbc.qref[:]=base
@@ -226,6 +234,7 @@ for step in range(round(args.duration_s*50)):
     if rows[-1]['spool_shift_m']>.005:errors.append('spool_shift_over_5mm');break
 report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'lift_m':args.lift_m,'duration_s':args.duration_s,
+        'motion_end_s':motion_end,
         'dressing_force_goal_n':args.dressing_force_goal_n,
         'index_closure_m':args.index_closure_m,
         'index_pregrasp_candidate':args.index_pregrasp_candidate,
@@ -233,6 +242,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'index_weight':args.index_weight,
         'dressing_lift_min_n':args.dressing_lift_min_n,
         'dressing_force_start_s':args.dressing_force_start_s,
+        'dressing_force_end_s':args.dressing_force_end_s,
         'track_pad_pose':args.track_pad_pose,
         'track_pad_orientation':args.track_pad_orientation,
         'pad_pose_weight':args.pad_pose_weight,
@@ -240,6 +250,8 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
         'start_state_token':args.start_state_token,
+        'b_hold_min_force_n':args.b_hold_min_force_n,
+        'b_hold_force_goal_n':args.b_hold_force_goal_n,
         'final_support_quality':support_monitor.last_report,
         'all_feet_supported':all(r['feet_supported'] for r in rows),
         'any_deep_robot_contact':any(r['deep_robot_contact'] for r in rows),
@@ -250,11 +262,14 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'completed':len(rows)==round(args.duration_s*50) and not errors,'errors':errors,'trace':rows}
 report['final_pad_contacts']=rows[-1]['pad_contacts'] if rows else []
 stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_side{args.side_pregrasp_candidate}_iw{args.index_weight:g}_up{args.dressing_lift_min_n:g}_start{args.dressing_force_start_s:g}'
+if args.motion_end_s is not None:stem+=f'_motionend{args.motion_end_s:g}'
+if args.dressing_force_end_s is not None:stem+=f'_forceend{args.dressing_force_end_s:g}'
 if args.track_pad_pose:stem+=f'_pose{args.pad_pose_weight:g}'
 if args.track_pad_orientation:stem+=f'_orient{args.pad_pose_weight:g}'
 if args.wrist_x_shift_m:stem+=f'_xshift{args.wrist_x_shift_m:g}'
 if args.support_wrist_yaw_offset_rad:stem+=f'_syaw{args.support_wrist_yaw_offset_rad:g}_at{args.support_wrist_yaw_start_s:g}'
 stem+=f'_from{args.start_state_token}'
+if args.start_state_token=='947858479e10':stem+=f'_bmin{args.b_hold_min_force_n:g}_bgoal{args.b_hold_force_goal_n:g}'
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel)
 np.savez_compressed(OUT/f'{stem}_qpos.npz',qpos=np.asarray(recorded_qpos),
