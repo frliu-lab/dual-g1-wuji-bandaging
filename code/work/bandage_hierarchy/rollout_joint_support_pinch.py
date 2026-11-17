@@ -26,6 +26,9 @@ parser.add_argument('--b-handle-force-cap-n',type=float,default=0.,help='Hard WB
 parser.add_argument('--b-lift-grip-cap-increase-n',type=float,default=0.,help='Extra predicted per-digit cap ramped only during diagnostic lift')
 parser.add_argument('--b-lift-closure-increase-m',type=float,default=0.,help='Extra B fingertip inward target ramped during diagnostic lift')
 parser.add_argument('--b-lift-force-goal-n',type=float,default=0.,help='Total upward spool force requested through B handle tangential contacts during lift')
+parser.add_argument('--b-lift-min-force-n',type=float,default=0.,help='Hard WBC minimum predicted upward force on spool during diagnostic lift')
+parser.add_argument('--b-handle-stick-on-lift',action='store_true',help='Penalize B handle tangential slip acceleration during diagnostic lift')
+parser.add_argument('--b-lift-feedback',action='store_true',help='Use height/velocity feedback for 2 s diagnostic lift')
 parser.add_argument('--b-object-follow',action='store_true',help='Shift B-left arm reference with spool motion during hold')
 parser.add_argument('--b-wrist-lift-m',type=float,default=0.,help='Final B-left wrist upward correction after low handle-edge contact')
 parser.add_argument('--b-lift-after-grasp-m',type=float,default=0.,help='Diagnostic post-grasp B arm lift over 1 s')
@@ -37,6 +40,11 @@ parser.add_argument('--b-warm-joint-seed',choices=(0,1,2),type=int,default=0,
 parser.add_argument('--b-spool-force-goal-n',type=float,default=0.,
                     help='Soft B-left thumb/index normal-force goal on spool during final hold')
 parser.add_argument('--open-support-pinky',action='store_true',help='Retract A-left little finger during final contact hold')
+parser.add_argument('--retract-support-pinky-on-lift',action='store_true',help='Return A-left pinky MCP joints toward open posture during pickup')
+parser.add_argument('--freeze-support-on-lift',action='store_true',help='Hold A-left arm and hand joint references at verified pickup onset')
+parser.add_argument('--support-wrist-roll-lift-offset-rad',type=float,default=0.,help='Ramp A-left wrist roll correction during the spool pickup')
+parser.add_argument('--support-pinky-abd-lift-offset-rad',type=float,default=0.,help='Ramp A-left pinky abduction correction during spool pickup')
+parser.add_argument('--support-follow-lift-gain',type=float,default=.5,help='A-left forearm relative pose Jacobian gain during pickup')
 parser.add_argument('--support-wrist-reorient',action='store_true',help='Blend A-left wrist toward screened palm-only orientation')
 parser.add_argument('--support-wrist-candidate',choices=('near','roll','roll_yaw'),default='near')
 parser.add_argument('--support-wrist-scale',type=float,default=1.)
@@ -104,6 +112,14 @@ if args.b_lift_closure_increase_m and not (args.b_lift_after_grasp_m and args.b_
     parser.error('Lift closure increase requires lift and hold closure; range [0,0.003] m')
 if args.b_lift_force_goal_n and not (args.b_lift_after_grasp_m and args.b_handle_force_cap_n and 0.<=args.b_lift_force_goal_n<=2.):
     parser.error('Lift force goal requires lift and handle force cap; range [0,2] N')
+if args.b_lift_min_force_n and not (args.b_lift_after_grasp_m and args.b_handle_force_cap_n and 0.<=args.b_lift_min_force_n<=2.):
+    parser.error('Lift minimum force requires lift and handle force cap; range [0,2] N')
+if args.b_handle_stick_on_lift and not args.b_lift_after_grasp_m:parser.error('Handle stick task requires diagnostic lift')
+if args.b_lift_feedback and not (args.b_lift_after_grasp_m and args.b_handle_force_cap_n and args.b_analytic_grip):
+    parser.error('Lift feedback requires lift, B handle force cap, and analytic grip')
+if args.b_lift_feedback and (args.b_lift_min_force_n or args.b_lift_force_goal_n or args.b_lift_grip_cap_increase_n or args.b_lift_closure_increase_m):
+    parser.error('Lift feedback controls the force target and cannot be combined with manual lift force/closure options')
+if args.retract_support_pinky_on_lift and not args.b_lift_feedback:parser.error('Lift pinky retraction requires lift feedback')
 if args.b_object_follow and not args.handle_layout:parser.error('B object follow requires --handle-layout')
 if args.b_stage_thumb and not args.handle_layout:parser.error('B thumb staging requires handle layout')
 if args.b_thumb_clearance_offset and not args.clear_pregrasp_spool:parser.error('B thumb clearance offset requires clear spool path')
@@ -261,6 +277,14 @@ wbc.weights[b_grasp_vadr]=args.b_finger_weight
 b_thumb_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
                       if model.joint(j).name.startswith('g1_b/wuji_left/l_thumb_')],dtype=int)
 b_thumb_open=path[b_path_start_segment,b_thumb_qadr].copy() if args.spool_after else None
+b_lift_hold_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
+                            if model.joint(j).name.startswith('g1_b/wuji_left/') or
+                            model.joint(j).name.startswith('g1_b/left_') and
+                            any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))],dtype=int)
+support_lift_hold_qadr=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
+                                 if model.joint(j).name.startswith('g1_a/wuji_left/') or
+                                 model.joint(j).name.startswith('g1_a/left_') and
+                                 any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))],dtype=int)
 b_thumb_clearance=(np.array(json.loads((OUT/'joint_spool_dynamic_thumb_clearance_search.json').read_text(encoding='utf8'))['best'][0]['offset_rad'])
                    if args.b_thumb_clearance_offset else None)
 b_arm_joints=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/left_') and
@@ -305,7 +329,7 @@ goal_forearm_rot = ref.xmat[forearm_body].reshape(3,3).copy()
 goal_palm_pos = ref.xpos[left_palm].copy()
 goal_palm_rot = ref.xmat[left_palm].reshape(3,3).copy()
 relative_palm_pos = goal_forearm_rot.T @ (goal_palm_pos - goal_forearm_pos)
-def follow_forearm(qref):
+def follow_forearm(qref, gain=.5):
     qref[elbow_qadr] = data.qpos[elbow_qadr]
     ref.qpos[:] = qref
     mujoco.mj_forward(model, ref)
@@ -319,7 +343,7 @@ def follow_forearm(qref):
     mujoco.mj_jacBody(model,ref,jp,jr,left_palm)
     J = np.vstack((jp[:,left_vadr],jr[:,left_vadr]))
     delta = J.T @ np.linalg.solve(J@J.T + .02**2*np.eye(6), np.r_[pos_error,rot_error])
-    qref[left_qadr] += .5*np.clip(delta,-.12,.12)
+    qref[left_qadr] += gain*np.clip(delta,-.12,.12)
     for j,a in zip(left_joints,left_qadr):
         lo,hi=model.jnt_range[j]
         qref[a]=np.clip(qref[a],lo+.03,hi-.03)
@@ -328,7 +352,7 @@ hz = 50
 interval = round(1/hz/model.opt.timestep)
 if abs(interval*model.opt.timestep-1/hz)>1e-9:
     raise ValueError('Simulation step does not divide 50 Hz')
-durations = [1.2] + [args.approach_segment_s]*(len(path)-2) + [args.hold_s+(1. if args.b_lift_after_grasp_m else 0.)]
+durations = [1.2] + [args.approach_segment_s]*(len(path)-2) + [args.hold_s+((2. if args.b_lift_feedback else 1.) if args.b_lift_after_grasp_m else 0.)]
 schedule = []
 for segment, duration in enumerate(durations[:-1],start=1):
     schedule.extend((segment,k+1,round(duration*hz)) for k in range(round(duration*hz)))
@@ -396,6 +420,8 @@ for digit,bid in (('thumb',thumb_tip),('index',index_tip)):
         'body':bid,
         'pad_local':goal_pad_rot.T@(goal_data.xpos[bid]-goal_data.xpos[pad_body])}
 b_digit_info={}
+lift_hold_qpos=None
+lift_spool_start=None
 if args.b_analytic_grip:
     goal_spool_rot=goal_data.xmat[spool_body].reshape(3,3)
     for digit in ('thumb','index'):
@@ -409,9 +435,37 @@ if args.b_analytic_grip:
                              'vadr':np.array([model.jnt_dofadr[j] for j in joints],dtype=int),
                              'spool_local':local}
 for segment,k,count in schedule:
+    if args.b_lift_feedback:
+        lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
+        if lift_time>0. and lift_hold_qpos is None:
+            lift_hold_qpos=data.qpos.copy()
+            lift_spool_start=data.xpos[spool_body].copy()
+            spool_rot=data.xmat[spool_body].reshape(3,3)
+            for info in b_digit_info.values():
+                info['spool_local']=spool_rot.T@(data.xpos[info['body']]-data.xpos[spool_body])
+        wbc.b_handle_stick=lift_time>0.
+        if lift_time>0.:
+            desired_z=lift_spool_start[2]+args.b_lift_after_grasp_m*min(1.,lift_time/2.)
+            desired_v=args.b_lift_after_grasp_m/2.
+            spool_vz=float(data.qvel[model.joint('bandage_spool_free').dofadr[0]+2])
+            force=float(np.clip(model.body_subtreemass[spool_body]*abs(model.opt.gravity[2])+60.*(desired_z-data.xpos[spool_body,2])+2.*(desired_v-spool_vz),0.,1.5))
+            wbc.b_handle_lift_min_n=max(0.,force-.05)
+            wbc.b_handle_lift_force_goal_n=force
+            spool_vxy=model.joint('bandage_spool_free').dofadr[0]
+            wbc.b_handle_lateral_force_target_n=np.clip(-40.*(data.xpos[spool_body,:2]-lift_spool_start[:2])-
+                                                         2.*data.qvel[spool_vxy:spool_vxy+2],-1.,1.)
+        else:
+            wbc.b_handle_lift_min_n=None
+            wbc.b_handle_lift_force_goal_n=None
+            wbc.b_handle_lateral_force_target_n=None
+    if args.b_handle_stick_on_lift:
+        wbc.b_handle_stick=bool(data.time>sum(durations[:-1])+args.hold_s)
     if args.b_lift_force_goal_n:
         lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
         wbc.b_handle_lift_force_goal_n=min(1.,lift_time/.2)*args.b_lift_force_goal_n if lift_time>0 else None
+    if args.b_lift_min_force_n:
+        lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
+        wbc.b_handle_lift_min_n=min(1.,lift_time/.2)*args.b_lift_min_force_n if lift_time>0 else None
     if args.b_lift_grip_cap_increase_n:
         lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
         wbc.b_spool_contact_force_cap_n=args.b_handle_force_cap_n+min(1.,lift_time)*args.b_lift_grip_cap_increase_n
@@ -425,6 +479,7 @@ for segment,k,count in schedule:
                                    else None)
     u=(k/count)**2*(3-2*k/count)
     wbc.qref[:]=(1-u)*path[segment-1]+u*path[segment]
+    if lift_hold_qpos is not None:wbc.qref[b_lift_hold_qadr]=lift_hold_qpos[b_lift_hold_qadr]
     if args.b_stage_thumb and segment>=b_path_start_segment+1:
         if segment<len(path)-1:wbc.qref[b_thumb_qadr]=b_thumb_open
         else:wbc.qref[b_thumb_qadr]=(1-u)*b_thumb_open+u*path[-1,b_thumb_qadr]
@@ -433,7 +488,7 @@ for segment,k,count in schedule:
                1.-u if segment==len(path)-1 else 1.)
         wbc.qref[b_thumb_qadr]+=blend*b_thumb_clearance
     if segment>=2:
-        follow_forearm(wbc.qref)
+        follow_forearm(wbc.qref,args.support_follow_lift_gain if lift_hold_qpos is not None else .5)
     if args.elbow_hold_weight>1. and segment>=3:
         wbc.qref[elbow_qadr]=elbow_hold_target
     if b_warm_target is not None and segment==len(path)-1 and k==count:
@@ -442,11 +497,23 @@ for segment,k,count in schedule:
     if args.open_support_pinky and segment==len(path)-1 and k==count:
         blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.5))
         wbc.qref[support_pinky_qadr]=(1-blend)*wbc.qref[support_pinky_qadr]+blend*support_pinky_open
+    if args.retract_support_pinky_on_lift and lift_hold_qpos is not None:
+        blend=min(1.,max(0.,(float(data.time)-sum(durations[:-1])-args.hold_s)/.5))
+        wbc.qref[support_pinky_qadr]=(1-blend)*lift_hold_qpos[support_pinky_qadr]+blend*support_pinky_open
     if args.support_wrist_reorient and segment==len(path)-1 and k==count:
         blend=min(1.,max(0.,(float(data.time)-(sum(durations[:-1])))/.5))
         delta={'near':[-.045,0.,.09],'roll':[-.135,-.045,0.],
                'roll_yaw':[-.135,-.045,.045]}[args.support_wrist_candidate]
         wbc.qref[support_wrist_qadr]+=blend*args.support_wrist_scale*np.array(delta)
+    if args.freeze_support_on_lift and lift_hold_qpos is not None:
+        wbc.qref[support_lift_hold_qadr]=lift_hold_qpos[support_lift_hold_qadr]
+    if args.support_wrist_roll_lift_offset_rad and lift_hold_qpos is not None:
+        blend=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)/.5)
+        wbc.qref[support_wrist_qadr[0]]+=blend*args.support_wrist_roll_lift_offset_rad
+    if args.support_pinky_abd_lift_offset_rad and lift_hold_qpos is not None:
+        blend=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)/.5)
+        q=support_pinky_qadr[1]
+        wbc.qref[q]=np.clip(wbc.qref[q]+blend*args.support_pinky_abd_lift_offset_rad,-.698,.698)
     if (args.b_object_follow and segment==len(path)-1 and k==count) or (args.b_lift_after_grasp_m and segment==len(path)-1 and k==count) or (args.b_wrist_lift_m and
         (segment==len(path)-1 and k==count or args.b_wrist_lift_early and segment==len(path)-2)):
         goal_data.qpos[:]=wbc.qref
@@ -457,7 +524,7 @@ for segment,k,count in schedule:
         shift=(data.xpos[spool_body]-spool_start if args.b_object_follow else np.zeros(3))
         if args.b_lift_after_grasp_m:
             lift_time=max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)
-            shift=shift+np.array([0.,0.,min(1.,lift_time)*args.b_lift_after_grasp_m])
+            shift=shift+np.array([0.,0.,min(1.,lift_time/(2. if args.b_lift_feedback else 1.))*args.b_lift_after_grasp_m])
         if args.b_wrist_lift_m:
             blend=(u if args.b_wrist_lift_early and segment==len(path)-2 else
                    1. if args.b_wrist_lift_early else
@@ -470,7 +537,7 @@ for segment,k,count in schedule:
         for digit,info in b_digit_info.items():
             bid=info['body'];vadr=info['vadr'];qadr=info['qadr']
             local=info['spool_local'].copy()
-            if args.b_hold_closure_m and segment==len(path)-1 and k==count:
+            if args.b_hold_closure_m and lift_hold_qpos is None and segment==len(path)-1 and k==count:
                 blend=min(1.,max(0.,(float(data.time)-sum(durations[:-1]))/.5))
                 lift_blend=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s))
                 closure=blend*args.b_hold_closure_m+lift_blend*args.b_lift_closure_increase_m
@@ -655,8 +722,8 @@ for segment,k,count in schedule:
             if not args.b_lift_after_grasp_m or data.time<sum(durations[:-1])+args.hold_s:
                 if max_spool_displacement>.005:faults.append('spool_displacement_over_5mm')
             else:
-                planned_lift=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s))*args.b_lift_after_grasp_m
-                relative=data.xpos[spool_body]-spool_start
+                planned_lift=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)/(2. if args.b_lift_feedback else 1.))*args.b_lift_after_grasp_m
+                relative=data.xpos[spool_body]-(lift_spool_start if lift_spool_start is not None else spool_start)
                 if np.linalg.norm(relative[:2])>.005:faults.append('spool_lateral_displacement_over_5mm')
                 if abs(float(relative[2])-planned_lift)>.005:faults.append('spool_lift_tracking_error_over_5mm')
             if max(b_forces.values())>2.:faults.append('b_digit_force_over_2N')
@@ -685,6 +752,9 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'b_lift_grip_cap_increase_n':args.b_lift_grip_cap_increase_n,
         'b_lift_closure_increase_m':args.b_lift_closure_increase_m,
         'b_lift_force_goal_n':args.b_lift_force_goal_n,
+        'b_lift_min_force_n':args.b_lift_min_force_n,
+        'b_handle_stick_on_lift':args.b_handle_stick_on_lift,
+        'b_lift_feedback':args.b_lift_feedback,
         'pre_retract_middle':args.pre_retract_middle,
         'side_high':args.side_high,
         'side_mid':args.side_mid,
@@ -700,6 +770,11 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'b_warm_joint_seed':args.b_warm_joint_seed,
         'b_spool_force_goal_n':args.b_spool_force_goal_n,
         'open_support_pinky':args.open_support_pinky,
+        'retract_support_pinky_on_lift':args.retract_support_pinky_on_lift,
+        'freeze_support_on_lift':args.freeze_support_on_lift,
+        'support_wrist_roll_lift_offset_rad':args.support_wrist_roll_lift_offset_rad,
+        'support_pinky_abd_lift_offset_rad':args.support_pinky_abd_lift_offset_rad,
+        'support_follow_lift_gain':args.support_follow_lift_gain,
         'support_wrist_reorient':args.support_wrist_reorient,
         'support_wrist_candidate':args.support_wrist_candidate if args.support_wrist_reorient else None,
         'support_wrist_scale':args.support_wrist_scale if args.support_wrist_reorient else None,
@@ -783,6 +858,9 @@ if args.b_handle_force_cap_n:stem+='_bcap'+str(args.b_handle_force_cap_n).replac
 if args.b_lift_grip_cap_increase_n:stem+='_liftcapplus'+str(args.b_lift_grip_cap_increase_n).replace('.','p')
 if args.b_lift_closure_increase_m:stem+='_liftcloseplus'+str(args.b_lift_closure_increase_m).replace('.','p')
 if args.b_lift_force_goal_n:stem+='_liftforce'+str(args.b_lift_force_goal_n).replace('.','p')
+if args.b_lift_min_force_n:stem+='_liftmin'+str(args.b_lift_min_force_n).replace('.','p')
+if args.b_handle_stick_on_lift:stem+='_bstick'
+if args.b_lift_feedback:stem+='_bfeedbacklift'
 if args.pre_retract_middle:stem+='_preretracted'
 if args.tray_clamp:stem+='_clamped'
 if args.abort_on_grasp_fault:stem+='_faultstop'
@@ -800,6 +878,11 @@ if args.b_warm_reference and args.b_warm_closure!='0p004':stem+='_closure'+args.
 if args.b_warm_joint_seed:stem+='_jseed'+str(args.b_warm_joint_seed)
 if args.b_spool_force_goal_n>0:stem+='_bforce'+str(args.b_spool_force_goal_n).replace('.','p')
 if args.open_support_pinky:stem+='_openpinky'
+if args.retract_support_pinky_on_lift:stem+='_liftopenpinky'
+if args.freeze_support_on_lift:stem+='_liftsupportfreeze'
+if args.support_wrist_roll_lift_offset_rad:stem+='_liftwristroll'+str(args.support_wrist_roll_lift_offset_rad).replace('.','p')
+if args.support_pinky_abd_lift_offset_rad:stem+='_liftpinkyabd'+str(args.support_pinky_abd_lift_offset_rad).replace('.','p')
+if args.support_follow_lift_gain!=.5:stem+='_liftfollow'+str(args.support_follow_lift_gain).replace('.','p')
 if args.support_wrist_reorient:stem+='_rewrist'
 if args.support_wrist_reorient and args.support_wrist_candidate!='near':stem+='_'+args.support_wrist_candidate
 if args.support_wrist_reorient and args.support_wrist_scale!=1.:stem+='_scale'+str(args.support_wrist_scale).replace('.','p')

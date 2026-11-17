@@ -48,7 +48,8 @@ class SupportQualityMonitor:
                 total[body]=total.get(body,0.)+impulse
         impulse=sum(total.values())
         palm=total.get('g1_a/wuji_left/l_wrist',0.)
-        finger=sum(v for k,v in total.items() if '/l_' in k and 'finger' in k)
+        finger=sum(v for k,v in total.items() if k.startswith('g1_a/wuji_left/l_')
+                   and any(token in k for token in ('finger','pinky','thumb')))
         window_ok=(full and impulse>=.5 and palm/impulse>=self.min_palm_share
                    and finger/impulse<=self.max_finger_share
                    and all(s.both_feet_supported for s in self.samples)
