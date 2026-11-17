@@ -6,6 +6,8 @@
 
 **新增局部进展：** [双指侧夹取敷料的检查点审计](media/bandage_v0/joint_dressing_side_pickup_checkpoint_audit.json)记录了 2.5 秒局部动态试验：A 右拇指与食指夹持敷料，敷料中心抬高 28.6 mm；A 左掌面末段承担 93.7% 托臂冲量，B 左卷轴漂移最大 1.64 mm，双机足部保持支撑且未发现深碰撞。末段 16 帧中 4 帧仍有极轻台面接触（峰值 0.0233 N），因此尚未通过严格连续离台门槛。试验从已有抓持状态重启，尚未整合进完整 17.7 秒路线。[侧向夹取静态候选](media/bandage_v0/joint_dressing_side_grasp_from_joint_screen_refined.json)及代码已存档。旧失败诊断是先前动作配置的实验记录。
 
+可观看 [18.2 秒连续总览](media/bandage_v0/joint_dressing_pickup_checkpoint_continuous_demo.mp4)和[手部近景](media/bandage_v0/joint_dressing_pickup_checkpoint_continuous_demo_hand_closeup.mp4)。这两个视角来自同一 [50 Hz 状态轨迹](media/bandage_v0/joint_dressing_pickup_checkpoint_continuous_demo_qpos.npz)：前 15.7 秒为已验证的双机托臂、夹敷料和握卷路径，随后从关节位置完全一致的检查点重启控制器，继续 2.5 秒取出敷料。检查点速度也由保存状态恢复；请参见[演示清单](media/bandage_v0/joint_dressing_pickup_checkpoint_continuous_demo_manifest.json)。此版卷轴仍在台上，敷料尚有极轻台面接触，更没有绕臂、固定带尾或实机验证。
+
 [敷料向上受力不可行诊断](media/bandage_v0/joint_dressing_lift_force_infeasible_audit.json)进一步显示：在当前仿真接触与其他约束下，现有抓姿连很小的额外向上合力都无法由 WBC 满足。该结果不是硬件能力上限；需要重新设计 A 右手指腹接触与器具取用方式。
 
 此仓库按实验批次存档双 G1、四只 Wuji 手协作研究。`media/` 保存当前可交流的代表性视频与对应说明；`VIDEO_CATALOG.json` 列出本地项目目前全部视频及 SHA-256，便于后续按实验批次补充。当前公开仓库只上传了五段代表性视频，其余历史视频尚未上传。在原始项目根目录运行 `python work/research_archive/build_archive_catalog.py` 可更新目录；公开仓库中的脚本副本位于 `code/work/research_archive/`。

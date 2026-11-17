@@ -33,12 +33,15 @@ p.add_argument('--pad-pose-weight',type=float,default=10.)
 p.add_argument('--wrist-x-shift-m',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-offset-rad',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
+p.add_argument('--start-state-token',default='75fdd3a3b4b1',
+               choices=('75fdd3a3b4b1','947858479e10'),
+               help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
 args=p.parse_args()
 if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=3. or args.index_preposition_s>=args.duration_s:
     p.error('Lift range (0,.06] m; duration [.5,3] s; preposition shorter than duration')
 model=mujoco.MjModel.from_xml_path(str(OUT/'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml'))
 data=mujoco.MjData(model)
-state=np.load(OUT/'joint_support_pinch_staged_wbc_report_spool_settled_handle_75fdd3a3b4b1_final_state.npz')
+state=np.load(OUT/f'joint_support_pinch_staged_wbc_report_spool_settled_handle_{args.start_state_token}_final_state.npz')
 data.qpos[:]=state['qpos'];data.qvel[:]=state['qvel'];mujoco.mj_forward(model,data)
 base=state['reference_qpos'].copy()
 palms=('g1_a/wuji_left/l_wrist','g1_a/wuji_right/r_wrist','g1_b/wuji_left/l_wrist','g1_b/wuji_right/r_wrist')
@@ -52,10 +55,19 @@ wbc.forearm_finger_force_limit_n=2.
 wbc.support_palm_force_goal_n=11.5
 wbc.b_spool_contact_force_cap_n=1.5
 wbc.dressing_contact_normal_goal_n=args.dressing_force_goal_n
+if args.start_state_token=='947858479e10':
+    wbc.b_handle_stick=True
+    wbc.b_handle_lift_min_n=.35
+    wbc.b_handle_lift_force_goal_n=.45
 arm_joints=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/right_') and
             any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
 arm_qa=np.array([model.jnt_qposadr[j] for j in arm_joints])
 arm_va=np.array([model.jnt_dofadr[j] for j in arm_joints])
+b_hold_qa=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
+                    if model.joint(j).name.startswith('g1_b/left_') and
+                    any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))],dtype=int)
+b_hand_hold_qa=np.array([model.jnt_qposadr[j] for j in range(model.njnt)
+                         if model.joint(j).name.startswith('g1_b/wuji_left/l_')],dtype=int)
 wrist=model.body('g1_a/wuji_right/r_wrist').id
 pad=model.body('dressing_pad').id
 pad_free=model.joint('dressing_pad_free')
@@ -64,8 +76,19 @@ if args.track_pad_pose:wbc.weights[pad_vadr:pad_vadr+6]=args.pad_pose_weight
 elif args.track_pad_orientation:wbc.weights[pad_vadr+3:pad_vadr+6]=args.pad_pose_weight
 spool=model.body('bandage_spool').id
 start_pad=data.xpos[pad].copy();start_spool=data.xpos[spool].copy()
+spool_free=model.joint('bandage_spool_free')
+spool_mass=float(model.body_subtreemass[spool])
 ref=mujoco.MjData(model)
 digit_info={}
+spool_digit_info={}
+if args.start_state_token=='947858479e10':
+    spool_rot=data.xmat[spool].reshape(3,3)
+    for digit,label in (('thumb','thumb'),('index','index_finger')):
+        body=model.body(f'g1_b/wuji_left/l_{label}_tip_sensor_frame').id
+        joints=[j for j in range(model.njnt) if model.joint(j).name.startswith(f'g1_b/wuji_left/l_{label}_')]
+        spool_digit_info[digit]={'body':body,'qa':np.array([model.jnt_qposadr[j] for j in joints]),
+                                 'va':np.array([model.jnt_dofadr[j] for j in joints]),
+                                 'local':spool_rot.T@(data.xpos[body]-start_spool)}
 pad_rot=data.xmat[pad].reshape(3,3)
 for digit,label in (('thumb','thumb'),('index','index_finger')):
     body=model.body(f'g1_a/wuji_right/r_{label}_tip_sensor_frame').id
@@ -85,6 +108,7 @@ def contact_force(ci):
     wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
     return max(0.,float(wrench[0]))
 rows=[];errors=[]
+recorded_qpos=[]
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 elbow=model.joint('training_elbow_hinge')
@@ -96,7 +120,18 @@ for step in range(round(args.duration_s*50)):
     force_elapsed=max(0.,t-args.dressing_force_start_s)
     wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,force_elapsed/.2)
                               if args.dressing_lift_min_n and force_elapsed>0. else None)
+    if args.start_state_token=='947858479e10':
+        spool_velocity=float(data.qvel[spool_free.dofadr[0]+2])
+        spool_error=float(start_spool[2]-data.xpos[spool,2])
+        hold_force=float(np.clip(spool_mass*abs(model.opt.gravity[2])+60.*spool_error-2.*spool_velocity,0.,1.5))
+        wbc.b_handle_lift_min_n=max(0.,hold_force-.05)
+        wbc.b_handle_lift_force_goal_n=hold_force
+        wbc.b_handle_lateral_force_target_n=np.clip(-40.*(data.xpos[spool,:2]-start_spool[:2])-
+            2.*data.qvel[spool_free.dofadr[0]:spool_free.dofadr[0]+2],-1.,1.)
     wbc.qref[:]=base
+    if args.start_state_token=='947858479e10':
+        wbc.qref[b_hold_qa]=state['qpos'][b_hold_qa]
+        wbc.qref[b_hand_hold_qa]=state['qpos'][b_hand_hold_qa]
     wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_start_s)/.5)
     wbc.qref[elbow.qposadr[0]]=.25
     if args.track_pad_pose:wbc.qref[pad_qadr+2]=base[pad_qadr+2]+planned
@@ -112,6 +147,13 @@ for step in range(round(args.duration_s*50)):
     correction=J.T@np.linalg.solve(J@J.T+1e-4*np.eye(3),
                                    np.array([args.wrist_x_shift_m*min(1.,lift_elapsed/lift_duration),0.,planned]))
     wbc.qref[arm_qa]+=np.clip(correction,-.12,.12)
+    for info in spool_digit_info.values():
+        body=info['body'];rot_spool=data.xmat[spool].reshape(3,3)
+        target=data.xpos[spool]+rot_spool@info['local']
+        jp=np.zeros((3,model.nv));mujoco.mj_jac(model,data,jp,None,data.xpos[body],body)
+        jac=jp[:,info['va']]
+        delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(len(info['va'])),jac.T@(.6*(target-data.xpos[body])))
+        wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     rot=data.xmat[pad].reshape(3,3)
     for name,info in digit_info.items():
         if pregrasp_candidate is not None and (name=='index' or side_candidate is not None):
@@ -150,7 +192,7 @@ for step in range(round(args.duration_s*50)):
                         normal=contact_force(ci)
                         impulses[hand]=impulses.get(hand,0.)+normal*model.opt.timestep
                         frame_support+=normal
-                if 'bandage_spool' in geoms:
+                if any('bandage_spool' in g or 'bandage_handle_prototype' in g for g in geoms):
                     hand=next((b for b in bodies if b.startswith('g1_b/wuji_left/')),None)
                     if hand:spool_grip[hand]=spool_grip.get(hand,0.)+contact_force(ci)*model.opt.timestep
             support_peak=max(support_peak,frame_support)
@@ -163,6 +205,7 @@ for step in range(round(args.duration_s*50)):
                  'pad_lift_m':float(data.xpos[pad,2]-start_pad[2]),
                  'pad_lateral_shift_m':float(np.linalg.norm(data.xpos[pad,:2]-start_pad[:2])),
                  'spool_shift_m':float(np.linalg.norm(data.xpos[spool]-start_spool))})
+    recorded_qpos.append(data.qpos.copy())
     rows[-1].update({'support_valid':bool(support_valid),'support_quality':support_monitor.last_report,
                      'feet_supported':feet=={'g1_a','g1_b'},'deep_robot_contact':deep,
                      'spool_grip_impulse_by_body_ns':spool_grip})
@@ -196,6 +239,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'wrist_x_shift_m':args.wrist_x_shift_m,
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
+        'start_state_token':args.start_state_token,
         'final_support_quality':support_monitor.last_report,
         'all_feet_supported':all(r['feet_supported'] for r in rows),
         'any_deep_robot_contact':any(r['deep_robot_contact'] for r in rows),
@@ -210,6 +254,9 @@ if args.track_pad_pose:stem+=f'_pose{args.pad_pose_weight:g}'
 if args.track_pad_orientation:stem+=f'_orient{args.pad_pose_weight:g}'
 if args.wrist_x_shift_m:stem+=f'_xshift{args.wrist_x_shift_m:g}'
 if args.support_wrist_yaw_offset_rad:stem+=f'_syaw{args.support_wrist_yaw_offset_rad:g}_at{args.support_wrist_yaw_start_s:g}'
+stem+=f'_from{args.start_state_token}'
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel)
+np.savez_compressed(OUT/f'{stem}_qpos.npz',qpos=np.asarray(recorded_qpos),
+                    time_s=np.asarray([row['time_s'] for row in rows]))
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))
