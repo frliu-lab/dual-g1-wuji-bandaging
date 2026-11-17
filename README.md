@@ -1,5 +1,7 @@
 # 双 G1 × Wuji 协作研究归档
 
+**最新可展示的研究子技能（仿真）**：[17.7 秒双机托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。两台 G1 在训练假人救护场景中协同；B 左手使用研究用卷轴芯手柄，卷轴实际抬高约 18.79 mm、最大横移约 3.58 mm，末段 A 左掌面承担约 96.2% 托臂冲量，B 左双指相向抓持 4.34 s。敷料仍在桌上、没有展开或绕臂、B 右手未参与。这是可复核的局部子技能，不是完成包扎、四手完整动作或实机质量证明。较小幅度的[10 mm 目标版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档；旧文中的失败描述保留为实验历史。
+
 此仓库按实验批次存档双 G1、四只 Wuji 手协作研究。`media/` 保存当前可交流的代表性视频与对应说明；`VIDEO_CATALOG.json` 列出本地项目目前全部视频及 SHA-256，便于后续按实验批次补充。当前公开仓库只上传了五段代表性视频，其余历史视频尚未上传。在原始项目根目录运行 `python work/research_archive/build_archive_catalog.py` 可更新目录；公开仓库中的脚本副本位于 `code/work/research_archive/`。
 
 当前可播放：[三动作合集](media/four_hand_dynamic_v2/three_cooperative_actions_conditional_sim.mp4) · [协同搬运](media/four_hand_dynamic_v2/long_box_obstacle/open_grasp_full_mass1p5_overview_conditional_sim.mp4) · [转桌](media/four_hand_dynamic_v2/table_doorway/turn_6deg_full_open_rest_v8_overview_conditional_sim.mp4) · [抬桌](media/four_hand_dynamic_v2/table_doorway/lift_12cm_full_open_rest_v12_overview_conditional_sim.mp4)。

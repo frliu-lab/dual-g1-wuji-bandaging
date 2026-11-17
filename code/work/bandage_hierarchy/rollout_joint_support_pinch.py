@@ -45,6 +45,7 @@ parser.add_argument('--freeze-support-on-lift',action='store_true',help='Hold A-
 parser.add_argument('--support-wrist-roll-lift-offset-rad',type=float,default=0.,help='Ramp A-left wrist roll correction during the spool pickup')
 parser.add_argument('--support-pinky-abd-lift-offset-rad',type=float,default=0.,help='Ramp A-left pinky abduction correction during spool pickup')
 parser.add_argument('--support-follow-lift-gain',type=float,default=.5,help='A-left forearm relative pose Jacobian gain during pickup')
+parser.add_argument('--support-wrist-hold-offset-rad',type=float,nargs=3,default=(0.,0.,0.),help='A-left wrist roll/pitch/yaw correction after original 2.5 s hold')
 parser.add_argument('--support-wrist-reorient',action='store_true',help='Blend A-left wrist toward screened palm-only orientation')
 parser.add_argument('--support-wrist-candidate',choices=('near','roll','roll_yaw'),default='near')
 parser.add_argument('--support-wrist-scale',type=float,default=1.)
@@ -514,6 +515,10 @@ for segment,k,count in schedule:
         blend=min(1.,max(0.,float(data.time)-sum(durations[:-1])-args.hold_s)/.5)
         q=support_pinky_qadr[1]
         wbc.qref[q]=np.clip(wbc.qref[q]+blend*args.support_pinky_abd_lift_offset_rad,-.698,.698)
+    if any(args.support_wrist_hold_offset_rad) and segment==len(path)-1 and k==count:
+        hold_elapsed=max(0.,float(data.time)-sum(durations[:-1]))
+        blend=min(1.,max(0.,hold_elapsed-2.5)/.5)
+        wbc.qref[support_wrist_qadr]+=blend*np.asarray(args.support_wrist_hold_offset_rad)
     if (args.b_object_follow and segment==len(path)-1 and k==count) or (args.b_lift_after_grasp_m and segment==len(path)-1 and k==count) or (args.b_wrist_lift_m and
         (segment==len(path)-1 and k==count or args.b_wrist_lift_early and segment==len(path)-2)):
         goal_data.qpos[:]=wbc.qref
@@ -775,6 +780,7 @@ report={'scope':('Dynamic double-G1 WBC screen: A-left forearm support, A-right 
         'support_wrist_roll_lift_offset_rad':args.support_wrist_roll_lift_offset_rad,
         'support_pinky_abd_lift_offset_rad':args.support_pinky_abd_lift_offset_rad,
         'support_follow_lift_gain':args.support_follow_lift_gain,
+        'support_wrist_hold_offset_rad':args.support_wrist_hold_offset_rad,
         'support_wrist_reorient':args.support_wrist_reorient,
         'support_wrist_candidate':args.support_wrist_candidate if args.support_wrist_reorient else None,
         'support_wrist_scale':args.support_wrist_scale if args.support_wrist_reorient else None,
@@ -883,6 +889,7 @@ if args.freeze_support_on_lift:stem+='_liftsupportfreeze'
 if args.support_wrist_roll_lift_offset_rad:stem+='_liftwristroll'+str(args.support_wrist_roll_lift_offset_rad).replace('.','p')
 if args.support_pinky_abd_lift_offset_rad:stem+='_liftpinkyabd'+str(args.support_pinky_abd_lift_offset_rad).replace('.','p')
 if args.support_follow_lift_gain!=.5:stem+='_liftfollow'+str(args.support_follow_lift_gain).replace('.','p')
+if any(args.support_wrist_hold_offset_rad):stem+='_holdwrist'+''.join(str(x).replace('.','p')+'_' for x in args.support_wrist_hold_offset_rad)
 if args.support_wrist_reorient:stem+='_rewrist'
 if args.support_wrist_reorient and args.support_wrist_candidate!='near':stem+='_'+args.support_wrist_candidate
 if args.support_wrist_reorient and args.support_wrist_scale!=1.:stem+='_scale'+str(args.support_wrist_scale).replace('.','p')
