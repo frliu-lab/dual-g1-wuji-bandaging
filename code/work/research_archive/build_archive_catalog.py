@@ -188,6 +188,7 @@ SELECTED = [
     'bandage_v0/joint_handle_pickup_20mm_audit.json',
     'bandage_v0/joint_handle_pickup_30mm_audit.json',
     'bandage_v0/joint_dressing_pickup_failure_audit.json',
+    'bandage_v0/joint_dressing_lift_force_infeasible_audit.json',
     'bandage_v0/joint_dressing_index_tip_screen.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_handle_75fdd3a3b4b1.json',
     'bandage_v0/joint_support_pinch_staged_wbc_report_spool_settled_handle_66a2f40ce837.json',

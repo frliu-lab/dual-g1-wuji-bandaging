@@ -23,6 +23,7 @@ p.add_argument('--index-closure-m',type=float,default=0.)
 p.add_argument('--index-pregrasp-candidate',type=int,default=-1)
 p.add_argument('--index-preposition-s',type=float,default=.5)
 p.add_argument('--index-weight',type=float,default=1.)
+p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 args=p.parse_args()
 if not 0.<args.lift_m<=.03 or not .5<=args.duration_s<=3. or args.index_preposition_s>=args.duration_s:
     p.error('Lift range (0,.03] m; duration [.5,3] s; preposition shorter than duration')
@@ -70,6 +71,8 @@ for step in range(round(args.duration_s*50)):
     lift_elapsed=max(0.,t-(args.index_preposition_s if index_candidate is not None else 0.))
     lift_duration=args.duration_s-(args.index_preposition_s if index_candidate is not None else 0.)
     planned=args.lift_m*min(1.,lift_elapsed/lift_duration)
+    wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,lift_elapsed/.2)
+                              if args.dressing_lift_min_n and lift_elapsed>0. else None)
     wbc.qref[:]=base
     if index_candidate is not None:
         qa=digit_info['index']['qa']
@@ -122,13 +125,14 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'index_closure_m':args.index_closure_m,
         'index_pregrasp_candidate':args.index_pregrasp_candidate,
         'index_weight':args.index_weight,
+        'dressing_lift_min_n':args.dressing_lift_min_n,
         'start_pad_center_m':start_pad.tolist(),
         'final_pad_center_m':rows[-1]['pad_center_m'] if rows else start_pad.tolist(),
         'final_pad_lift_m':rows[-1]['pad_lift_m'] if rows else 0.,
         'max_pad_lateral_shift_m':max((r['pad_lateral_shift_m'] for r in rows),default=0.),
         'completed':len(rows)==round(args.duration_s*50) and not errors,'errors':errors,'trace':rows}
 report['final_pad_contacts']=rows[-1]['pad_contacts'] if rows else []
-stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_iw{args.index_weight:g}'
+stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_iw{args.index_weight:g}_up{args.dressing_lift_min_n:g}'
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel)
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))

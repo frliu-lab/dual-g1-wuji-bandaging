@@ -4,6 +4,8 @@
 
 最新[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)仍通过数值门槛，但尚未录制/复核视频。[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)显示 A 右食指在抬腕中掉接触，敷料仍压在托盘与敷料台上；[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)没有通过动态验证。后续需让敷料离台、带材绕臂并固定，同时让 B 右手承担明确协作角色。
 
+[敷料向上受力不可行诊断](media/bandage_v0/joint_dressing_lift_force_infeasible_audit.json)进一步显示：在当前仿真接触与其他约束下，现有抓姿连很小的额外向上合力都无法由 WBC 满足。该结果不是硬件能力上限；需要重新设计 A 右手指腹接触与器具取用方式。
+
 此仓库按实验批次存档双 G1、四只 Wuji 手协作研究。`media/` 保存当前可交流的代表性视频与对应说明；`VIDEO_CATALOG.json` 列出本地项目目前全部视频及 SHA-256，便于后续按实验批次补充。当前公开仓库只上传了五段代表性视频，其余历史视频尚未上传。在原始项目根目录运行 `python work/research_archive/build_archive_catalog.py` 可更新目录；公开仓库中的脚本副本位于 `code/work/research_archive/`。
 
 当前可播放：[三动作合集](media/four_hand_dynamic_v2/three_cooperative_actions_conditional_sim.mp4) · [协同搬运](media/four_hand_dynamic_v2/long_box_obstacle/open_grasp_full_mass1p5_overview_conditional_sim.mp4) · [转桌](media/four_hand_dynamic_v2/table_doorway/turn_6deg_full_open_rest_v8_overview_conditional_sim.mp4) · [抬桌](media/four_hand_dynamic_v2/table_doorway/lift_12cm_full_open_rest_v12_overview_conditional_sim.mp4)。

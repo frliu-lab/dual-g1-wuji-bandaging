@@ -38,3 +38,14 @@ pad_audit['index_contact_timeline_10hz']=[{
 dest=OUT/'joint_dressing_pickup_failure_audit.json'
 dest.write_text(json.dumps(pad_audit,indent=2),encoding='utf8')
 print('dressing_pickup_failure',dest.name,dest.stat().st_size)
+force_source=OUT/'joint_dressing_pickup_checkpoint_lift0.02_force0.7_iclose0_ipre-1_iw1_up0.02.json'
+force_content=force_source.read_bytes()
+force=json.loads(force_content)
+force_audit={k:v for k,v in force.items() if k!='trace'}
+force_audit['source_local_report']=force_source.name
+force_audit['source_sha256']=hashlib.sha256(force_content).hexdigest()
+force_audit['source_bytes']=len(force_content)
+force_audit['interpretation']='QP infeasible under current contact topology and constraints; not a hardware capability bound.'
+dest=OUT/'joint_dressing_lift_force_infeasible_audit.json'
+dest.write_text(json.dumps(force_audit,indent=2),encoding='utf8')
+print('dressing_lift_force_infeasible',dest.name,dest.stat().st_size)
