@@ -14,6 +14,8 @@
 
 把相同抓持延长到 1.5 秒时，双指约在检查点续跑的 3.06 秒失去接触；见[长时保持失败审计](media/bandage_v0/joint_dressing_long_hold_failure_audit.json)。因此当前通过门槛明确限于 0.5 秒保持，不能推断持续搬运敷料或完成包扎。
 
+[固定指尖目标方向的诊断](media/bandage_v0/joint_dressing_fixed_digit_frame_failure_audit.json)把双指脱离推迟到约 3.22–3.60 秒，但仍未同时通过长时夹持与托臂门槛。这个结果提示敷料旋转滑出是重要失效模式；暂不升级公开演示的验收结论。
+
 [敷料向上受力不可行诊断](media/bandage_v0/joint_dressing_lift_force_infeasible_audit.json)进一步显示：在当前仿真接触与其他约束下，现有抓姿连很小的额外向上合力都无法由 WBC 满足。该结果不是硬件能力上限；需要重新设计 A 右手指腹接触与器具取用方式。
 
 此仓库按实验批次存档双 G1、四只 Wuji 手协作研究。`media/` 保存当前可交流的代表性视频与对应说明；`VIDEO_CATALOG.json` 列出本地项目目前全部视频及 SHA-256，便于后续按实验批次补充。当前公开仓库只上传了五段代表性视频，其余历史视频尚未上传。在原始项目根目录运行 `python work/research_archive/build_archive_catalog.py` 可更新目录；公开仓库中的脚本副本位于 `code/work/research_archive/`。

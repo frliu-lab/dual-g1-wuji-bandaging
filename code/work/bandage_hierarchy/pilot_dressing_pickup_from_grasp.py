@@ -24,6 +24,10 @@ p.add_argument('--motion-end-s',type=float,default=None,
 p.add_argument('--smooth-motion',action='store_true',help='Cubic ease in/out for the pickup translation')
 p.add_argument('--dressing-force-goal-n',type=float,default=.7)
 p.add_argument('--index-closure-m',type=float,default=0.)
+p.add_argument('--index-closure-after-s',type=float,default=0.)
+p.add_argument('--thumb-closure-m',type=float,default=0.)
+p.add_argument('--thumb-closure-after-s',type=float,default=0.)
+p.add_argument('--freeze-digit-frame-after-s',type=float,default=None)
 p.add_argument('--index-pregrasp-candidate',type=int,default=-1)
 p.add_argument('--side-pregrasp-candidate',type=int,default=-1)
 p.add_argument('--middle-support-candidate',type=int,default=-1)
@@ -49,6 +53,8 @@ p.add_argument('--support-pinky-flex-late-offset-rad',type=float,default=0.)
 p.add_argument('--support-pinky-late-start-s',type=float,default=2.5)
 p.add_argument('--support-palm-shift-late-m',type=float,nargs=3,default=(0.,0.,0.))
 p.add_argument('--support-palm-shift-start-s',type=float,default=2.5)
+p.add_argument('--support-palm-shift-second-m',type=float,nargs=3,default=(0.,0.,0.))
+p.add_argument('--support-palm-shift-second-start-s',type=float,default=3.)
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
@@ -147,6 +153,7 @@ def contact_force(ci):
 rows=[];errors=[]
 recorded_qpos=[]
 pad_hold_quat=None
+fixed_digit_rot=None
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
@@ -183,12 +190,14 @@ for step in range(round(args.duration_s*50)):
     wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_start_s)/.5)
     wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_late_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_late_start_s)/.5)
     wbc.qref[support_pinky_qa]+=args.support_pinky_flex_late_offset_rad*min(1.,max(0.,t-args.support_pinky_late_start_s)/.5)
-    if any(args.support_palm_shift_late_m):
+    if any(args.support_palm_shift_late_m) or any(args.support_palm_shift_second_m):
         support_ref.qpos[:]=wbc.qref;mujoco.mj_forward(model,support_ref)
         jp=np.zeros((3,model.nv));mujoco.mj_jacBody(model,support_ref,jp,None,left_palm)
         jac=jp[:,left_va]
         blend=min(1.,max(0.,t-args.support_palm_shift_start_s)/.5)
-        delta=jac.T@np.linalg.solve(jac@jac.T+1e-4*np.eye(3),blend*np.asarray(args.support_palm_shift_late_m))
+        blend2=min(1.,max(0.,t-args.support_palm_shift_second_start_s)/.5)
+        target=blend*np.asarray(args.support_palm_shift_late_m)+blend2*np.asarray(args.support_palm_shift_second_m)
+        delta=jac.T@np.linalg.solve(jac@jac.T+1e-4*np.eye(3),target)
         wbc.qref[left_qa]+=np.clip(delta,-.12,.12)
     wbc.qref[elbow.qposadr[0]]=.25
     if args.support_follow_gain and t>=args.support_follow_start_s:
@@ -231,6 +240,8 @@ for step in range(round(args.duration_s*50)):
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(len(info['va'])),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     rot=data.xmat[pad].reshape(3,3)
+    if args.freeze_digit_frame_after_s is not None and t>=args.freeze_digit_frame_after_s and fixed_digit_rot is None:
+        fixed_digit_rot=rot.copy()
     for name,info in digit_info.items():
         if name=='middle' and args.middle_after_s is not None and t<args.middle_after_s+.3:continue
         if pregrasp_candidate is not None and (name=='index' or side_candidate is not None or middle_candidate is not None):
@@ -243,8 +254,12 @@ for step in range(round(args.duration_s*50)):
         jac=jp[:,info['va']]
         local=info['local'].copy()
         if info is digit_info['index'] and args.index_closure_m:
-            local-=args.index_closure_m*local/max(1e-6,np.linalg.norm(local))
-        target=data.xpos[pad]+rot@local
+            closure=args.index_closure_m*min(1.,max(0.,t-args.index_closure_after_s)/.3)
+            local-=closure*local/max(1e-6,np.linalg.norm(local))
+        if info is digit_info['thumb'] and args.thumb_closure_m:
+            closure=args.thumb_closure_m*min(1.,max(0.,t-args.thumb_closure_after_s)/.3)
+            local-=closure*local/max(1e-6,np.linalg.norm(local))
+        target=data.xpos[pad]+(fixed_digit_rot if fixed_digit_rot is not None else rot)@local
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(jac.shape[1]),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     try:
@@ -307,6 +322,10 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'smooth_motion':args.smooth_motion,
         'dressing_force_goal_n':args.dressing_force_goal_n,
         'index_closure_m':args.index_closure_m,
+        'index_closure_after_s':args.index_closure_after_s,
+        'thumb_closure_m':args.thumb_closure_m,
+        'thumb_closure_after_s':args.thumb_closure_after_s,
+        'freeze_digit_frame_after_s':args.freeze_digit_frame_after_s,
         'index_pregrasp_candidate':args.index_pregrasp_candidate,
         'side_pregrasp_candidate':args.side_pregrasp_candidate,
         'middle_support_candidate':args.middle_support_candidate,
@@ -330,6 +349,8 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'support_pinky_late_start_s':args.support_pinky_late_start_s,
         'support_palm_shift_late_m':args.support_palm_shift_late_m,
         'support_palm_shift_start_s':args.support_palm_shift_start_s,
+        'support_palm_shift_second_m':args.support_palm_shift_second_m,
+        'support_palm_shift_second_start_s':args.support_palm_shift_second_start_s,
         'start_state_token':args.start_state_token,
         'b_hold_min_force_n':args.b_hold_min_force_n,
         'b_hold_force_goal_n':args.b_hold_force_goal_n,
@@ -344,6 +365,9 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
 report['final_pad_contacts']=rows[-1]['pad_contacts'] if rows else []
 stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_side{args.side_pregrasp_candidate}_iw{args.index_weight:g}_up{args.dressing_lift_min_n:g}_start{args.dressing_force_start_s:g}'
 if args.duration_s!=3.:stem+=f'_duration{args.duration_s:g}'
+if args.index_closure_after_s:stem+=f'_icloseafter{args.index_closure_after_s:g}'
+if args.thumb_closure_m:stem+=f'_tclose{args.thumb_closure_m:g}_after{args.thumb_closure_after_s:g}'
+if args.freeze_digit_frame_after_s is not None:stem+=f'_fixedframe{args.freeze_digit_frame_after_s:g}'
 if args.middle_support_candidate>=0:stem+=f'_middle{args.middle_support_candidate}'
 if args.middle_after_s is not None:stem+=f'_middleafter{args.middle_after_s:g}'
 if args.motion_end_s is not None:stem+=f'_motionend{args.motion_end_s:g}'
@@ -358,6 +382,7 @@ if args.support_wrist_yaw_late_offset_rad:stem+=f'_lateyaw{args.support_wrist_ya
 if args.support_follow_gain:stem+=f'_follow{args.support_follow_gain:g}_at{args.support_follow_start_s:g}'
 if args.support_pinky_flex_late_offset_rad:stem+=f'_pinky{args.support_pinky_flex_late_offset_rad:g}_at{args.support_pinky_late_start_s:g}'
 if any(args.support_palm_shift_late_m):stem+='_palmshift'+','.join(f'{x:g}' for x in args.support_palm_shift_late_m)
+if any(args.support_palm_shift_second_m):stem+='_palmshift2'+','.join(f'{x:g}' for x in args.support_palm_shift_second_m)+f'_at{args.support_palm_shift_second_start_s:g}'
 stem+=f'_from{args.start_state_token}'
 if args.start_state_token=='947858479e10':stem+=f'_bmin{args.b_hold_min_force_n:g}_bgoal{args.b_hold_force_goal_n:g}'
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
