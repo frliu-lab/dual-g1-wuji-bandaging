@@ -1,8 +1,10 @@
 # 双 G1 × Wuji 协作研究归档
 
-**最新可展示的研究子技能（仿真）**：[17.7 秒双机托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。两台 G1 在训练假人救护场景中协同；B 左手使用研究用卷轴芯手柄，卷轴实际抬高约 18.79 mm、最大横移约 3.58 mm，末段 A 左掌面承担约 96.2% 托臂冲量，B 左双指相向抓持 4.34 s。敷料仍在桌上、没有展开或绕臂、B 右手未参与。这是可复核的局部子技能，不是完成包扎、四手完整动作或实机质量证明。较小幅度的[10 mm 目标版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档；旧文中的失败描述保留为实验历史。
+**最新可展示的研究子技能（仿真）**：[18.7 秒双机托臂、抓卷轴与敷料拾取总览](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo.mp4) · [手部近景](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo_hand_closeup.mp4) · [逐帧验收](media/bandage_v0/joint_dressing_sustained_half_second_pass_audit.json)。末段敷料被拇指和食指抬离台面并保持 0.5 秒，托臂质量门槛同时通过。视频由已验证的 15.7 秒路线与从相同状态重启的 3 秒控制续跑组成；此版本卷轴未抬起。它是仿真局部子技能，尚未缠绕、固定带尾、实现四手完整协作或进行实机验证。较长的 1.5 秒持物尚未通过。
 
-最新[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)仍通过数值门槛，但尚未录制/复核视频。[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)显示 A 右食指在抬腕中掉接触，敷料仍压在托盘与敷料台上；[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)没有通过动态验证。后续需让敷料离台、带材绕臂并固定，同时让 B 右手承担明确协作角色。
+另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
+
+历史[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)通过数值门槛，但尚未录制/复核视频。早期[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)和[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)记录了已被后续短时拾取方案改进的失败过程。后续需把卷轴悬空与敷料持物同时实现，再让带材绕臂、固定末端，并为 B 右手安排明确协作角色。
 
 **新增局部进展：** [双指侧夹取敷料的检查点审计](media/bandage_v0/joint_dressing_side_pickup_checkpoint_audit.json)记录了 2.5 秒局部动态试验：A 右拇指与食指夹持敷料，敷料中心抬高 28.6 mm；A 左掌面末段承担 93.7% 托臂冲量，B 左卷轴漂移最大 1.64 mm，双机足部保持支撑且未发现深碰撞。末段 16 帧中 4 帧仍有极轻台面接触（峰值 0.0233 N），因此尚未通过严格连续离台门槛。试验从已有抓持状态重启，尚未整合进完整 17.7 秒路线。[侧向夹取静态候选](media/bandage_v0/joint_dressing_side_grasp_from_joint_screen_refined.json)及代码已存档。旧失败诊断是先前动作配置的实验记录。
 
