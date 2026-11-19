@@ -15,9 +15,13 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser();parser.add_argument('--closeup',action='store_true')
 parser.add_argument('--sustained',action='store_true',help='Use 3 s pilot with verified final half-second hold')
+parser.add_argument('--one-second',action='store_true',help='Use 3.5 s pilot with verified final one-second hold')
 args=parser.parse_args()
+if args.one_second and args.sustained:parser.error('Select one hold duration')
 SOURCE=OUT/'joint_support_pinch_staged_wbc_report_spool_settled_handle_65e2b2086889.json'
-PILOT_STEM=('joint_dressing_pickup_checkpoint_lift0.04_force0.7_iclose0_ipre-1_side0_iw10_up0.12_start1.65_motionend2.5_smooth_xshift-0.075_syaw-0.22_at1.5_palmshift0,0,0.02_from75fdd3a3b4b1'
+PILOT_STEM=('joint_dressing_pickup_checkpoint_lift0.04_force0.7_iclose0_ipre-1_side0_iw10_up0.12_start1.65_duration3.5_fixedframe2.2_motionend2.5_smooth_xshift-0.075_syaw-0.22_at1.5_palmshift0,0,0.023_palmshift20.01,0,0.02_at3_from75fdd3a3b4b1'
+            if args.one_second else
+            'joint_dressing_pickup_checkpoint_lift0.04_force0.7_iclose0_ipre-1_side0_iw10_up0.12_start1.65_motionend2.5_smooth_xshift-0.075_syaw-0.22_at1.5_palmshift0,0,0.02_from75fdd3a3b4b1'
             if args.sustained else
             'joint_dressing_pickup_checkpoint_lift0.035_force0.7_iclose0_ipre-1_side0_iw10_up0.12_start1.65_xshift-0.065_syaw-0.22_at1.5_from75fdd3a3b4b1')
 route=json.loads(SOURCE.read_text(encoding='utf8'))
@@ -27,14 +31,15 @@ pickup=np.load(OUT/f'{PILOT_STEM}_qpos.npz')
 prior=np.asarray([r['qpos'] for r in segment])
 checkpoint=np.load(OUT/'joint_support_pinch_staged_wbc_report_spool_settled_handle_75fdd3a3b4b1_final_state.npz')
 if not np.array_equal(prior[-1],checkpoint['qpos']):raise RuntimeError('Route/checkpoint state mismatch')
-if not pilot['completed'] or len(pickup['qpos'])!=(150 if args.sustained else 125):raise RuntimeError('Incomplete pickup pilot')
+if not pilot['completed'] or len(pickup['qpos'])!=(175 if args.one_second else 150 if args.sustained else 125):raise RuntimeError('Incomplete pickup pilot')
 if not pilot['final_support_quality']['valid'] or not pilot['all_feet_supported'] or pilot['any_deep_robot_contact']:
     raise RuntimeError('Pickup support/feet/collision gate failed')
 if pilot['final_pad_lift_m']<.025 or pilot['max_pad_lateral_shift_m']>.075:
     raise RuntimeError('Pickup movement gate failed')
-if args.sustained:
-    tail=[r for r in pilot['trace'] if r['time_s']>=2.7]
-    if len(tail)<14 or not all(r['support_valid'] for r in tail):raise RuntimeError('Sustained support gate failed')
+if args.sustained or args.one_second:
+    tail=[r for r in pilot['trace'] if r['time_s']>=(2.5 if args.one_second else 2.7)]
+    if len(tail)<(50 if args.one_second else 14) or not all(r['support_valid'] for r in tail):
+        raise RuntimeError('Sustained support gate failed')
     if any(any('dressing_stage' in c['geoms'] for c in r['pad_contacts']) for r in tail):
         raise RuntimeError('Sustained dressing stage clearance failed')
     for r in tail:
@@ -44,7 +49,8 @@ if args.sustained:
             if not .05<=force<=2.:raise RuntimeError(f'Sustained {digit} grip gate failed')
 states=np.vstack([prior,pickup['qpos']])
 times=np.arange(1,len(states)+1,dtype=float)/50.
-name=('joint_dressing_pickup_sustained_half_second_demo' if args.sustained else
+name=('joint_dressing_pickup_sustained_one_second_demo' if args.one_second else
+      'joint_dressing_pickup_sustained_half_second_demo' if args.sustained else
       'joint_dressing_pickup_checkpoint_continuous_demo')
 np.savez_compressed(OUT/f'{name}_qpos.npz',qpos=states,time_s=times)
 model=mujoco.MjModel.from_xml_path(str(OUT/'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml'))
@@ -68,7 +74,7 @@ try:
 finally:
     proc.stdin.close()
 if proc.wait()!=0:raise RuntimeError('ffmpeg failed')
-manifest={'scope':f'Continuous state replay of 15.7 s double-G1 grasp route and {3.0 if args.sustained else 2.5} s dressing pickup from identical checkpoint; controller restarted at checkpoint',
+manifest={'scope':f'Continuous state replay of 15.7 s double-G1 grasp route and {3.5 if args.one_second else 3.0 if args.sustained else 2.5} s dressing pickup from identical checkpoint; controller restarted at checkpoint',
           'source_route':SOURCE.name,'source_pilot':f'{PILOT_STEM}.json',
           'video':video.name,'trajectory':f'{name}_qpos.npz','state_hz':50,'video_fps':10,
           'camera':'hand closeup' if args.closeup else 'overview',
@@ -78,7 +84,8 @@ manifest={'scope':f'Continuous state replay of 15.7 s double-G1 grasp route and 
           'support_quality_final':pilot['final_support_quality'],
           'spool_lifted':False,'wrap_performed':False,'hardware_validated':False,
           'strict_continuous_dressing_stage_clearance':False,
-          'final_0p3s_dressing_stage_clearance':bool(args.sustained),
-          'sustained_final_0p3s_contact_and_support_gate':bool(args.sustained)}
+          'final_0p3s_dressing_stage_clearance':bool(args.sustained or args.one_second),
+          'sustained_final_0p3s_contact_and_support_gate':bool(args.sustained or args.one_second),
+          'sustained_final_1p0s_contact_and_support_gate':bool(args.one_second)}
 (OUT/f'{name}{"_hand_closeup" if args.closeup else ""}_manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf8')
 print(json.dumps(manifest))

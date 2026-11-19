@@ -1,6 +1,6 @@
 # 双 G1 × Wuji 协作研究归档
 
-**最新可展示的研究子技能（仿真）**：[18.7 秒双机托臂、抓卷轴与敷料拾取总览](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo.mp4) · [手部近景](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo_hand_closeup.mp4) · [逐帧验收](media/bandage_v0/joint_dressing_sustained_half_second_pass_audit.json)。末段敷料被拇指和食指抬离台面并保持 0.5 秒，托臂质量门槛同时通过。视频由已验证的 15.7 秒路线与从相同状态重启的 3 秒控制续跑组成；此版本卷轴未抬起。它是仿真局部子技能，尚未缠绕、固定带尾、实现四手完整协作或进行实机验证。较长的 1.5 秒持物尚未通过。
+**最新可展示的研究子技能（仿真）**：[19.2 秒双机托臂、抓卷轴与敷料拾取总览](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4) · [手部近景](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4) · [逐帧验收](media/bandage_v0/joint_dressing_one_second_hold_pass_audit.json)。末段敷料被拇指和食指抬离台面并保持 1 秒，50 个控制帧全部通过托臂、双指接触、离台和碰撞门槛。视频由已验证的 15.7 秒路线与从相同状态重启的 3.5 秒控制续跑组成；卷轴仍在台面上。这是仿真局部子技能，尚未缠绕、固定带尾、实现四手完整协作或进行实机验证。更长的 1.5 秒持物尚未通过。
 
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
@@ -17,6 +17,8 @@
 把相同抓持延长到 1.5 秒时，双指约在检查点续跑的 3.06 秒失去接触；见[长时保持失败审计](media/bandage_v0/joint_dressing_long_hold_failure_audit.json)。因此当前通过门槛明确限于 0.5 秒保持，不能推断持续搬运敷料或完成包扎。
 
 [固定指尖目标方向的诊断](media/bandage_v0/joint_dressing_fixed_digit_frame_failure_audit.json)把双指脱离推迟到约 3.22–3.60 秒，但仍未同时通过长时夹持与托臂门槛。这个结果提示敷料旋转滑出是重要失效模式；暂不升级公开演示的验收结论。
+
+**新的一秒保持验收：** 在取出末段冻结指尖目标方向，并分两阶段微调 A 左托臂掌心后，[审计](media/bandage_v0/joint_dressing_one_second_hold_pass_audit.json)确认 2.5–3.5 秒的 50 个保持帧全部有效。敷料离台 29.9–32.8 mm，拇指/食指法向力分别为 0.621–0.754 N / 0.582–0.697 N，无敷料台接触，末态托臂掌面占比 94.1%，卷轴漂移最大 2.13 mm。对应[19.2 秒视频](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4)、[近景](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4)和[轨迹](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo_qpos.npz)已存档。继续到约 3.76 秒仍会失去双指接触，因此不能外推为长期持物或完整包扎。
 
 [敷料向上受力不可行诊断](media/bandage_v0/joint_dressing_lift_force_infeasible_audit.json)进一步显示：在当前仿真接触与其他约束下，现有抓姿连很小的额外向上合力都无法由 WBC 满足。该结果不是硬件能力上限；需要重新设计 A 右手指腹接触与器具取用方式。
 
