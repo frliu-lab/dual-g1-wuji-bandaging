@@ -10,6 +10,8 @@
 
 [持续夹持失败审计](media/bandage_v0/joint_dressing_sustained_hold_failure_audit.json)显示：试图在取出动作后额外保持 0.5 秒时，维持硬性向上受力约束会在约 2.64 秒失去可行解；撤销约束则双指脱离、敷料落回台面。提高软性夹持目标也未解决。因此上述视频只展示短暂的取出动作，不能解读为稳定持物或完整包扎。
 
+**更新的可展示子技能：** [18.7 秒总览](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo.mp4) · [手部近景](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo_hand_closeup.mp4) · [逐帧验收](media/bandage_v0/joint_dressing_sustained_half_second_pass_audit.json) · [50 Hz 轨迹](media/bandage_v0/joint_dressing_pickup_sustained_half_second_demo_qpos.npz)。平滑减速并在末段调整 A 左托臂掌心后，敷料被双指抬离台面并保持 0.5 秒；25 个保持控制帧均有双指接触、无敷料台接触且托臂质量门槛通过。敷料抬高 31.6–32.8 mm，拇指/食指法向力分别在 0.647–0.696 N / 0.596–0.644 N；末段托臂掌面冲量占比 90.5%，卷轴漂移最大 2.0 mm。视频仍是从保存状态重启后的连续仿真回放；卷轴仍在台面上，尚无缠绕、固定带尾、B 右手协作或实机验证。上述失败审计保留为旧控制方案记录。
+
 [敷料向上受力不可行诊断](media/bandage_v0/joint_dressing_lift_force_infeasible_audit.json)进一步显示：在当前仿真接触与其他约束下，现有抓姿连很小的额外向上合力都无法由 WBC 满足。该结果不是硬件能力上限；需要重新设计 A 右手指腹接触与器具取用方式。
 
 此仓库按实验批次存档双 G1、四只 Wuji 手协作研究。`media/` 保存当前可交流的代表性视频与对应说明；`VIDEO_CATALOG.json` 列出本地项目目前全部视频及 SHA-256，便于后续按实验批次补充。当前公开仓库只上传了五段代表性视频，其余历史视频尚未上传。在原始项目根目录运行 `python work/research_archive/build_archive_catalog.py` 可更新目录；公开仓库中的脚本副本位于 `code/work/research_archive/`。

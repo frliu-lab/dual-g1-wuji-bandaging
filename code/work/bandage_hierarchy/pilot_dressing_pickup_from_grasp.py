@@ -21,10 +21,14 @@ p.add_argument('--lift-m',type=float,default=.01)
 p.add_argument('--duration-s',type=float,default=1.)
 p.add_argument('--motion-end-s',type=float,default=None,
                help='End arm translation before the pilot ends, then hold the lifted pose')
+p.add_argument('--smooth-motion',action='store_true',help='Cubic ease in/out for the pickup translation')
 p.add_argument('--dressing-force-goal-n',type=float,default=.7)
 p.add_argument('--index-closure-m',type=float,default=0.)
 p.add_argument('--index-pregrasp-candidate',type=int,default=-1)
 p.add_argument('--side-pregrasp-candidate',type=int,default=-1)
+p.add_argument('--middle-support-candidate',type=int,default=-1)
+p.add_argument('--middle-after-s',type=float,default=None,
+               help='Move middle finger only after the initial thumb/index pickup')
 p.add_argument('--index-preposition-s',type=float,default=.5)
 p.add_argument('--index-weight',type=float,default=1.)
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
@@ -36,6 +40,14 @@ p.add_argument('--pad-pose-weight',type=float,default=10.)
 p.add_argument('--wrist-x-shift-m',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-offset-rad',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
+p.add_argument('--support-wrist-yaw-late-offset-rad',type=float,default=0.)
+p.add_argument('--support-wrist-yaw-late-start-s',type=float,default=2.5)
+p.add_argument('--support-follow-gain',type=float,default=0.)
+p.add_argument('--support-follow-start-s',type=float,default=0.)
+p.add_argument('--support-pinky-flex-late-offset-rad',type=float,default=0.)
+p.add_argument('--support-pinky-late-start-s',type=float,default=2.5)
+p.add_argument('--support-palm-shift-late-m',type=float,nargs=3,default=(0.,0.,0.))
+p.add_argument('--support-palm-shift-start-s',type=float,default=2.5)
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
@@ -86,6 +98,17 @@ start_pad=data.xpos[pad].copy();start_spool=data.xpos[spool].copy()
 spool_free=model.joint('bandage_spool_free')
 spool_mass=float(model.body_subtreemass[spool])
 ref=mujoco.MjData(model)
+support_ref=mujoco.MjData(model);support_ref.qpos[:]=base;mujoco.mj_forward(model,support_ref)
+forearm_body=model.body('training_forearm_dynamic').id
+left_palm=model.body('g1_a/wuji_left/l_wrist').id
+left_joints=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/left_')
+             and any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
+left_qa=np.array([model.jnt_qposadr[j] for j in left_joints])
+left_va=np.array([model.jnt_dofadr[j] for j in left_joints])
+goal_forearm_pos=support_ref.xpos[forearm_body].copy()
+goal_forearm_rot=support_ref.xmat[forearm_body].reshape(3,3).copy()
+goal_palm_pos=support_ref.xpos[left_palm].copy()
+relative_palm_pos=goal_forearm_rot.T@(goal_palm_pos-goal_forearm_pos)
 digit_info={}
 spool_digit_info={}
 if args.start_state_token=='947858479e10':
@@ -97,7 +120,8 @@ if args.start_state_token=='947858479e10':
                                  'va':np.array([model.jnt_dofadr[j] for j in joints]),
                                  'local':spool_rot.T@(data.xpos[body]-start_spool)}
 pad_rot=data.xmat[pad].reshape(3,3)
-for digit,label in (('thumb','thumb'),('index','index_finger')):
+for digit,label in ((('thumb','thumb'),('index','index_finger'),('middle','middle_finger'))
+                    if args.middle_support_candidate>=0 else (('thumb','thumb'),('index','index_finger'))):
     body=model.body(f'g1_a/wuji_right/r_{label}_tip_sensor_frame').id
     joints=[j for j in range(model.njnt) if model.joint(j).name.startswith(f'g1_a/wuji_right/r_{label}_')]
     digit_info[digit]={'body':body,'qa':np.array([model.jnt_qposadr[j] for j in joints]),
@@ -107,7 +131,11 @@ index_candidate=(np.load(OUT/'joint_dressing_index_tip_candidates.npz')['qpos'][
                  if args.index_pregrasp_candidate>=0 else None)
 side_candidate=(np.load(OUT/'joint_dressing_side_grasp_from_joint_candidates_refined.npz')['qpos'][args.side_pregrasp_candidate]
                 if args.side_pregrasp_candidate>=0 else None)
-pregrasp_candidate=side_candidate if side_candidate is not None else index_candidate
+middle_candidate=(np.load(OUT/'joint_dressing_middle_support_candidates.npz')['qpos'][args.middle_support_candidate]
+                  if args.middle_support_candidate>=0 else None)
+pregrasp_candidate=(side_candidate if args.middle_after_s is not None and side_candidate is not None else
+                    middle_candidate if middle_candidate is not None else
+                    side_candidate if side_candidate is not None else index_candidate)
 wbc.weights[digit_info['index']['va']]=args.index_weight
 local_captured={name:False for name in digit_info}
 interval=round(.02/model.opt.timestep)
@@ -118,12 +146,15 @@ rows=[];errors=[]
 recorded_qpos=[]
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
+support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
 elbow=model.joint('training_elbow_hinge')
 for step in range(round(args.duration_s*50)):
     t=step*.02
     lift_elapsed=max(0.,t-(args.index_preposition_s if pregrasp_candidate is not None else 0.))
     lift_duration=motion_end-(args.index_preposition_s if pregrasp_candidate is not None else 0.)
-    planned=args.lift_m*min(1.,lift_elapsed/lift_duration)
+    motion_u=min(1.,lift_elapsed/lift_duration)
+    if args.smooth_motion:motion_u=motion_u*motion_u*(3.-2.*motion_u)
+    planned=args.lift_m*motion_u
     force_elapsed=max(0.,t-args.dressing_force_start_s)
     wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,force_elapsed/.2)
                               if args.dressing_lift_min_n and force_elapsed>0. and
@@ -141,19 +172,47 @@ for step in range(round(args.duration_s*50)):
         wbc.qref[b_hold_qa]=state['qpos'][b_hold_qa]
         wbc.qref[b_hand_hold_qa]=state['qpos'][b_hand_hold_qa]
     wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_start_s)/.5)
+    wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_late_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_late_start_s)/.5)
+    wbc.qref[support_pinky_qa]+=args.support_pinky_flex_late_offset_rad*min(1.,max(0.,t-args.support_pinky_late_start_s)/.5)
+    if any(args.support_palm_shift_late_m):
+        support_ref.qpos[:]=wbc.qref;mujoco.mj_forward(model,support_ref)
+        jp=np.zeros((3,model.nv));mujoco.mj_jacBody(model,support_ref,jp,None,left_palm)
+        jac=jp[:,left_va]
+        blend=min(1.,max(0.,t-args.support_palm_shift_start_s)/.5)
+        delta=jac.T@np.linalg.solve(jac@jac.T+1e-4*np.eye(3),blend*np.asarray(args.support_palm_shift_late_m))
+        wbc.qref[left_qa]+=np.clip(delta,-.12,.12)
     wbc.qref[elbow.qposadr[0]]=.25
+    if args.support_follow_gain and t>=args.support_follow_start_s:
+        support_ref.qpos[:]=wbc.qref;mujoco.mj_forward(model,support_ref)
+        live_rot=data.xmat[forearm_body].reshape(3,3)
+        palm_rot=support_ref.xmat[left_palm].reshape(3,3)
+        pos_error=data.xpos[forearm_body]+live_rot@relative_palm_pos-goal_palm_pos
+        target_rot=(live_rot@goal_forearm_rot.T)@palm_rot
+        rot_error=.5*sum((np.cross(palm_rot[:,i],target_rot[:,i]) for i in range(3)),start=np.zeros(3))
+        jp=np.zeros((3,model.nv));jr=np.zeros_like(jp)
+        mujoco.mj_jacBody(model,support_ref,jp,jr,left_palm)
+        jac=np.vstack((jp[:,left_va],jr[:,left_va]))
+        delta=jac.T@np.linalg.solve(jac@jac.T+.02**2*np.eye(6),np.r_[pos_error,rot_error])
+        wbc.qref[left_qa]+=args.support_follow_gain*np.clip(delta,-.12,.12)
+        for j,qa in zip(left_joints,left_qa):
+            lo,hi=model.jnt_range[j];wbc.qref[qa]=np.clip(wbc.qref[qa],lo+.03,hi-.03)
     if args.track_pad_pose:wbc.qref[pad_qadr+2]=base[pad_qadr+2]+planned
     if pregrasp_candidate is not None:
         blend=min(1.,t/args.index_preposition_s)
         for name,info in digit_info.items():
-            if name=='index' or side_candidate is not None:
+            if name=='middle' and args.middle_after_s is not None:continue
+            if name=='index' or side_candidate is not None or middle_candidate is not None:
                 qa=info['qa']
                 wbc.qref[qa]=(1-blend)*base[qa]+blend*pregrasp_candidate[qa]
+    if middle_candidate is not None and args.middle_after_s is not None:
+        info=digit_info['middle'];qa=info['qa']
+        blend=np.clip((t-args.middle_after_s)/.3,0.,1.)
+        wbc.qref[qa]=(1-blend)*base[qa]+blend*middle_candidate[qa]
     ref.qpos[:]=base;mujoco.mj_forward(model,ref)
     jp=np.zeros((3,model.nv));mujoco.mj_jac(model,ref,jp,None,ref.xpos[wrist],wrist)
     J=jp[:,arm_va]
     correction=J.T@np.linalg.solve(J@J.T+1e-4*np.eye(3),
-                                   np.array([args.wrist_x_shift_m*min(1.,lift_elapsed/lift_duration),0.,planned]))
+                                   np.array([args.wrist_x_shift_m*motion_u,0.,planned]))
     wbc.qref[arm_qa]+=np.clip(correction,-.12,.12)
     for info in spool_digit_info.values():
         body=info['body'];rot_spool=data.xmat[spool].reshape(3,3)
@@ -164,7 +223,8 @@ for step in range(round(args.duration_s*50)):
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     rot=data.xmat[pad].reshape(3,3)
     for name,info in digit_info.items():
-        if pregrasp_candidate is not None and (name=='index' or side_candidate is not None):
+        if name=='middle' and args.middle_after_s is not None and t<args.middle_after_s+.3:continue
+        if pregrasp_candidate is not None and (name=='index' or side_candidate is not None or middle_candidate is not None):
             if t<args.index_preposition_s:continue
             if not local_captured[name]:
                 info['local']=rot.T@(data.xpos[info['body']]-data.xpos[pad])
@@ -235,10 +295,13 @@ for step in range(round(args.duration_s*50)):
 report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'lift_m':args.lift_m,'duration_s':args.duration_s,
         'motion_end_s':motion_end,
+        'smooth_motion':args.smooth_motion,
         'dressing_force_goal_n':args.dressing_force_goal_n,
         'index_closure_m':args.index_closure_m,
         'index_pregrasp_candidate':args.index_pregrasp_candidate,
         'side_pregrasp_candidate':args.side_pregrasp_candidate,
+        'middle_support_candidate':args.middle_support_candidate,
+        'middle_after_s':args.middle_after_s,
         'index_weight':args.index_weight,
         'dressing_lift_min_n':args.dressing_lift_min_n,
         'dressing_force_start_s':args.dressing_force_start_s,
@@ -249,6 +312,14 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'wrist_x_shift_m':args.wrist_x_shift_m,
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
+        'support_wrist_yaw_late_offset_rad':args.support_wrist_yaw_late_offset_rad,
+        'support_wrist_yaw_late_start_s':args.support_wrist_yaw_late_start_s,
+        'support_follow_gain':args.support_follow_gain,
+        'support_follow_start_s':args.support_follow_start_s,
+        'support_pinky_flex_late_offset_rad':args.support_pinky_flex_late_offset_rad,
+        'support_pinky_late_start_s':args.support_pinky_late_start_s,
+        'support_palm_shift_late_m':args.support_palm_shift_late_m,
+        'support_palm_shift_start_s':args.support_palm_shift_start_s,
         'start_state_token':args.start_state_token,
         'b_hold_min_force_n':args.b_hold_min_force_n,
         'b_hold_force_goal_n':args.b_hold_force_goal_n,
@@ -262,12 +333,19 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'completed':len(rows)==round(args.duration_s*50) and not errors,'errors':errors,'trace':rows}
 report['final_pad_contacts']=rows[-1]['pad_contacts'] if rows else []
 stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_side{args.side_pregrasp_candidate}_iw{args.index_weight:g}_up{args.dressing_lift_min_n:g}_start{args.dressing_force_start_s:g}'
+if args.middle_support_candidate>=0:stem+=f'_middle{args.middle_support_candidate}'
+if args.middle_after_s is not None:stem+=f'_middleafter{args.middle_after_s:g}'
 if args.motion_end_s is not None:stem+=f'_motionend{args.motion_end_s:g}'
+if args.smooth_motion:stem+='_smooth'
 if args.dressing_force_end_s is not None:stem+=f'_forceend{args.dressing_force_end_s:g}'
 if args.track_pad_pose:stem+=f'_pose{args.pad_pose_weight:g}'
 if args.track_pad_orientation:stem+=f'_orient{args.pad_pose_weight:g}'
 if args.wrist_x_shift_m:stem+=f'_xshift{args.wrist_x_shift_m:g}'
 if args.support_wrist_yaw_offset_rad:stem+=f'_syaw{args.support_wrist_yaw_offset_rad:g}_at{args.support_wrist_yaw_start_s:g}'
+if args.support_wrist_yaw_late_offset_rad:stem+=f'_lateyaw{args.support_wrist_yaw_late_offset_rad:g}_at{args.support_wrist_yaw_late_start_s:g}'
+if args.support_follow_gain:stem+=f'_follow{args.support_follow_gain:g}_at{args.support_follow_start_s:g}'
+if args.support_pinky_flex_late_offset_rad:stem+=f'_pinky{args.support_pinky_flex_late_offset_rad:g}_at{args.support_pinky_late_start_s:g}'
+if any(args.support_palm_shift_late_m):stem+='_palmshift'+','.join(f'{x:g}' for x in args.support_palm_shift_late_m)
 stem+=f'_from{args.start_state_token}'
 if args.start_state_token=='947858479e10':stem+=f'_bmin{args.b_hold_min_force_n:g}_bgoal{args.b_hold_force_goal_n:g}'
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
