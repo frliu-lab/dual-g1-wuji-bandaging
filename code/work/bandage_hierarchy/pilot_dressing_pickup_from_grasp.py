@@ -37,6 +37,7 @@ p.add_argument('--dressing-force-end-s',type=float,default=None)
 p.add_argument('--track-pad-pose',action='store_true')
 p.add_argument('--track-pad-orientation',action='store_true')
 p.add_argument('--pad-pose-weight',type=float,default=10.)
+p.add_argument('--pad-orientation-after-s',type=float,default=None)
 p.add_argument('--wrist-x-shift-m',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-offset-rad',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
@@ -54,8 +55,8 @@ p.add_argument('--start-state-token',default='75fdd3a3b4b1',
 p.add_argument('--b-hold-min-force-n',type=float,default=.35)
 p.add_argument('--b-hold-force-goal-n',type=float,default=.45)
 args=p.parse_args()
-if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=3. or args.index_preposition_s>=args.duration_s:
-    p.error('Lift range (0,.06] m; duration [.5,3] s; preposition shorter than duration')
+if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=5. or args.index_preposition_s>=args.duration_s:
+    p.error('Lift range (0,.06] m; duration [.5,5] s; preposition shorter than duration')
 motion_end=args.motion_end_s if args.motion_end_s is not None else args.duration_s
 if not args.index_preposition_s<motion_end<=args.duration_s:p.error('motion end must follow preposition and precede duration')
 model=mujoco.MjModel.from_xml_path(str(OUT/'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml'))
@@ -93,6 +94,7 @@ pad_free=model.joint('dressing_pad_free')
 pad_qadr=pad_free.qposadr[0];pad_vadr=pad_free.dofadr[0]
 if args.track_pad_pose:wbc.weights[pad_vadr:pad_vadr+6]=args.pad_pose_weight
 elif args.track_pad_orientation:wbc.weights[pad_vadr+3:pad_vadr+6]=args.pad_pose_weight
+original_pad_orientation_weights=wbc.weights[pad_vadr+3:pad_vadr+6].copy()
 spool=model.body('bandage_spool').id
 start_pad=data.xpos[pad].copy();start_spool=data.xpos[spool].copy()
 spool_free=model.joint('bandage_spool_free')
@@ -144,6 +146,7 @@ def contact_force(ci):
     return max(0.,float(wrench[0]))
 rows=[];errors=[]
 recorded_qpos=[]
+pad_hold_quat=None
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
@@ -168,6 +171,12 @@ for step in range(round(args.duration_s*50)):
         wbc.b_handle_lateral_force_target_n=np.clip(-40.*(data.xpos[spool,:2]-start_spool[:2])-
             2.*data.qvel[spool_free.dofadr[0]:spool_free.dofadr[0]+2],-1.,1.)
     wbc.qref[:]=base
+    if args.pad_orientation_after_s is not None:
+        if t>=args.pad_orientation_after_s and pad_hold_quat is None:
+            pad_hold_quat=data.qpos[pad_qadr+3:pad_qadr+7].copy()
+        if pad_hold_quat is not None:wbc.qref[pad_qadr+3:pad_qadr+7]=pad_hold_quat
+        wbc.weights[pad_vadr+3:pad_vadr+6]=(args.pad_pose_weight
+            if t>=args.pad_orientation_after_s else original_pad_orientation_weights)
     if args.start_state_token=='947858479e10':
         wbc.qref[b_hold_qa]=state['qpos'][b_hold_qa]
         wbc.qref[b_hand_hold_qa]=state['qpos'][b_hand_hold_qa]
@@ -309,6 +318,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'track_pad_pose':args.track_pad_pose,
         'track_pad_orientation':args.track_pad_orientation,
         'pad_pose_weight':args.pad_pose_weight,
+        'pad_orientation_after_s':args.pad_orientation_after_s,
         'wrist_x_shift_m':args.wrist_x_shift_m,
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
@@ -333,6 +343,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'completed':len(rows)==round(args.duration_s*50) and not errors,'errors':errors,'trace':rows}
 report['final_pad_contacts']=rows[-1]['pad_contacts'] if rows else []
 stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_side{args.side_pregrasp_candidate}_iw{args.index_weight:g}_up{args.dressing_lift_min_n:g}_start{args.dressing_force_start_s:g}'
+if args.duration_s!=3.:stem+=f'_duration{args.duration_s:g}'
 if args.middle_support_candidate>=0:stem+=f'_middle{args.middle_support_candidate}'
 if args.middle_after_s is not None:stem+=f'_middleafter{args.middle_after_s:g}'
 if args.motion_end_s is not None:stem+=f'_motionend{args.motion_end_s:g}'
@@ -340,6 +351,7 @@ if args.smooth_motion:stem+='_smooth'
 if args.dressing_force_end_s is not None:stem+=f'_forceend{args.dressing_force_end_s:g}'
 if args.track_pad_pose:stem+=f'_pose{args.pad_pose_weight:g}'
 if args.track_pad_orientation:stem+=f'_orient{args.pad_pose_weight:g}'
+if args.pad_orientation_after_s is not None:stem+=f'_orientafter{args.pad_orientation_after_s:g}w{args.pad_pose_weight:g}'
 if args.wrist_x_shift_m:stem+=f'_xshift{args.wrist_x_shift_m:g}'
 if args.support_wrist_yaw_offset_rad:stem+=f'_syaw{args.support_wrist_yaw_offset_rad:g}_at{args.support_wrist_yaw_start_s:g}'
 if args.support_wrist_yaw_late_offset_rad:stem+=f'_lateyaw{args.support_wrist_yaw_late_offset_rad:g}_at{args.support_wrist_yaw_late_start_s:g}'
