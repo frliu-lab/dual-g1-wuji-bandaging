@@ -20,6 +20,8 @@
 
 **新的一秒保持验收：** 在取出末段冻结指尖目标方向，并分两阶段微调 A 左托臂掌心后，[审计](media/bandage_v0/joint_dressing_one_second_hold_pass_audit.json)确认 2.5–3.5 秒的 50 个保持帧全部有效。敷料离台 29.9–32.8 mm，拇指/食指法向力分别为 0.621–0.754 N / 0.582–0.697 N，无敷料台接触，末态托臂掌面占比 94.1%，卷轴漂移最大 2.13 mm。对应[19.2 秒视频](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4)、[近景](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4)和[轨迹](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo_qpos.npz)已存档。继续到约 3.76 秒仍会失去双指接触，因此不能外推为长期持物或完整包扎。
 
+继续研究更长的抓持时，[1.5 秒双指接触诊断](media/bandage_v0/joint_dressing_grip_support_tradeoff_audit.json)保持了 75/75 帧拇指与食指接触，但 A 左托臂仅 58/75 帧通过掌面承载门槛，末态掌面占比 80.8%。这一版本不通过联合门槛；公开可展示的最长联合验收仍是 1 秒。
+
 [敷料向上受力不可行诊断](media/bandage_v0/joint_dressing_lift_force_infeasible_audit.json)进一步显示：在当前仿真接触与其他约束下，现有抓姿连很小的额外向上合力都无法由 WBC 满足。该结果不是硬件能力上限；需要重新设计 A 右手指腹接触与器具取用方式。
 
 此仓库按实验批次存档双 G1、四只 Wuji 手协作研究。`media/` 保存当前可交流的代表性视频与对应说明；`VIDEO_CATALOG.json` 列出本地项目目前全部视频及 SHA-256，便于后续按实验批次补充。当前公开仓库只上传了五段代表性视频，其余历史视频尚未上传。在原始项目根目录运行 `python work/research_archive/build_archive_catalog.py` 可更新目录；公开仓库中的脚本副本位于 `code/work/research_archive/`。

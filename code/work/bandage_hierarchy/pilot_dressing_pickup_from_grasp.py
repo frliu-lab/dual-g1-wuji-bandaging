@@ -3,6 +3,7 @@
 Only a short checkpoint pilot. Full-sequence replay and contact validation are required.
 """
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -55,6 +56,11 @@ p.add_argument('--support-palm-shift-late-m',type=float,nargs=3,default=(0.,0.,0
 p.add_argument('--support-palm-shift-start-s',type=float,default=2.5)
 p.add_argument('--support-palm-shift-second-m',type=float,nargs=3,default=(0.,0.,0.))
 p.add_argument('--support-palm-shift-second-start-s',type=float,default=3.)
+p.add_argument('--support-palm-shift-third-m',type=float,nargs=3,default=(0.,0.,0.))
+p.add_argument('--support-palm-shift-third-start-s',type=float,default=3.5)
+p.add_argument('--support-palm-position-weight-late',type=float,default=None)
+p.add_argument('--support-palm-position-weight-late-start-s',type=float,default=3.5)
+p.add_argument('--elbow-hold-weight',type=float,default=1.)
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
@@ -158,6 +164,7 @@ support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
 elbow=model.joint('training_elbow_hinge')
+wbc.weights[elbow.dofadr[0]]=args.elbow_hold_weight
 for step in range(round(args.duration_s*50)):
     t=step*.02
     lift_elapsed=max(0.,t-(args.index_preposition_s if pregrasp_candidate is not None else 0.))
@@ -178,6 +185,8 @@ for step in range(round(args.duration_s*50)):
         wbc.b_handle_lateral_force_target_n=np.clip(-40.*(data.xpos[spool,:2]-start_spool[:2])-
             2.*data.qvel[spool_free.dofadr[0]:spool_free.dofadr[0]+2],-1.,1.)
     wbc.qref[:]=base
+    if args.support_palm_position_weight_late is not None and t>=args.support_palm_position_weight_late_start_s:
+        wbc.palm_position_weights[0]=args.support_palm_position_weight_late
     if args.pad_orientation_after_s is not None:
         if t>=args.pad_orientation_after_s and pad_hold_quat is None:
             pad_hold_quat=data.qpos[pad_qadr+3:pad_qadr+7].copy()
@@ -190,13 +199,16 @@ for step in range(round(args.duration_s*50)):
     wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_start_s)/.5)
     wbc.qref[support_yaw_qa]+=args.support_wrist_yaw_late_offset_rad*min(1.,max(0.,t-args.support_wrist_yaw_late_start_s)/.5)
     wbc.qref[support_pinky_qa]+=args.support_pinky_flex_late_offset_rad*min(1.,max(0.,t-args.support_pinky_late_start_s)/.5)
-    if any(args.support_palm_shift_late_m) or any(args.support_palm_shift_second_m):
+    if any(args.support_palm_shift_late_m) or any(args.support_palm_shift_second_m) or any(args.support_palm_shift_third_m):
         support_ref.qpos[:]=wbc.qref;mujoco.mj_forward(model,support_ref)
         jp=np.zeros((3,model.nv));mujoco.mj_jacBody(model,support_ref,jp,None,left_palm)
         jac=jp[:,left_va]
         blend=min(1.,max(0.,t-args.support_palm_shift_start_s)/.5)
         blend2=min(1.,max(0.,t-args.support_palm_shift_second_start_s)/.5)
-        target=blend*np.asarray(args.support_palm_shift_late_m)+blend2*np.asarray(args.support_palm_shift_second_m)
+        blend3=min(1.,max(0.,t-args.support_palm_shift_third_start_s)/.5)
+        target=(blend*np.asarray(args.support_palm_shift_late_m)+
+                blend2*np.asarray(args.support_palm_shift_second_m)+
+                blend3*np.asarray(args.support_palm_shift_third_m))
         delta=jac.T@np.linalg.solve(jac@jac.T+1e-4*np.eye(3),target)
         wbc.qref[left_qa]+=np.clip(delta,-.12,.12)
     wbc.qref[elbow.qposadr[0]]=.25
@@ -351,6 +363,11 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'support_palm_shift_start_s':args.support_palm_shift_start_s,
         'support_palm_shift_second_m':args.support_palm_shift_second_m,
         'support_palm_shift_second_start_s':args.support_palm_shift_second_start_s,
+        'support_palm_shift_third_m':args.support_palm_shift_third_m,
+        'support_palm_shift_third_start_s':args.support_palm_shift_third_start_s,
+        'support_palm_position_weight_late':args.support_palm_position_weight_late,
+        'support_palm_position_weight_late_start_s':args.support_palm_position_weight_late_start_s,
+        'elbow_hold_weight':args.elbow_hold_weight,
         'start_state_token':args.start_state_token,
         'b_hold_min_force_n':args.b_hold_min_force_n,
         'b_hold_force_goal_n':args.b_hold_force_goal_n,
@@ -383,8 +400,14 @@ if args.support_follow_gain:stem+=f'_follow{args.support_follow_gain:g}_at{args.
 if args.support_pinky_flex_late_offset_rad:stem+=f'_pinky{args.support_pinky_flex_late_offset_rad:g}_at{args.support_pinky_late_start_s:g}'
 if any(args.support_palm_shift_late_m):stem+='_palmshift'+','.join(f'{x:g}' for x in args.support_palm_shift_late_m)
 if any(args.support_palm_shift_second_m):stem+='_palmshift2'+','.join(f'{x:g}' for x in args.support_palm_shift_second_m)+f'_at{args.support_palm_shift_second_start_s:g}'
+if any(args.support_palm_shift_third_m):stem+='_palmshift3'+','.join(f'{x:g}' for x in args.support_palm_shift_third_m)+f'_at{args.support_palm_shift_third_start_s:g}'
+if args.support_palm_position_weight_late is not None:stem+=f'_palmweight{args.support_palm_position_weight_late:g}_at{args.support_palm_position_weight_late_start_s:g}'
+if args.elbow_hold_weight!=1.:stem+=f'_elbowweight{args.elbow_hold_weight:g}'
 stem+=f'_from{args.start_state_token}'
 if args.start_state_token=='947858479e10':stem+=f'_bmin{args.b_hold_min_force_n:g}_bgoal{args.b_hold_force_goal_n:g}'
+if len(str(OUT/f'{stem}.json'))>240:
+    stem='joint_dressing_pilot_'+hashlib.sha256(stem.encode('utf8')).hexdigest()[:16]
+report['artifact_stem']=stem
 (OUT/f'{stem}.json').write_text(json.dumps(report,indent=2),encoding='utf8')
 np.savez_compressed(OUT/f'{stem}_final_state.npz',qpos=data.qpos,qvel=data.qvel)
 np.savez_compressed(OUT/f'{stem}_qpos.npz',qpos=np.asarray(recorded_qpos),
