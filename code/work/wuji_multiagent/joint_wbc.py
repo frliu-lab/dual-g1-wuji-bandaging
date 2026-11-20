@@ -18,6 +18,7 @@ class JointWBC:
   self.forearm_finger_force_limit_n=None
   self.support_palm_force_goal_n=None
   self.dressing_contact_normal_goal_n=None
+  self.dressing_digit_normal_goals_n=None
   self.dressing_lift_min_n=None
   self.spool_contact_normal_goal_n=None
   self.b_spool_contact_force_cap_n=None
@@ -171,8 +172,10 @@ class JointWBC:
     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
     for digit in dressing_contacts:
      if any(n.startswith(f'g1_a/wuji_right/r_{digit}_') for n in names):dressing_contacts[digit].append(k)
-   for entries in dressing_contacts.values():
-    for k in entries:goals[k*3]=self.dressing_contact_normal_goal_n/len(entries);forceweight[k*3]=5.
+   for digit,entries in dressing_contacts.items():
+    digit_goal=(self.dressing_digit_normal_goals_n or {}).get(digit,self.dressing_contact_normal_goal_n)
+    if not np.isfinite(digit_goal) or digit_goal<0:raise ValueError('Dressing digit force goal must be finite and nonnegative')
+    for k in entries:goals[k*3]=digit_goal/len(entries);forceweight[k*3]=5.
   if self.spool_contact_normal_goal_n is not None:
    if not np.isfinite(self.spool_contact_normal_goal_n) or self.spool_contact_normal_goal_n<0:
     raise ValueError('Spool contact normal goal must be finite and nonnegative')

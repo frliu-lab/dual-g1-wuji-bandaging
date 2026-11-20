@@ -24,8 +24,13 @@ p.add_argument('--motion-end-s',type=float,default=None,
                help='End arm translation before the pilot ends, then hold the lifted pose')
 p.add_argument('--smooth-motion',action='store_true',help='Cubic ease in/out for the pickup translation')
 p.add_argument('--dressing-force-goal-n',type=float,default=.7)
+p.add_argument('--dressing-thumb-goal-n',type=float,default=None)
+p.add_argument('--dressing-index-goal-n',type=float,default=None)
 p.add_argument('--index-closure-m',type=float,default=0.)
 p.add_argument('--index-closure-after-s',type=float,default=0.)
+p.add_argument('--index-tip-offset-m',type=float,nargs=3,default=(0.,0.,0.),
+               help='World-frame index tip target correction during regrasp')
+p.add_argument('--index-tip-offset-start-s',type=float,default=.5)
 p.add_argument('--thumb-closure-m',type=float,default=0.)
 p.add_argument('--thumb-closure-after-s',type=float,default=0.)
 p.add_argument('--freeze-digit-frame-after-s',type=float,default=None)
@@ -36,6 +41,15 @@ p.add_argument('--middle-after-s',type=float,default=None,
                help='Move middle finger only after the initial thumb/index pickup')
 p.add_argument('--index-preposition-s',type=float,default=.5)
 p.add_argument('--index-weight',type=float,default=1.)
+p.add_argument('--pickup-wrist-position-weight',type=float,default=1500.)
+p.add_argument('--pickup-wrist-rotation-weight',type=float,default=10.)
+p.add_argument('--pickup-wrist-pitch-offset-rad',type=float,default=0.)
+p.add_argument('--pickup-wrist-yaw-offset-rad',type=float,default=0.)
+p.add_argument('--pickup-wrist-rotate-start-s',type=float,default=.8)
+p.add_argument('--pickup-arm-offsets-rad',type=float,nargs=7,default=(0.,)*7,
+               help='Right shoulder pitch/roll/yaw, elbow, wrist roll/pitch/yaw corrections')
+p.add_argument('--index-ik-target-rad',type=float,nargs=4,default=None,
+               help='Static grasp IK target for index MCP flex/abd, PIP, DIP')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-end-s',type=float,default=None)
@@ -85,13 +99,16 @@ palms=('g1_a/wuji_left/l_wrist','g1_a/wuji_right/r_wrist','g1_b/wuji_left/l_wris
 def contact_filter(m,c):
     return any(m.body(m.geom_bodyid[int(g)]).name.startswith(('g1_a/','g1_b/')) for g in c.geom if g>=0)
 wbc=JointWBC(model,base,palm_names=palms,contact_filter=contact_filter,
-             palm_rotation_weights=[10.,10.,10.,10.],
-             palm_position_weights=[1000.,1500.,1000.,1000.])
+             palm_rotation_weights=[10.,args.pickup_wrist_rotation_weight,10.,10.],
+             palm_position_weights=[1000.,args.pickup_wrist_position_weight,1000.,1000.])
 wbc.forearm_contact_force_limit_n=12.
 wbc.forearm_finger_force_limit_n=2.
 wbc.support_palm_force_goal_n=11.5
 wbc.b_spool_contact_force_cap_n=1.5
 wbc.dressing_contact_normal_goal_n=args.dressing_force_goal_n
+if args.dressing_thumb_goal_n is not None or args.dressing_index_goal_n is not None:
+    wbc.dressing_digit_normal_goals_n={k:v for k,v in (('thumb',args.dressing_thumb_goal_n),
+        ('index',args.dressing_index_goal_n)) if v is not None}
 if args.start_state_token=='947858479e10':
     wbc.b_handle_stick=True
     wbc.b_handle_lift_min_n=args.b_hold_min_force_n or None
@@ -253,6 +270,15 @@ for step in range(round(args.duration_s*50)):
     correction=J.T@np.linalg.solve(J@J.T+1e-4*np.eye(3),
                                    np.array([args.wrist_x_shift_m*motion_u,0.,planned]))
     wbc.qref[arm_qa]+=np.clip(correction,-.12,.12)
+    if any(args.pickup_arm_offsets_rad):
+        arm_blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
+        wbc.qref[arm_qa]+=arm_blend*np.asarray(args.pickup_arm_offsets_rad)
+    wrist_rotate=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
+    if wrist_rotate:
+        for joint_name,offset in (('g1_a/right_wrist_pitch_joint',args.pickup_wrist_pitch_offset_rad),
+                                  ('g1_a/right_wrist_yaw_joint',args.pickup_wrist_yaw_offset_rad)):
+            qa=model.joint(joint_name).qposadr[0]
+            wbc.qref[qa]+=wrist_rotate*offset
     for info in spool_digit_info.values():
         body=info['body'];rot_spool=data.xmat[spool].reshape(3,3)
         target=data.xpos[spool]+rot_spool@info['local']
@@ -281,8 +307,15 @@ for step in range(round(args.duration_s*50)):
             closure=args.thumb_closure_m*min(1.,max(0.,t-args.thumb_closure_after_s)/.3)
             local-=closure*local/max(1e-6,np.linalg.norm(local))
         target=data.xpos[pad]+(fixed_digit_rot if fixed_digit_rot is not None else rot)@local
+        if name=='index' and any(args.index_tip_offset_m):
+            blend=np.clip((t-args.index_tip_offset_start_s)/.5,0.,1.)
+            target+=blend*np.asarray(args.index_tip_offset_m)
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(jac.shape[1]),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
+    if args.index_ik_target_rad is not None:
+        blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
+        qa=digit_info['index']['qa']
+        wbc.qref[qa]=(1.-blend)*wbc.qref[qa]+blend*np.asarray(args.index_ik_target_rad)
     try:
         data.ctrl[:],_,_=wbc.solve(data)
         impulses={};feet=set();deep=False;support_peak=0.;spool_grip={}
@@ -343,6 +376,8 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'motion_end_s':motion_end,
         'smooth_motion':args.smooth_motion,
         'dressing_force_goal_n':args.dressing_force_goal_n,
+        'dressing_thumb_goal_n':args.dressing_thumb_goal_n,
+        'dressing_index_goal_n':args.dressing_index_goal_n,
         'index_closure_m':args.index_closure_m,
         'index_closure_after_s':args.index_closure_after_s,
         'thumb_closure_m':args.thumb_closure_m,
@@ -353,6 +388,15 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'middle_support_candidate':args.middle_support_candidate,
         'middle_after_s':args.middle_after_s,
         'index_weight':args.index_weight,
+        'pickup_wrist_position_weight':args.pickup_wrist_position_weight,
+        'pickup_wrist_rotation_weight':args.pickup_wrist_rotation_weight,
+        'pickup_wrist_pitch_offset_rad':args.pickup_wrist_pitch_offset_rad,
+        'pickup_wrist_yaw_offset_rad':args.pickup_wrist_yaw_offset_rad,
+        'pickup_wrist_rotate_start_s':args.pickup_wrist_rotate_start_s,
+        'pickup_arm_offsets_rad':args.pickup_arm_offsets_rad,
+        'index_ik_target_rad':args.index_ik_target_rad,
+        'index_tip_offset_m':args.index_tip_offset_m,
+        'index_tip_offset_start_s':args.index_tip_offset_start_s,
         'dressing_lift_min_n':args.dressing_lift_min_n,
         'dressing_force_start_s':args.dressing_force_start_s,
         'dressing_force_end_s':args.dressing_force_end_s,

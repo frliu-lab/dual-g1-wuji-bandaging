@@ -4,6 +4,8 @@
 
 **复现状态更新：** [独立重跑审计](media/bandage_v0/joint_dressing_reproduction_regression_audit.json)发现上述成功是单次录制结果；当前环境下使用相同参数重跑时在第 83 个控制帧失去敷料接触，去除硬性上提约束虽能跑满 4 秒，但敷料未离台且托臂掌面占比降至 79.7%。因此这段视频可展示曾出现的动作，**尚不能证明可重复的策略或实机动作质量**。失败根因仍待定位。
 
+**联合抓取诊断：** [四组右臂与食指联合控制审计](media/bandage_v0/joint_dressing_arm_index_ik_contact_audit.json)显示静态可达性改进可以在末段 25/25 帧恢复拇指和食指接触，托臂掌面份额约 92%，但敷料仍与台面持续接触。改为食指承受更多预测法向力没有抬起敷料；硬性向上受力约束在接触切换期间不可行。此版本是失败诊断，尚不可作为拾取成功或完整包扎演示。
+
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
 历史[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)通过数值门槛，但尚未录制/复核视频。早期[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)和[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)记录了已被后续短时拾取方案改进的失败过程。后续需把卷轴悬空与敷料持物同时实现，再让带材绕臂、固定末端，并为 B 右手安排明确协作角色。

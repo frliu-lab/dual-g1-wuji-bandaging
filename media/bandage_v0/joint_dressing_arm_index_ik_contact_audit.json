@@ -1,0 +1,61 @@
+{
+  "scope": "Joint two-G1 simulation checkpoint diagnostic; no wrapping or hardware validation",
+  "finding": "Coordinated right-arm plus index-finger IK restores sustained two-digit contact, but pad remains on stage. Increasing index normal-force goal does not yield pickup. Hard upward-force minimum becomes infeasible.",
+  "trials": [
+    {
+      "tag": "force_balance_025_12",
+      "source_report": "joint_dressing_pilot_471d477e49ddc69b.json",
+      "sha256": "7a5b7d0d91355a578a4cdd9a31aa3e61dbb495480c84353555150d0e283cec8d",
+      "completed": true,
+      "control_steps": 175,
+      "pad_lift_m": 0.010950110856055684,
+      "last_25_thumb_contact_steps": 25,
+      "last_25_index_contact_steps": 25,
+      "last_25_stage_contact_steps": 25,
+      "final_palm_impulse_share": 0.9173272881188896,
+      "errors": []
+    },
+    {
+      "tag": "arm_index_ik",
+      "source_report": "joint_dressing_pilot_97ed662bb499d569.json",
+      "sha256": "6573ff17bf3aadbd3efd438475563c05ebc9a56f1fd322296bfa7222e1502849",
+      "completed": true,
+      "control_steps": 175,
+      "pad_lift_m": 0.010845990082843482,
+      "last_25_thumb_contact_steps": 25,
+      "last_25_index_contact_steps": 25,
+      "last_25_stage_contact_steps": 25,
+      "final_palm_impulse_share": 0.9200491544234494,
+      "errors": []
+    },
+    {
+      "tag": "arm_index_ik_lift08",
+      "source_report": "joint_dressing_pilot_97f4dac51d108698.json",
+      "sha256": "dc0989b11ec970d918914bfaa1dc7e969fb169e2e75f8512572ff9fe232d87bd",
+      "completed": false,
+      "control_steps": 88,
+      "pad_lift_m": 0.00862575507539931,
+      "last_25_thumb_contact_steps": 25,
+      "last_25_index_contact_steps": 25,
+      "last_25_stage_contact_steps": 25,
+      "final_palm_impulse_share": 0.8788998434946924,
+      "errors": [
+        "WBC invalid infeasible residual inf constraint violation 4.243253557550952e-08"
+      ]
+    },
+    {
+      "tag": "force_balance_005_20",
+      "source_report": "joint_dressing_pilot_f53b7f7827956ca4.json",
+      "sha256": "1ce58a3c8c1d9d66f949ac6814e31ebf6466e61b9da5329da3ab5344fc4ce47c",
+      "completed": true,
+      "control_steps": 175,
+      "pad_lift_m": 0.01092096438316248,
+      "last_25_thumb_contact_steps": 25,
+      "last_25_index_contact_steps": 25,
+      "last_25_stage_contact_steps": 25,
+      "final_palm_impulse_share": 0.9161593885432143,
+      "errors": []
+    }
+  ],
+  "pass": false
+}
