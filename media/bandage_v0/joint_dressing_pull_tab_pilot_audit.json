@@ -1,7 +1,7 @@
 {
   "scope": "Isolated physical pull-tab scene; simulated dual-G1 checkpoint only",
   "scene": "joint_spool_grasp_dressing_pull_tab_variant.xml",
-  "finding": "A lower side-target IK adds side contacts but all six tested controllers leave the dressing on the stage.",
+  "finding": "Eight pilots, including per-frame physical-tab IK, do not clear the dressing from stage; contact normals still indicate downward loading.",
   "trials": [
     {
       "name": "baseline",
@@ -66,6 +66,28 @@
       "pad_center_lift_m": -0.0007207512693934159,
       "last25_thumb_tab_steps": 25,
       "last25_index_tab_steps": 10,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "online_tab_ik",
+      "report": "joint_dressing_pilot_92d66e11a054723c.json",
+      "completed": true,
+      "steps": 175,
+      "pad_center_lift_m": 0.003001258449594424,
+      "last25_thumb_tab_steps": 25,
+      "last25_index_tab_steps": 8,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "online_tab_ik_lower",
+      "report": "joint_dressing_pilot_3e0ade8649439cbc.json",
+      "completed": true,
+      "steps": 175,
+      "pad_center_lift_m": -0.001778357691285648,
+      "last25_thumb_tab_steps": 20,
+      "last25_index_tab_steps": 3,
       "last25_stage_steps": 25,
       "errors": []
     }

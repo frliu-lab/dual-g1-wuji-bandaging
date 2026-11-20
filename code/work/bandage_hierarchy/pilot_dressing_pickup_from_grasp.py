@@ -10,6 +10,7 @@ from pathlib import Path
 
 import mujoco
 import numpy as np
+from scipy.optimize import least_squares
 
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
@@ -61,6 +62,8 @@ p.add_argument('--late-tab-pinch-after-s',type=float,default=None)
 p.add_argument('--late-thumb-ik-target-rad',type=float,nargs=4,default=None)
 p.add_argument('--late-index-ik-target-rad',type=float,nargs=4,default=None)
 p.add_argument('--late-arm-offsets-rad',type=float,nargs=7,default=(0.,)*7)
+p.add_argument('--online-tab-ik-after-s',type=float,default=None)
+p.add_argument('--online-tab-target-z-m',type=float,default=-.006)
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-end-s',type=float,default=None)
@@ -191,6 +194,16 @@ pregrasp_candidate=(side_candidate if args.middle_after_s is not None and side_c
                     side_candidate if side_candidate is not None else index_candidate)
 wbc.weights[digit_info['index']['va']]=args.index_weight
 local_captured={name:False for name in digit_info}
+if args.online_tab_ik_after_s is not None:
+    if not args.pull_tab_scene:p.error('online tab IK requires --pull-tab-scene')
+    ik_data=mujoco.MjData(model)
+    ik_ids=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/right_')
+            and any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
+    for prefix in ('r_thumb_','r_index_finger_'):
+        ik_ids += [j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/wuji_right/'+prefix)]
+    ik_qa=np.array([model.jnt_qposadr[j] for j in ik_ids]);ik_lo=model.jnt_range[ik_ids,0]+1e-5
+    ik_hi=model.jnt_range[ik_ids,1]-1e-5
+    tab_geom=model.geom('dressing_pull_tab').id
 interval=round(.02/model.opt.timestep)
 def contact_force(ci):
     wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
@@ -357,6 +370,23 @@ for step in range(round(args.duration_s*50)):
             if target is not None:
                 qa=digit_info[name]['qa']
                 wbc.qref[qa]=(1.-late_blend)*wbc.qref[qa]+late_blend*np.asarray(target)
+    if args.online_tab_ik_after_s is not None and t>=args.online_tab_ik_after_s:
+        ik_data.qpos[:]=data.qpos;mujoco.mj_forward(model,ik_data)
+        tab_R=ik_data.geom_xmat[tab_geom].reshape(3,3)
+        tab_pos=ik_data.geom_xpos[tab_geom].copy()
+        tab_targets=(tab_pos+tab_R[:,1]*.008+tab_R[:,2]*args.online_tab_target_z_m,
+                     tab_pos-tab_R[:,1]*.008+tab_R[:,2]*args.online_tab_target_z_m)
+        thumb_id=digit_info['thumb']['body'];index_id=digit_info['index']['body']
+        wrist_start=ik_data.xpos[wrist].copy();ik_start=data.qpos[ik_qa].copy()
+        def tab_residual(x):
+            ik_data.qpos[ik_qa]=x;mujoco.mj_forward(model,ik_data)
+            return np.r_[ik_data.xpos[thumb_id]-tab_targets[0],
+                         ik_data.xpos[index_id]-tab_targets[1],
+                         .2*(ik_data.xpos[wrist]-wrist_start),
+                         .002*(x[:len(arm_qa)]-ik_start[:len(arm_qa)])]
+        fit=least_squares(tab_residual,np.clip(ik_start,ik_lo,ik_hi),bounds=(ik_lo,ik_hi),
+                          max_nfev=35)
+        wbc.qref[ik_qa]=fit.x
     try:
         data.ctrl[:],_,_=wbc.solve(data)
         impulses={};feet=set();deep=False;support_peak=0.;spool_grip={}
@@ -437,6 +467,14 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'pickup_arm_offsets_rad':args.pickup_arm_offsets_rad,
         'index_ik_target_rad':args.index_ik_target_rad,
         'thumb_ik_target_rad':args.thumb_ik_target_rad,
+        'late_tab_pinch_after_s':args.late_tab_pinch_after_s,
+        'late_thumb_ik_target_rad':args.late_thumb_ik_target_rad,
+        'late_index_ik_target_rad':args.late_index_ik_target_rad,
+        'late_arm_offsets_rad':args.late_arm_offsets_rad,
+        'online_tab_ik_after_s':args.online_tab_ik_after_s,
+        'online_tab_target_z_m':args.online_tab_target_z_m,
+        'transport_grasp_after_s':args.transport_grasp_after_s,
+        'pull_tab_scene':args.pull_tab_scene,
         'index_tip_offset_m':args.index_tip_offset_m,
         'index_tip_offset_start_s':args.index_tip_offset_start_s,
         'thumb_tip_offset_m':args.thumb_tip_offset_m,

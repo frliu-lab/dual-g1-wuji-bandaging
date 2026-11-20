@@ -10,7 +10,7 @@
 
 [姿态、第三指与更大抬升对照](media/bandage_v0/joint_dressing_pad_orientation_counterfactual_audit.json)进一步排除了简单增益调整：较强的敷料姿态目标在接触阶段使求解失效；加第三指或把手腕上提指令从 40 mm 增到 60 mm 仍有末段 25/25 帧台面接触。当前抓持布局需要重新规划，不能仅延长相同轨迹。
 
-新增一个**独立训练器具场景**：[带物理拉片的敷料模型](media/bandage_v0/joint_spool_grasp_dressing_pull_tab_variant.xml)及[六组试验审计](media/bandage_v0/joint_dressing_pull_tab_pilot_audit.json)。拉片与敷料同属自由运动刚体，不是固定到手上的约束；联合右臂和双指目标可产生拉片接触，但六组都没有让敷料脱离台面。后续需要让指腹在拉片两侧形成有向上摩擦余量的接触，再验证底面净空与持物稳定性。该变体只是研究道具，不代表原场景完成。
+新增一个**独立训练器具场景**：[带物理拉片的敷料模型](media/bandage_v0/joint_spool_grasp_dressing_pull_tab_variant.xml)及[八组试验审计](media/bandage_v0/joint_dressing_pull_tab_pilot_audit.json)。拉片与敷料同属自由运动刚体，不是固定到手上的约束；联合右臂和双指目标及每帧根据拉片位姿重算的双指目标可产生接触，但八组都没有让敷料脱离台面。实际接触法线仍有明显向下分量；把目标下移会减少食指接触。后续需要重新设计指腹进入拉片两侧的路径与接触法线，再验证底面净空和持物稳定性。该变体只是研究道具，不代表原场景完成。
 
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
