@@ -31,6 +31,9 @@ p.add_argument('--index-closure-after-s',type=float,default=0.)
 p.add_argument('--index-tip-offset-m',type=float,nargs=3,default=(0.,0.,0.),
                help='World-frame index tip target correction during regrasp')
 p.add_argument('--index-tip-offset-start-s',type=float,default=.5)
+p.add_argument('--thumb-tip-offset-m',type=float,nargs=3,default=(0.,0.,0.),
+               help='World-frame thumb tip target correction toward the pad side')
+p.add_argument('--thumb-tip-offset-start-s',type=float,default=.5)
 p.add_argument('--thumb-closure-m',type=float,default=0.)
 p.add_argument('--thumb-closure-after-s',type=float,default=0.)
 p.add_argument('--freeze-digit-frame-after-s',type=float,default=None)
@@ -50,6 +53,8 @@ p.add_argument('--pickup-arm-offsets-rad',type=float,nargs=7,default=(0.,)*7,
                help='Right shoulder pitch/roll/yaw, elbow, wrist roll/pitch/yaw corrections')
 p.add_argument('--index-ik-target-rad',type=float,nargs=4,default=None,
                help='Static grasp IK target for index MCP flex/abd, PIP, DIP')
+p.add_argument('--thumb-ik-target-rad',type=float,nargs=4,default=None,
+               help='Static side-underpad IK target for thumb CMC flex/abd, MCP, IP')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-end-s',type=float,default=None)
@@ -310,12 +315,19 @@ for step in range(round(args.duration_s*50)):
         if name=='index' and any(args.index_tip_offset_m):
             blend=np.clip((t-args.index_tip_offset_start_s)/.5,0.,1.)
             target+=blend*np.asarray(args.index_tip_offset_m)
+        if name=='thumb' and any(args.thumb_tip_offset_m):
+            blend=np.clip((t-args.thumb_tip_offset_start_s)/.5,0.,1.)
+            target+=blend*np.asarray(args.thumb_tip_offset_m)
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(jac.shape[1]),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     if args.index_ik_target_rad is not None:
         blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
         qa=digit_info['index']['qa']
         wbc.qref[qa]=(1.-blend)*wbc.qref[qa]+blend*np.asarray(args.index_ik_target_rad)
+    if args.thumb_ik_target_rad is not None:
+        blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
+        qa=digit_info['thumb']['qa']
+        wbc.qref[qa]=(1.-blend)*wbc.qref[qa]+blend*np.asarray(args.thumb_ik_target_rad)
     try:
         data.ctrl[:],_,_=wbc.solve(data)
         impulses={};feet=set();deep=False;support_peak=0.;spool_grip={}

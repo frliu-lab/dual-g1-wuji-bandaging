@@ -6,6 +6,8 @@
 
 **联合抓取诊断：** [四组右臂与食指联合控制审计](media/bandage_v0/joint_dressing_arm_index_ik_contact_audit.json)显示静态可达性改进可以在末段 25/25 帧恢复拇指和食指接触，托臂掌面份额约 92%，但敷料仍与台面持续接触。改为食指承受更多预测法向力没有抬起敷料；硬性向上受力约束在接触切换期间不可行。此版本是失败诊断，尚不可作为拾取成功或完整包扎演示。
 
+[敷料边缘净空审计](media/bandage_v0/joint_dressing_pad_edge_clearance_audit.json)定位了中心高度误判：拇指与食指持续接触时，敷料中心虽抬高约 10 mm，却倾斜到最低边缘比台面高程低约 12 mm，末段 25/25 帧仍有台面接触。因此下一轮须控制敷料姿态及完整底面净空；中心抬高不作为成功指标。
+
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
 历史[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)通过数值门槛，但尚未录制/复核视频。早期[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)和[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)记录了已被后续短时拾取方案改进的失败过程。后续需把卷轴悬空与敷料持物同时实现，再让带材绕臂、固定末端，并为 B 右手安排明确协作角色。
