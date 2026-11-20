@@ -62,6 +62,8 @@ p.add_argument('--track-pad-pose',action='store_true')
 p.add_argument('--track-pad-orientation',action='store_true')
 p.add_argument('--pad-pose-weight',type=float,default=10.)
 p.add_argument('--pad-orientation-after-s',type=float,default=None)
+p.add_argument('--pad-orientation-use-start',action='store_true',
+               help='Hold checkpoint pad orientation instead of the orientation at activation')
 p.add_argument('--wrist-x-shift-m',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-offset-rad',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
@@ -136,6 +138,7 @@ elif args.track_pad_orientation:wbc.weights[pad_vadr+3:pad_vadr+6]=args.pad_pose
 original_pad_orientation_weights=wbc.weights[pad_vadr+3:pad_vadr+6].copy()
 spool=model.body('bandage_spool').id
 start_pad=data.xpos[pad].copy();start_spool=data.xpos[spool].copy()
+start_pad_quat=data.qpos[pad_qadr+3:pad_qadr+7].copy()
 spool_free=model.joint('bandage_spool_free')
 spool_mass=float(model.body_subtreemass[spool])
 ref=mujoco.MjData(model)
@@ -220,7 +223,8 @@ for step in range(round(args.duration_s*50)):
         wbc.palm_position_weights[0]=args.support_palm_position_weight_late
     if args.pad_orientation_after_s is not None:
         if t>=args.pad_orientation_after_s and pad_hold_quat is None:
-            pad_hold_quat=data.qpos[pad_qadr+3:pad_qadr+7].copy()
+            pad_hold_quat=(start_pad_quat.copy() if args.pad_orientation_use_start else
+                           data.qpos[pad_qadr+3:pad_qadr+7].copy())
         if pad_hold_quat is not None:wbc.qref[pad_qadr+3:pad_qadr+7]=pad_hold_quat
         wbc.weights[pad_vadr+3:pad_vadr+6]=(args.pad_pose_weight
             if t>=args.pad_orientation_after_s else original_pad_orientation_weights)
@@ -407,8 +411,11 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'pickup_wrist_rotate_start_s':args.pickup_wrist_rotate_start_s,
         'pickup_arm_offsets_rad':args.pickup_arm_offsets_rad,
         'index_ik_target_rad':args.index_ik_target_rad,
+        'thumb_ik_target_rad':args.thumb_ik_target_rad,
         'index_tip_offset_m':args.index_tip_offset_m,
         'index_tip_offset_start_s':args.index_tip_offset_start_s,
+        'thumb_tip_offset_m':args.thumb_tip_offset_m,
+        'thumb_tip_offset_start_s':args.thumb_tip_offset_start_s,
         'dressing_lift_min_n':args.dressing_lift_min_n,
         'dressing_force_start_s':args.dressing_force_start_s,
         'dressing_force_end_s':args.dressing_force_end_s,
@@ -416,6 +423,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'track_pad_orientation':args.track_pad_orientation,
         'pad_pose_weight':args.pad_pose_weight,
         'pad_orientation_after_s':args.pad_orientation_after_s,
+        'pad_orientation_use_start':args.pad_orientation_use_start,
         'wrist_x_shift_m':args.wrist_x_shift_m,
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
