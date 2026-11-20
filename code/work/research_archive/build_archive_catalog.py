@@ -199,6 +199,7 @@ SELECTED = [
     'bandage_v0/joint_dressing_long_hold_failure_audit.json',
     'bandage_v0/joint_dressing_fixed_digit_frame_failure_audit.json',
     'bandage_v0/joint_dressing_one_second_hold_pass_audit.json',
+    'bandage_v0/joint_dressing_reproduction_regression_audit.json',
     'bandage_v0/joint_dressing_grip_support_tradeoff_audit.json',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4',

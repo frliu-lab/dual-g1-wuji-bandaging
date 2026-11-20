@@ -1,0 +1,42 @@
+{
+  "scope": "Independent checkpoint reruns under current environment; regression diagnostic, not hardware evidence",
+  "reference": "joint_dressing_one_second_hold_pass_audit.json",
+  "finding": "Previously archived 1 s pickup/hold pass did not reproduce in an exact-parameter rerun. No trial here meets pickup plus palm support gates. Root cause is not yet identified.",
+  "trials": [
+    {
+      "tag": "baseline_recheck",
+      "source_report": "joint_dressing_pilot_191c91ba3930f67c.json",
+      "sha256": "f14ea30ea23f659f102b81146681e7bf2afce8e95a724695585710dec8bdc198",
+      "steps": 83,
+      "completed": false,
+      "errors": [
+        "No A-right dressing contacts for minimum lift force"
+      ],
+      "final_pad_lift_m": -0.002075034624043237,
+      "final_palm_impulse_share": 0.8963766724104187
+    },
+    {
+      "tag": "fingertotalcap05",
+      "source_report": "joint_dressing_pilot_eae6fcd7410245fe.json",
+      "sha256": "9fc565f451d6b4e5fccc3d30a55086a81e825da5c6f8ce6aaa2f6e49e8da98f3",
+      "steps": 83,
+      "completed": false,
+      "errors": [
+        "No A-right dressing contacts for minimum lift force"
+      ],
+      "final_pad_lift_m": -0.002075034624043237,
+      "final_palm_impulse_share": 0.8963766724104187
+    },
+    {
+      "tag": "softforceonly",
+      "source_report": "joint_dressing_pilot_c45ed23598e3e916.json",
+      "sha256": "64567e06c9918d1c58f9947317e5cd99a9170b984930a0770f71f07c253110b9",
+      "steps": 200,
+      "completed": true,
+      "errors": [],
+      "final_pad_lift_m": -0.0020743601845054638,
+      "final_palm_impulse_share": 0.7966517492471754
+    }
+  ],
+  "interpretation": "The archived video is a recorded successful rollout, not a repeatable policy validation; do not claim robust dressing pickup."
+}

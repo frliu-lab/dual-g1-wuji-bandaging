@@ -2,6 +2,8 @@
 
 **最新可展示的研究子技能（仿真）**：[19.2 秒双机托臂、抓卷轴与敷料拾取总览](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4) · [手部近景](media/bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4) · [逐帧验收](media/bandage_v0/joint_dressing_one_second_hold_pass_audit.json)。末段敷料被拇指和食指抬离台面并保持 1 秒，50 个控制帧全部通过托臂、双指接触、离台和碰撞门槛。视频由已验证的 15.7 秒路线与从相同状态重启的 3.5 秒控制续跑组成；卷轴仍在台面上。这是仿真局部子技能，尚未缠绕、固定带尾、实现四手完整协作或进行实机验证。更长的 1.5 秒持物尚未通过。
 
+**复现状态更新：** [独立重跑审计](media/bandage_v0/joint_dressing_reproduction_regression_audit.json)发现上述成功是单次录制结果；当前环境下使用相同参数重跑时在第 83 个控制帧失去敷料接触，去除硬性上提约束虽能跑满 4 秒，但敷料未离台且托臂掌面占比降至 79.7%。因此这段视频可展示曾出现的动作，**尚不能证明可重复的策略或实机动作质量**。失败根因仍待定位。
+
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
 历史[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)通过数值门槛，但尚未录制/复核视频。早期[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)和[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)记录了已被后续短时拾取方案改进的失败过程。后续需把卷轴悬空与敷料持物同时实现，再让带材绕臂、固定末端，并为 B 右手安排明确协作角色。

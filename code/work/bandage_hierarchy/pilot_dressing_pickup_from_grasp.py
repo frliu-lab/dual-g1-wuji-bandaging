@@ -61,6 +61,11 @@ p.add_argument('--support-palm-shift-third-start-s',type=float,default=3.5)
 p.add_argument('--support-palm-position-weight-late',type=float,default=None)
 p.add_argument('--support-palm-position-weight-late-start-s',type=float,default=3.5)
 p.add_argument('--elbow-hold-weight',type=float,default=1.)
+p.add_argument('--support-force-goal-late-n',type=float,default=None)
+p.add_argument('--support-force-goal-late-start-s',type=float,default=3.5)
+p.add_argument('--finger-forearm-cap-late-n',type=float,default=None)
+p.add_argument('--finger-forearm-cap-late-start-s',type=float,default=3.5)
+p.add_argument('--tag',default='',help='Distinct suffix for experimental output files')
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
@@ -185,6 +190,10 @@ for step in range(round(args.duration_s*50)):
         wbc.b_handle_lateral_force_target_n=np.clip(-40.*(data.xpos[spool,:2]-start_spool[:2])-
             2.*data.qvel[spool_free.dofadr[0]:spool_free.dofadr[0]+2],-1.,1.)
     wbc.qref[:]=base
+    if args.support_force_goal_late_n is not None and t>=args.support_force_goal_late_start_s:
+        wbc.support_palm_force_goal_n=args.support_force_goal_late_n
+    if args.finger_forearm_cap_late_n is not None and t>=args.finger_forearm_cap_late_start_s:
+        wbc.forearm_finger_force_limit_n=args.finger_forearm_cap_late_n
     if args.support_palm_position_weight_late is not None and t>=args.support_palm_position_weight_late_start_s:
         wbc.palm_position_weights[0]=args.support_palm_position_weight_late
     if args.pad_orientation_after_s is not None:
@@ -311,6 +320,7 @@ for step in range(round(args.duration_s*50)):
                  'spool_shift_m':float(np.linalg.norm(data.xpos[spool]-start_spool))})
     recorded_qpos.append(data.qpos.copy())
     rows[-1].update({'support_valid':bool(support_valid),'support_quality':support_monitor.last_report,
+                     'support_impulse_by_body_ns':impulses,
                      'feet_supported':feet=={'g1_a','g1_b'},'deep_robot_contact':deep,
                      'spool_grip_impulse_by_body_ns':spool_grip})
     rows[-1]['digit_tip_m']={name:data.xpos[info['body']].tolist() for name,info in digit_info.items()}
@@ -368,6 +378,11 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'support_palm_position_weight_late':args.support_palm_position_weight_late,
         'support_palm_position_weight_late_start_s':args.support_palm_position_weight_late_start_s,
         'elbow_hold_weight':args.elbow_hold_weight,
+        'support_force_goal_late_n':args.support_force_goal_late_n,
+        'support_force_goal_late_start_s':args.support_force_goal_late_start_s,
+        'finger_forearm_cap_late_n':args.finger_forearm_cap_late_n,
+        'finger_forearm_cap_late_start_s':args.finger_forearm_cap_late_start_s,
+        'tag':args.tag,
         'start_state_token':args.start_state_token,
         'b_hold_min_force_n':args.b_hold_min_force_n,
         'b_hold_force_goal_n':args.b_hold_force_goal_n,
@@ -403,6 +418,8 @@ if any(args.support_palm_shift_second_m):stem+='_palmshift2'+','.join(f'{x:g}' f
 if any(args.support_palm_shift_third_m):stem+='_palmshift3'+','.join(f'{x:g}' for x in args.support_palm_shift_third_m)+f'_at{args.support_palm_shift_third_start_s:g}'
 if args.support_palm_position_weight_late is not None:stem+=f'_palmweight{args.support_palm_position_weight_late:g}_at{args.support_palm_position_weight_late_start_s:g}'
 if args.elbow_hold_weight!=1.:stem+=f'_elbowweight{args.elbow_hold_weight:g}'
+if args.support_force_goal_late_n is not None:stem+=f'_supportforce{args.support_force_goal_late_n:g}_at{args.support_force_goal_late_start_s:g}'
+if args.tag:stem+=f'_tag{args.tag}'
 stem+=f'_from{args.start_state_token}'
 if args.start_state_token=='947858479e10':stem+=f'_bmin{args.b_hold_min_force_n:g}_bgoal{args.b_hold_force_goal_n:g}'
 if len(str(OUT/f'{stem}.json'))>240:
