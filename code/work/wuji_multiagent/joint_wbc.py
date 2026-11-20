@@ -135,10 +135,10 @@ class JointWBC:
   dressing_up_coeff=np.zeros(3*nc)
   spool_lateral_coeff=np.zeros((2,3*nc))
   for k,(ga,gb) in enumerate(ids):
-   if 'dressing_pad_contact' in (m.geom(ga).name,m.geom(gb).name):
+   if any(name in (m.geom(ga).name,m.geom(gb).name) for name in ('dressing_pad_contact','dressing_pull_tab')):
     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
     if any(n.startswith(('g1_a/wuji_right/r_thumb_','g1_a/wuji_right/r_index_finger_')) for n in names):
-     sign=-1. if m.geom(ga).name=='dressing_pad_contact' else 1.
+     sign=-1. if m.geom(ga).name in ('dressing_pad_contact','dressing_pull_tab') else 1.
      dressing_up_coeff[k*3:k*3+3]=sign*d.contact[self.contact_indices[k]].frame.reshape(3,3)[:,2]
    if 'bandage_handle_prototype' not in (m.geom(ga).name,m.geom(gb).name):continue
    names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
@@ -168,7 +168,7 @@ class JointWBC:
     raise ValueError('Dressing contact normal goal must be finite and nonnegative')
    dressing_contacts={digit:[] for digit in ('thumb','index')}
    for k,(ga,gb) in enumerate(ids):
-    if 'dressing_pad_contact' not in (m.geom(ga).name,m.geom(gb).name):continue
+    if not any(name in (m.geom(ga).name,m.geom(gb).name) for name in ('dressing_pad_contact','dressing_pull_tab')):continue
     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
     for digit in dressing_contacts:
      if any(n.startswith(f'g1_a/wuji_right/r_{digit}_') for n in names):dressing_contacts[digit].append(k)

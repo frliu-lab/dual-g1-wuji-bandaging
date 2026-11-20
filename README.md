@@ -10,6 +10,8 @@
 
 [姿态、第三指与更大抬升对照](media/bandage_v0/joint_dressing_pad_orientation_counterfactual_audit.json)进一步排除了简单增益调整：较强的敷料姿态目标在接触阶段使求解失效；加第三指或把手腕上提指令从 40 mm 增到 60 mm 仍有末段 25/25 帧台面接触。当前抓持布局需要重新规划，不能仅延长相同轨迹。
 
+新增一个**独立训练器具场景**：[带物理拉片的敷料模型](media/bandage_v0/joint_spool_grasp_dressing_pull_tab_variant.xml)及[五组试验审计](media/bandage_v0/joint_dressing_pull_tab_pilot_audit.json)。拉片与敷料同属自由运动刚体，不是固定到手上的约束；联合右臂和双指目标可产生拉片接触，但五组都没有让敷料脱离台面。后续需要让指腹在拉片两侧形成有向上摩擦余量的接触，再验证底面净空与持物稳定性。该变体只是研究道具，不代表原场景完成。
+
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
 历史[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)通过数值门槛，但尚未录制/复核视频。早期[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)和[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)记录了已被后续短时拾取方案改进的失败过程。后续需把卷轴悬空与敷料持物同时实现，再让带材绕臂、固定末端，并为 B 右手安排明确协作角色。

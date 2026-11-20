@@ -55,6 +55,12 @@ p.add_argument('--index-ik-target-rad',type=float,nargs=4,default=None,
                help='Static grasp IK target for index MCP flex/abd, PIP, DIP')
 p.add_argument('--thumb-ik-target-rad',type=float,nargs=4,default=None,
                help='Static side-underpad IK target for thumb CMC flex/abd, MCP, IP')
+p.add_argument('--transport-grasp-after-s',type=float,default=None,
+               help='After grasp, move digit targets with planned pickup instead of observed pad')
+p.add_argument('--late-tab-pinch-after-s',type=float,default=None)
+p.add_argument('--late-thumb-ik-target-rad',type=float,nargs=4,default=None)
+p.add_argument('--late-index-ik-target-rad',type=float,nargs=4,default=None)
+p.add_argument('--late-arm-offsets-rad',type=float,nargs=7,default=(0.,)*7)
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-end-s',type=float,default=None)
@@ -87,6 +93,7 @@ p.add_argument('--support-force-goal-late-start-s',type=float,default=3.5)
 p.add_argument('--finger-forearm-cap-late-n',type=float,default=None)
 p.add_argument('--finger-forearm-cap-late-start-s',type=float,default=3.5)
 p.add_argument('--tag',default='',help='Distinct suffix for experimental output files')
+p.add_argument('--pull-tab-scene',action='store_true',help='Use isolated physical dressing pull-tab scene')
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
@@ -97,7 +104,9 @@ if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=5. or args.index_preposit
     p.error('Lift range (0,.06] m; duration [.5,5] s; preposition shorter than duration')
 motion_end=args.motion_end_s if args.motion_end_s is not None else args.duration_s
 if not args.index_preposition_s<motion_end<=args.duration_s:p.error('motion end must follow preposition and precede duration')
-model=mujoco.MjModel.from_xml_path(str(OUT/'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml'))
+scene_name=('joint_spool_grasp_dressing_pull_tab_variant.xml' if args.pull_tab_scene else
+            'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml')
+model=mujoco.MjModel.from_xml_path(str(OUT/scene_name))
 data=mujoco.MjData(model)
 state=np.load(OUT/f'joint_support_pinch_staged_wbc_report_spool_settled_handle_{args.start_state_token}_final_state.npz')
 data.qpos[:]=state['qpos'];data.qvel[:]=state['qvel'];mujoco.mj_forward(model,data)
@@ -190,6 +199,7 @@ rows=[];errors=[]
 recorded_qpos=[]
 pad_hold_quat=None
 fixed_digit_rot=None
+transport_anchor=None
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
@@ -282,6 +292,9 @@ for step in range(round(args.duration_s*50)):
     if any(args.pickup_arm_offsets_rad):
         arm_blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
         wbc.qref[arm_qa]+=arm_blend*np.asarray(args.pickup_arm_offsets_rad)
+    if args.late_tab_pinch_after_s is not None and any(args.late_arm_offsets_rad):
+        late_blend=np.clip((t-args.late_tab_pinch_after_s)/.6,0.,1.)
+        wbc.qref[arm_qa]+=late_blend*np.asarray(args.late_arm_offsets_rad)
     wrist_rotate=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
     if wrist_rotate:
         for joint_name,offset in (('g1_a/right_wrist_pitch_joint',args.pickup_wrist_pitch_offset_rad),
@@ -296,6 +309,8 @@ for step in range(round(args.duration_s*50)):
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(len(info['va'])),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     rot=data.xmat[pad].reshape(3,3)
+    if args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s and transport_anchor is None:
+        transport_anchor=(data.xpos[pad].copy(),rot.copy(),float(planned),float(motion_u))
     if args.freeze_digit_frame_after_s is not None and t>=args.freeze_digit_frame_after_s and fixed_digit_rot is None:
         fixed_digit_rot=rot.copy()
     for name,info in digit_info.items():
@@ -315,7 +330,11 @@ for step in range(round(args.duration_s*50)):
         if info is digit_info['thumb'] and args.thumb_closure_m:
             closure=args.thumb_closure_m*min(1.,max(0.,t-args.thumb_closure_after_s)/.3)
             local-=closure*local/max(1e-6,np.linalg.norm(local))
-        target=data.xpos[pad]+(fixed_digit_rot if fixed_digit_rot is not None else rot)@local
+        if transport_anchor is None:
+            target=data.xpos[pad]+(fixed_digit_rot if fixed_digit_rot is not None else rot)@local
+        else:
+            anchor_pos,anchor_rot,anchor_lift,anchor_u=transport_anchor
+            target=anchor_pos+np.array([args.wrist_x_shift_m*(motion_u-anchor_u),0.,planned-anchor_lift])+anchor_rot@local
         if name=='index' and any(args.index_tip_offset_m):
             blend=np.clip((t-args.index_tip_offset_start_s)/.5,0.,1.)
             target+=blend*np.asarray(args.index_tip_offset_m)
@@ -324,14 +343,20 @@ for step in range(round(args.duration_s*50)):
             target+=blend*np.asarray(args.thumb_tip_offset_m)
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(jac.shape[1]),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
-    if args.index_ik_target_rad is not None:
+    if args.index_ik_target_rad is not None and transport_anchor is None:
         blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
         qa=digit_info['index']['qa']
         wbc.qref[qa]=(1.-blend)*wbc.qref[qa]+blend*np.asarray(args.index_ik_target_rad)
-    if args.thumb_ik_target_rad is not None:
+    if args.thumb_ik_target_rad is not None and transport_anchor is None:
         blend=np.clip((t-args.pickup_wrist_rotate_start_s)/.6,0.,1.)
         qa=digit_info['thumb']['qa']
         wbc.qref[qa]=(1.-blend)*wbc.qref[qa]+blend*np.asarray(args.thumb_ik_target_rad)
+    if args.late_tab_pinch_after_s is not None:
+        late_blend=np.clip((t-args.late_tab_pinch_after_s)/.6,0.,1.)
+        for name,target in (('thumb',args.late_thumb_ik_target_rad),('index',args.late_index_ik_target_rad)):
+            if target is not None:
+                qa=digit_info[name]['qa']
+                wbc.qref[qa]=(1.-late_blend)*wbc.qref[qa]+late_blend*np.asarray(target)
     try:
         data.ctrl[:],_,_=wbc.solve(data)
         impulses={};feet=set();deep=False;support_peak=0.;spool_grip={}
@@ -381,9 +406,9 @@ for step in range(round(args.duration_s*50)):
                   model.body(model.geom_bodyid[c.geom2]).name],
         'distance_m':float(c.dist),
         'normal_force_n':contact_force(ci),
-        'pad_to_other_normal_world':((1. if model.geom(c.geom1).name=='dressing_pad_contact' else -1.)*
+        'pad_to_other_normal_world':((1. if model.geom(c.geom1).name in ('dressing_pad_contact','dressing_pull_tab') else -1.)*
                                       np.asarray(c.frame[:3])).tolist()} for ci,c in enumerate(data.contact)
-        if 'dressing_pad_contact' in (model.geom(c.geom1).name,model.geom(c.geom2).name)]
+        if any(name in (model.geom(c.geom1).name,model.geom(c.geom2).name) for name in ('dressing_pad_contact','dressing_pull_tab'))]
     if rows[-1]['pad_lateral_shift_m']>max(.01,abs(args.wrist_x_shift_m)+.01):
         errors.append('pad_lateral_shift_over_plan_plus_10mm');break
     if rows[-1]['spool_shift_m']>.005:errors.append('spool_shift_over_5mm');break
