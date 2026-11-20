@@ -1,7 +1,7 @@
 {
   "scope": "Isolated physical pull-tab scene; simulated dual-G1 checkpoint only",
   "scene": "joint_spool_grasp_dressing_pull_tab_variant.xml",
-  "finding": "The tab permits intermittent two-finger contact, but no tested controller lifts the dressing clear of the stage.",
+  "finding": "A lower side-target IK adds side contacts but all six tested controllers leave the dressing on the stage.",
   "trials": [
     {
       "name": "baseline",
@@ -55,6 +55,17 @@
       "pad_center_lift_m": 0.0007709492732297374,
       "last25_thumb_tab_steps": 25,
       "last25_index_tab_steps": 7,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "lower_side_target",
+      "report": "joint_dressing_pilot_ee8b1469aba2d1c8.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0007207512693934159,
+      "last25_thumb_tab_steps": 25,
+      "last25_index_tab_steps": 10,
       "last25_stage_steps": 25,
       "errors": []
     }
