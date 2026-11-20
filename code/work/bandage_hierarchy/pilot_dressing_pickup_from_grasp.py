@@ -58,12 +58,16 @@ p.add_argument('--thumb-ik-target-rad',type=float,nargs=4,default=None,
                help='Static side-underpad IK target for thumb CMC flex/abd, MCP, IP')
 p.add_argument('--transport-grasp-after-s',type=float,default=None,
                help='After grasp, move digit targets with planned pickup instead of observed pad')
+p.add_argument('--transport-extra-lift-m',type=float,default=0.)
 p.add_argument('--late-tab-pinch-after-s',type=float,default=None)
 p.add_argument('--late-thumb-ik-target-rad',type=float,nargs=4,default=None)
 p.add_argument('--late-index-ik-target-rad',type=float,nargs=4,default=None)
 p.add_argument('--late-arm-offsets-rad',type=float,nargs=7,default=(0.,)*7)
 p.add_argument('--online-tab-ik-after-s',type=float,default=None)
 p.add_argument('--online-tab-target-z-m',type=float,default=-.006)
+p.add_argument('--online-tab-side-offset-m',type=float,default=.008)
+p.add_argument('--online-tab-ik-transport',action='store_true',
+               help='Keep online side-pinch IK during planned upward transport')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-end-s',type=float,default=None)
@@ -97,6 +101,7 @@ p.add_argument('--finger-forearm-cap-late-n',type=float,default=None)
 p.add_argument('--finger-forearm-cap-late-start-s',type=float,default=3.5)
 p.add_argument('--tag',default='',help='Distinct suffix for experimental output files')
 p.add_argument('--pull-tab-scene',action='store_true',help='Use isolated physical dressing pull-tab scene')
+p.add_argument('--pinch-post-scene',action='store_true',help='Use isolated cylindrical pinch-post diagnostic scene')
 p.add_argument('--start-state-token',default='75fdd3a3b4b1',
                choices=('75fdd3a3b4b1','947858479e10'),
                help='15.7 s joint grasp or 17.7 s full-sequence 20 mm spool pickup endpoint')
@@ -107,7 +112,9 @@ if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=5. or args.index_preposit
     p.error('Lift range (0,.06] m; duration [.5,5] s; preposition shorter than duration')
 motion_end=args.motion_end_s if args.motion_end_s is not None else args.duration_s
 if not args.index_preposition_s<motion_end<=args.duration_s:p.error('motion end must follow preposition and precede duration')
-scene_name=('joint_spool_grasp_dressing_pull_tab_variant.xml' if args.pull_tab_scene else
+if args.pull_tab_scene and args.pinch_post_scene:p.error('Choose one diagnostic scene')
+scene_name=('joint_spool_grasp_dressing_pinch_post_variant.xml' if args.pinch_post_scene else
+            'joint_spool_grasp_dressing_pull_tab_variant.xml' if args.pull_tab_scene else
             'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml')
 model=mujoco.MjModel.from_xml_path(str(OUT/scene_name))
 data=mujoco.MjData(model)
@@ -195,7 +202,7 @@ pregrasp_candidate=(side_candidate if args.middle_after_s is not None and side_c
 wbc.weights[digit_info['index']['va']]=args.index_weight
 local_captured={name:False for name in digit_info}
 if args.online_tab_ik_after_s is not None:
-    if not args.pull_tab_scene:p.error('online tab IK requires --pull-tab-scene')
+    if not (args.pull_tab_scene or args.pinch_post_scene):p.error('online tab IK requires diagnostic grip scene')
     ik_data=mujoco.MjData(model)
     ik_ids=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/right_')
             and any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
@@ -225,6 +232,8 @@ for step in range(round(args.duration_s*50)):
     motion_u=min(1.,lift_elapsed/lift_duration)
     if args.smooth_motion:motion_u=motion_u*motion_u*(3.-2.*motion_u)
     planned=args.lift_m*motion_u
+    if args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s:
+        planned+=args.transport_extra_lift_m*np.clip((t-args.transport_grasp_after_s)/.8,0.,1.)
     force_elapsed=max(0.,t-args.dressing_force_start_s)
     wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,force_elapsed/.2)
                               if args.dressing_lift_min_n and force_elapsed>0. and
@@ -324,6 +333,8 @@ for step in range(round(args.duration_s*50)):
     rot=data.xmat[pad].reshape(3,3)
     if args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s and transport_anchor is None:
         transport_anchor=(data.xpos[pad].copy(),rot.copy(),float(planned),float(motion_u))
+        for info in digit_info.values():
+            info['local']=rot.T@(data.xpos[info['body']]-data.xpos[pad])
     if args.freeze_digit_frame_after_s is not None and t>=args.freeze_digit_frame_after_s and fixed_digit_rot is None:
         fixed_digit_rot=rot.copy()
     for name,info in digit_info.items():
@@ -370,12 +381,15 @@ for step in range(round(args.duration_s*50)):
             if target is not None:
                 qa=digit_info[name]['qa']
                 wbc.qref[qa]=(1.-late_blend)*wbc.qref[qa]+late_blend*np.asarray(target)
-    if args.online_tab_ik_after_s is not None and t>=args.online_tab_ik_after_s:
+    if (args.online_tab_ik_after_s is not None and t>=args.online_tab_ik_after_s and
+            (transport_anchor is None or args.online_tab_ik_transport)):
         ik_data.qpos[:]=data.qpos;mujoco.mj_forward(model,ik_data)
         tab_R=ik_data.geom_xmat[tab_geom].reshape(3,3)
         tab_pos=ik_data.geom_xpos[tab_geom].copy()
-        tab_targets=(tab_pos+tab_R[:,1]*.008+tab_R[:,2]*args.online_tab_target_z_m,
-                     tab_pos-tab_R[:,1]*.008+tab_R[:,2]*args.online_tab_target_z_m)
+        if transport_anchor is not None:
+            tab_pos[2]+=planned-transport_anchor[2]
+        tab_targets=(tab_pos+tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*args.online_tab_target_z_m,
+                     tab_pos-tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*args.online_tab_target_z_m)
         thumb_id=digit_info['thumb']['body'];index_id=digit_info['index']['body']
         wrist_start=ik_data.xpos[wrist].copy();ik_start=data.qpos[ik_qa].copy()
         def tab_residual(x):
@@ -473,8 +487,12 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'late_arm_offsets_rad':args.late_arm_offsets_rad,
         'online_tab_ik_after_s':args.online_tab_ik_after_s,
         'online_tab_target_z_m':args.online_tab_target_z_m,
+        'online_tab_side_offset_m':args.online_tab_side_offset_m,
+        'online_tab_ik_transport':args.online_tab_ik_transport,
         'transport_grasp_after_s':args.transport_grasp_after_s,
+        'transport_extra_lift_m':args.transport_extra_lift_m,
         'pull_tab_scene':args.pull_tab_scene,
+        'pinch_post_scene':args.pinch_post_scene,
         'index_tip_offset_m':args.index_tip_offset_m,
         'index_tip_offset_start_s':args.index_tip_offset_start_s,
         'thumb_tip_offset_m':args.thumb_tip_offset_m,

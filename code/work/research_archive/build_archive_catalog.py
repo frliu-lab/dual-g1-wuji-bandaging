@@ -205,6 +205,8 @@ SELECTED = [
     'bandage_v0/joint_dressing_pad_orientation_counterfactual_audit.json',
     'bandage_v0/joint_dressing_pull_tab_pilot_audit.json',
     'bandage_v0/joint_spool_grasp_dressing_pull_tab_variant.xml',
+    'bandage_v0/joint_dressing_pinch_post_pilot_audit.json',
+    'bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml',
     'bandage_v0/joint_dressing_grip_support_tradeoff_audit.json',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4',

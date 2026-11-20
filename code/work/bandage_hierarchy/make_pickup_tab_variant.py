@@ -13,3 +13,9 @@ dst.write_text(text.replace(old,new),encoding='utf-8')
 m=mujoco.MjModel.from_xml_path(str(dst))
 assert m.geom('dressing_pull_tab').id>=0
 print(dst,'nq',m.nq,'nv',m.nv,'nu',m.nu)
+post=root/'joint_spool_grasp_dressing_pinch_post_variant.xml'
+post_geom='<geom name="dressing_pull_tab" type="cylinder" pos="0 0 .025" size=".006 .025" mass=".001" rgba=".82 .89 .96 1" friction="1.2 .005 .0001" />'
+post.write_text(text.replace(old,old+post_geom),encoding='utf-8')
+post_model=mujoco.MjModel.from_xml_path(str(post))
+assert post_model.nq==m.nq and post_model.geom('dressing_pull_tab').id>=0
+print(post,'nq',post_model.nq,'nv',post_model.nv,'nu',post_model.nu)

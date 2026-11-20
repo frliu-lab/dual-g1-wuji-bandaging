@@ -1,0 +1,54 @@
+{
+  "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
+  "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
+  "finding": "Two-sided post contact is more consistent, but 15 mm commanded transport does not lift pad from stage; hard 0.05 N upward-force constraint becomes infeasible late.",
+  "trials": [
+    {
+      "name": "side_pinch",
+      "report": "joint_dressing_pilot_826e2b1d6e5ebaeb.json",
+      "completed": true,
+      "steps": 175,
+      "pad_center_lift_m": -0.002439703876119359,
+      "last25_thumb_post_steps": 25,
+      "last25_index_post_steps": 25,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "planned_lift_breaks_grip",
+      "report": "joint_dressing_pilot_355a1bac7ec491d8.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0026540355294474294,
+      "last25_thumb_post_steps": 0,
+      "last25_index_post_steps": 0,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "online_transport_15mm",
+      "report": "joint_dressing_pilot_855b3137f941871e.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": 0.0011438377977307512,
+      "last25_thumb_post_steps": 25,
+      "last25_index_post_steps": 23,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "upward_force_0p05n",
+      "report": "joint_dressing_pilot_9d884450939fcd6e.json",
+      "completed": false,
+      "steps": 189,
+      "pad_center_lift_m": 0.0007171941925128156,
+      "last25_thumb_post_steps": 25,
+      "last25_index_post_steps": 24,
+      "last25_stage_steps": 25,
+      "errors": [
+        "WBC invalid infeasible residual inf constraint violation 2.0866780525707895e-12"
+      ]
+    }
+  ],
+  "pass": false
+}
