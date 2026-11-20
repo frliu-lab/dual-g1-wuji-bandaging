@@ -202,6 +202,7 @@ SELECTED = [
     'bandage_v0/joint_dressing_reproduction_regression_audit.json',
     'bandage_v0/joint_dressing_arm_index_ik_contact_audit.json',
     'bandage_v0/joint_dressing_pad_edge_clearance_audit.json',
+    'bandage_v0/joint_dressing_pad_orientation_counterfactual_audit.json',
     'bandage_v0/joint_dressing_grip_support_tradeoff_audit.json',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo_hand_closeup.mp4',
