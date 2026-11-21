@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Twelve pilots fail pickup. Stronger wrist hold reduces lateral drift (75 to 40 mm) but loses effective upward grasp; intermediate hold still drifts 63 mm and stays on stage.",
+  "finding": "Nineteen isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
   "trials": [
     {
       "name": "side_pinch",
@@ -135,6 +135,92 @@
       "max_pad_lateral_shift_m": 0.06306597813915889,
       "median_last25_predicted_up_n": -0.0008950747239325695,
       "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "post_force_model_check",
+      "report": "joint_dressing_pilot_af2d1939a49b4879.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0005447909156692798,
+      "max_pad_lateral_shift_m": 0.05748322573926934,
+      "median_last25_predicted_up_n": 0.19412150811877446,
+      "median_last25_actual_robot_up_n": 0.150010234597918,
+      "last25_stage_steps": 12,
+      "errors": []
+    },
+    {
+      "name": "post_late_transport35",
+      "report": "joint_dressing_pilot_f77146926fffa5f6.json",
+      "completed": false,
+      "steps": 221,
+      "pad_center_lift_m": -0.0075680091115665205,
+      "max_pad_lateral_shift_m": 0.08003086083926544,
+      "median_last25_predicted_up_n": -3.697282290212088e-05,
+      "median_last25_actual_robot_up_n": 0.024400575567553477,
+      "last25_stage_steps": 23,
+      "errors": [
+        "pad_lateral_shift_over_plan_plus_10mm"
+      ]
+    },
+    {
+      "name": "post_padpose_weak",
+      "report": "joint_dressing_pilot_db8df7015c0f66c5.json",
+      "completed": true,
+      "steps": 190,
+      "pad_center_lift_m": -0.005715401563046063,
+      "max_pad_lateral_shift_m": 0.07148964614894589,
+      "median_last25_predicted_up_n": -1.4584460870004879e-05,
+      "median_last25_actual_robot_up_n": -0.034045981774902076,
+      "last25_stage_steps": 6,
+      "errors": []
+    },
+    {
+      "name": "post_xy_force30",
+      "report": "joint_dressing_pilot_d9dbae46a8f86523.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.00327361111827984,
+      "max_pad_lateral_shift_m": 0.032173440603890914,
+      "median_last25_predicted_up_n": -0.0051226101834453645,
+      "median_last25_actual_robot_up_n": 0.014559098691336248,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "post_xy_force10",
+      "report": "joint_dressing_pilot_cdda2ab4dc057845.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.001764273011775841,
+      "max_pad_lateral_shift_m": 0.06191206164333347,
+      "median_last25_predicted_up_n": 0.14501066772457402,
+      "median_last25_actual_robot_up_n": 0.15407502916788396,
+      "last25_stage_steps": 7,
+      "errors": []
+    },
+    {
+      "name": "post_xy_force10_up04",
+      "report": "joint_dressing_pilot_397bf9410815807a.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0027757779922170656,
+      "max_pad_lateral_shift_m": 0.029866326387076564,
+      "median_last25_predicted_up_n": -0.0067342080263681535,
+      "median_last25_actual_robot_up_n": 0.005457743591561648,
+      "last25_stage_steps": 17,
+      "errors": []
+    },
+    {
+      "name": "post_early_unload",
+      "report": "joint_dressing_pilot_82b974787d9e2b48.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0035674318497241897,
+      "max_pad_lateral_shift_m": 0.03412725251453306,
+      "median_last25_predicted_up_n": -0.0036118565022196965,
+      "median_last25_actual_robot_up_n": 0.01599668090443543,
+      "last25_stage_steps": 23,
       "errors": []
     }
   ],

@@ -5,10 +5,11 @@ from statistics import median
 
 ROOT = Path(__file__).resolve().parents[2]
 REPORTS = ROOT / 'outputs/wuji_multiagent/bandage_v0'
-AUDIT = ROOT / 'research_archive/media/bandage_v0/joint_dressing_pinch_post_pilot_audit.json'
+AUDIT = REPORTS / 'joint_dressing_pinch_post_pilot_audit.json'
 TAGS = (
     'post_force_model_check', 'post_late_transport35', 'post_padpose_weak',
     'post_xy_force30', 'post_xy_force10', 'post_xy_force10_up04',
+    'post_early_unload',
 )
 
 
@@ -40,10 +41,11 @@ def main():
             'last25_stage_steps': sum(any('dressing_stage' in c['geoms'] for c in f['pad_contacts']) for f in tail),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Eighteen isolated pinch-post pilots fail pickup. World-frame force logging '
+    audit['finding'] = ('Nineteen isolated pinch-post pilots fail pickup. World-frame force logging '
                         'confirms some predicted upward grip is realized, but the pad slides laterally '
                         'or remains supported by the stage. Lateral-force feedback limits drift to about '
-                        '30 mm in one run, without clearing the stage. This diagnostic prop is not the '
+                        '30 mm in one run, without clearing the stage. Moving the upward force target '
+                        'earlier also fails to unload the stage. This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False
     AUDIT.write_text(json.dumps(audit, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
