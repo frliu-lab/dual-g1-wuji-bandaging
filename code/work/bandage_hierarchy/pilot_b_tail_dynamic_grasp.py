@@ -22,6 +22,7 @@ parser.add_argument('--tip-pinch-seed',action='store_true')
 parser.add_argument('--tip-pinch-rank',type=int,default=0)
 parser.add_argument('--gap-servo',action='store_true')
 parser.add_argument('--no-rest',action='store_true')
+parser.add_argument('--right-hand-position-mode',action='store_true')
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -103,6 +104,11 @@ wbc=JointWBC(model,data.qpos.copy(),palm_names=palms,contact_filter=robot_contac
 wbc.backend='CLARABEL' if args.tip_servo else 'DIRECT'
 wbc.tip_position_weight=args.tip_weight
 wbc.tail_proxy_digit_normal_goal_n=args.normal_goal_n
+if args.right_hand_position_mode:
+    wbc.hand_position_mode=True
+    right_hand={i for i in wbc.hand_indices if model.actuator(int(i)).name.startswith('g1_b/wuji_right/')}
+    assert right_hand
+    wbc.force_control_indices=set(map(int,wbc.hand_indices))-right_hand
 tip_bodies={digit:model.body(f'g1_b/wuji_right/r_{digit}_tip_sensor_frame').id
             for digit in ('thumb','index_finger')}
 tip_offsets={digit:data.xpos[bid].copy()-initial_tab for digit,bid in tip_bodies.items()}
@@ -151,6 +157,9 @@ for _ in range(round(duration/.02)):
             wbc.tip_position_targets={model.body(bid).name:tab_now+
                 (tab_rotation@tip_local_offsets[digit] if args.pose_servo else tip_offsets[digit])
                 for digit,bid in tip_bodies.items()}
+        if args.right_hand_position_mode:
+            for actuator in right_hand:
+                wbc.hand_commands[actuator]=wbc.qref[wbc.act_qadr[actuator]]
         ctrl,meta,_=wbc.solve(data)
         data.ctrl[:]=ctrl
         steps+=1
@@ -223,6 +232,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'optimized_tip_seed':args.optimized_tip_seed,
         'tip_pinch_seed':args.tip_pinch_seed,
         'gap_servo':args.gap_servo,
+        'right_hand_position_mode':args.right_hand_position_mode,
         'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
@@ -239,5 +249,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_no_rest" if args.no_rest else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))

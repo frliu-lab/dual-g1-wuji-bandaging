@@ -26,7 +26,8 @@ for rank in range(5):
 feedback=[]
 for label,suffix in (('gap_feedback','_gap'),('gap_and_1n_force','_force1n_gap'),
                      ('pose_tip_servo','_tip_servo_1mm_w1000_pose'),
-                     ('gap_without_rest','_gap_no_rest')):
+                     ('gap_without_rest','_gap_no_rest'),
+                     ('right_hand_position_with_gap','_gap_right_position')):
     name=f'joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0{suffix}.json'
     trial=json.loads((OUT/name).read_text())
     feedback.append({'label':label,'source':name,'duration_s':trial['duration_s'],

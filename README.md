@@ -135,3 +135,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 **修正后的手部反馈对照：** [碰撞网格间隙反馈](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap.json)让 rank0 的相向接触占比从 17% 升至 22.8%、带端位移从 23.8 mm 降至 9.4 mm，完成 0.5 s WBC；[再加入每指 1 N 预测法向力目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_force1n_gap.json)时相向占比 19%、位移 8.2 mm。[物体姿态指尖跟踪](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_tip_servo_1mm_w1000_pose.json)于 0.22 s 出现数值约束失效。[统一门槛](media/bandage_v0/joint_b_tail_tip_pinch_grasp_gate.json)下均不合格，尤其未达到 ≥90% 的相向接触。
 
 **撤除支架反事实：** 在相同 rank0 几何、相同 0.5 s WBC 和碰撞网格间隙反馈下，[无支架报告](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap_no_rest.json)的双脚接地仍为 100%，但双指相向接触降至 9.2%，带端最大位移达 0.452 m。由此可确认此前带端留在附近主要依赖支架；机器人尚不能独立持带。
+
+**全身与手指控制接口对照：** WBC 现在可只将 B 右 Wuji 手切为关节位置指令，其他三只手仍按力矩求解。用相同 rank0、间隙反馈和支架跑满 0.5 s 时，[位置控制报告](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap_right_position.json)的双脚接地为 100%，但相向双指接触只有 17.2%，带端最大位移 0.414 m，明显劣于原有的 22.8% 和 9.4 mm。接口切换可运行，但当前关节位置参考不能稳定抓带，不具备进入包扎阶段的资格。

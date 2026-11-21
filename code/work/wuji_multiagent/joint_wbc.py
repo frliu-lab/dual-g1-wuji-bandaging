@@ -65,7 +65,9 @@ class JointWBC:
   gain=self.m.actuator_gainprm[:,0]
   bias=self.m.actuator_biasprm[:,0]+self.m.actuator_biasprm[:,1]*(self.act_gear*d.qpos[self.act_qadr])+self.m.actuator_biasprm[:,2]*(self.act_gear*d.qvel[self.act_vadr])
   ctrl=(tau-bias)/gain
-  if self.hand_position_mode:ctrl[self.hand_indices]=self.hand_commands[self.hand_indices]+self.hand_tau_correction[self.hand_indices]/gain[self.hand_indices]
+  if self.hand_position_mode:
+   position_hand=np.array([i for i in self.hand_indices if i not in self.force_control_indices],dtype=int)
+   ctrl[position_hand]=self.hand_commands[position_hand]+self.hand_tau_correction[position_hand]/gain[position_hand]
   for i in range(self.m.nu):
    if self.m.actuator_ctrllimited[i]:ctrl[i]=np.clip(ctrl[i],*self.m.actuator_ctrlrange[i])
   return ctrl
