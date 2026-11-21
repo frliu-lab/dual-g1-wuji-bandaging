@@ -69,6 +69,8 @@ p.add_argument('--online-tab-side-offset-m',type=float,default=.008)
 p.add_argument('--online-tab-ik-transport',action='store_true',
                help='Keep online side-pinch IK during planned upward transport')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
+p.add_argument('--dressing-up-goal-n',type=float,default=None)
+p.add_argument('--dressing-up-goal-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-start-s',type=float,default=0.)
 p.add_argument('--dressing-force-end-s',type=float,default=None)
 p.add_argument('--track-pad-pose',action='store_true')
@@ -238,6 +240,8 @@ for step in range(round(args.duration_s*50)):
     wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,force_elapsed/.2)
                               if args.dressing_lift_min_n and force_elapsed>0. and
                               (args.dressing_force_end_s is None or t<args.dressing_force_end_s) else None)
+    wbc.dressing_up_force_goal_n=(args.dressing_up_goal_n
+        if args.dressing_up_goal_n is not None and t>=args.dressing_up_goal_start_s else None)
     if args.start_state_token=='947858479e10':
         spool_velocity=float(data.qvel[spool_free.dofadr[0]+2])
         spool_error=float(start_spool[2]-data.xpos[spool,2])
@@ -498,6 +502,8 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'thumb_tip_offset_m':args.thumb_tip_offset_m,
         'thumb_tip_offset_start_s':args.thumb_tip_offset_start_s,
         'dressing_lift_min_n':args.dressing_lift_min_n,
+        'dressing_up_goal_n':args.dressing_up_goal_n,
+        'dressing_up_goal_start_s':args.dressing_up_goal_start_s,
         'dressing_force_start_s':args.dressing_force_start_s,
         'dressing_force_end_s':args.dressing_force_end_s,
         'track_pad_pose':args.track_pad_pose,

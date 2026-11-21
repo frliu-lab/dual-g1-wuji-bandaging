@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Two-sided post contact is more consistent, but 15 mm commanded transport does not lift pad from stage; hard 0.05 N upward-force constraint becomes infeasible late.",
+  "finding": "Two-sided post contact improves, but six controllers including soft upward-force goal and higher grip-force goal do not lift dressing clear of stage; hard 0.05 N upward-force constraint becomes infeasible late.",
   "trials": [
     {
       "name": "side_pinch",
@@ -48,6 +48,28 @@
       "errors": [
         "WBC invalid infeasible residual inf constraint violation 2.0866780525707895e-12"
       ]
+    },
+    {
+      "name": "soft_up_0p2n",
+      "report": "joint_dressing_pilot_9caceb4c8c39ceca.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.000269514383767433,
+      "last25_thumb_post_steps": 25,
+      "last25_index_post_steps": 16,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "soft_up_0p2n_grip1p5",
+      "report": "joint_dressing_pilot_2a6d166397a8d0b7.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": 0.0011744369400583654,
+      "last25_thumb_post_steps": 25,
+      "last25_index_post_steps": 23,
+      "last25_stage_steps": 25,
+      "errors": []
     }
   ],
   "pass": false

@@ -12,7 +12,7 @@
 
 新增一个**独立训练器具场景**：[带物理拉片的敷料模型](media/bandage_v0/joint_spool_grasp_dressing_pull_tab_variant.xml)及[八组试验审计](media/bandage_v0/joint_dressing_pull_tab_pilot_audit.json)。拉片与敷料同属自由运动刚体，不是固定到手上的约束；联合右臂和双指目标及每帧根据拉片位姿重算的双指目标可产生接触，但八组都没有让敷料脱离台面。实际接触法线仍有明显向下分量；把目标下移会减少食指接触。后续需要重新设计指腹进入拉片两侧的路径与接触法线，再验证底面净空和持物稳定性。该变体只是研究道具，不代表原场景完成。
 
-另一项[细圆柱训练抓取柄](media/bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml)使末段两指侧向接触达到 25/25 帧，但[四组动态审计](media/bandage_v0/joint_dressing_pinch_post_pilot_audit.json)显示：按规划向上搬运 15 mm 时敷料仍在台面；施加 0.05 N 硬性向上合力下限会在后段不可行。该圆柱柄只是诊断几何，不是原敷料或真实 Wuji 手验收。
+另一项[细圆柱训练抓取柄](media/bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml)使末段两指侧向接触达到 25/25 帧，但[六组动态审计](media/bandage_v0/joint_dressing_pinch_post_pilot_audit.json)显示：按规划向上搬运 15 mm 时敷料仍在台面；施加 0.05 N 硬性向上合力下限会在后段不可行。增加 0.2 N 软性上提目标与 1.5 N 夹持目标也未让敷料离台。该圆柱柄只是诊断几何，不是原敷料或真实 Wuji 手验收。
 
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
