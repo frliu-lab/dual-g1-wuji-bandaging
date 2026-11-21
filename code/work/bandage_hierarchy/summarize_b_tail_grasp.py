@@ -25,7 +25,8 @@ for rank in range(5):
                  'strict_proxy_grasp_pass':passed})
 feedback=[]
 for label,suffix in (('gap_feedback','_gap'),('gap_and_1n_force','_force1n_gap'),
-                     ('pose_tip_servo','_tip_servo_1mm_w1000_pose')):
+                     ('pose_tip_servo','_tip_servo_1mm_w1000_pose'),
+                     ('gap_without_rest','_gap_no_rest')):
     name=f'joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0{suffix}.json'
     trial=json.loads((OUT/name).read_text())
     feedback.append({'label':label,'source':name,'duration_s':trial['duration_s'],
@@ -33,7 +34,7 @@ for label,suffix in (('gap_feedback','_gap'),('gap_and_1n_force','_force1n_gap')
                      'opposing_contact_fraction':trial['contact_fractions']['opposing'],
                      'tail_center_drift_m':trial['max_tail_center_drift_m'],
                      'strict_proxy_grasp_pass':gate(trial)})
-report={'scope':'Rigid tail on rest with massless tether; research gate only, no flexible bandage or hardware claim',
+report={'scope':'Rigid tail with massless tether; includes rest-removal counterfactual, no flexible bandage or hardware claim',
         'thresholds':{'duration_s_min':.499,'two_foot_support_fraction_min':.99,
                       'opposing_contact_fraction_min':.9,'tail_center_drift_m_max':.005,
                       'max_b_nonfloor_penetration_m':.003,'wbc_error':None},

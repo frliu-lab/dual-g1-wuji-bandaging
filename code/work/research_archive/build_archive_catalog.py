@@ -241,6 +241,8 @@ SELECTED = [
     'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap.json',
     'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_force1n_gap.json',
     'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_tip_servo_1mm_w1000_pose.json',
+    'bandage_v0/joint_b_tail_dynamic_proxy_variant_7mm_tip_pinch_rank0_no_rest.xml',
+    'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap_no_rest.json',
     'bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml',
     'bandage_v0/joint_dressing_grip_support_tradeoff_audit.json',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4',

@@ -21,6 +21,7 @@ parser.add_argument('--optimized-tip-seed',action='store_true')
 parser.add_argument('--tip-pinch-seed',action='store_true')
 parser.add_argument('--tip-pinch-rank',type=int,default=0)
 parser.add_argument('--gap-servo',action='store_true')
+parser.add_argument('--no-rest',action='store_true')
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -46,10 +47,11 @@ geom_quat=np.asarray(tip_ik['proxy_quaternion_wxyz'] if tip_ik else
                      [.70710678,0,.70710678,0])
 root=ET.parse(OUT/screen['scene']).getroot()
 world=root.find('worldbody')
-ET.SubElement(world,'geom',{'name':'bandage_tail_rest','type':'cylinder',
-                            'pos':f'{pos[0]} {pos[1]} {pos[2]-(.029 if tip_pinch else .028 if tip_ik else .024)}',
-                            'size':f'.005 {(.014 if tip_ik or tip_pinch else .017)}','rgba':'.45 .47 .50 1',
-                            'friction':'1 .005 .0001'})
+if not args.no_rest:
+    ET.SubElement(world,'geom',{'name':'bandage_tail_rest','type':'cylinder',
+                                'pos':f'{pos[0]} {pos[1]} {pos[2]-(.029 if tip_pinch else .028 if tip_ik else .024)}',
+                                'size':f'.005 {(.014 if tip_ik or tip_pinch else .017)}','rgba':'.45 .47 .50 1',
+                                'friction':'1 .005 .0001'})
 tab=ET.SubElement(world,'body',{'name':'bandage_tail_dynamic_proxy',
                                 'pos':' '.join(map(str,pos))})
 ET.SubElement(tab,'freejoint',{'name':'bandage_tail_proxy_free'})
@@ -64,7 +66,7 @@ line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':
                                         pos-np.array([.38,-.44,.702]))))})
 ET.SubElement(line,'site',{'site':'bandage_spool_anchor'})
 ET.SubElement(line,'site',{'site':'bandage_tail_proxy_anchor'})
-xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}.xml'
+xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_no_rest" if args.no_rest else ""}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
 data=mujoco.MjData(model)
@@ -221,6 +223,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'optimized_tip_seed':args.optimized_tip_seed,
         'tip_pinch_seed':args.tip_pinch_seed,
         'gap_servo':args.gap_servo,
+        'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'tip_position_weight':args.tip_weight,
@@ -236,5 +239,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_no_rest" if args.no_rest else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
