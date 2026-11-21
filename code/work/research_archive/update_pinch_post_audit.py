@@ -11,6 +11,7 @@ TAGS = (
     'post_xy_force30', 'post_xy_force10', 'post_xy_force10_up04',
     'post_early_unload',
     'post_contact_gate',
+    'post_gate_zplus2', 'post_gate_zplus2_xy30',
 )
 
 
@@ -45,13 +46,15 @@ def main():
                                      for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Twenty isolated pinch-post pilots fail pickup. World-frame force logging '
+    audit['finding'] = ('Twenty-two isolated pinch-post pilots fail pickup. World-frame force logging '
                         'confirms some predicted upward grip is realized, but the pad slides laterally '
                         'or remains supported by the stage. Lateral-force feedback limits drift to about '
                         '30 mm in one run, without clearing the stage. Moving the upward force target '
                         'earlier also fails to unload the stage. A measured-contact phase gate correctly '
                         'blocks transport when the simulated hand presses downward despite a positive '
-                        'predicted upward force. This diagnostic prop is not the '
+                        'predicted upward force. Raising the finger target 8 mm reduces downward loading '
+                        'but still slides the pad; stronger lateral feedback restores downward loading. '
+                        'This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False
     AUDIT.write_text(json.dumps(audit, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')

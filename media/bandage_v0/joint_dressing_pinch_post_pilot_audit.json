@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Twenty isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. A measured-contact phase gate correctly blocks transport when the simulated hand presses downward despite a positive predicted upward force. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
+  "finding": "Twenty-two isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. A measured-contact phase gate correctly blocks transport when the simulated hand presses downward despite a positive predicted upward force. Raising the finger target 8 mm reduces downward loading but still slides the pad; stronger lateral feedback restores downward loading. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
   "trials": [
     {
       "name": "side_pinch",
@@ -247,6 +247,34 @@
       "median_last25_predicted_up_n": 0.06403781336666381,
       "median_last25_actual_robot_up_n": -0.2507619664254548,
       "last25_stage_steps": 21,
+      "transport_started": false,
+      "max_ready_streak": 2,
+      "errors": []
+    },
+    {
+      "name": "post_gate_zplus2",
+      "report": "joint_dressing_pilot_bae42600bb590e59.json",
+      "completed": true,
+      "steps": 180,
+      "pad_center_lift_m": -0.004493570087166443,
+      "max_pad_lateral_shift_m": 0.030760495715437687,
+      "median_last25_predicted_up_n": 0.06657528247568012,
+      "median_last25_actual_robot_up_n": -0.01781273954479768,
+      "last25_stage_steps": 23,
+      "transport_started": false,
+      "max_ready_streak": 2,
+      "errors": []
+    },
+    {
+      "name": "post_gate_zplus2_xy30",
+      "report": "joint_dressing_pilot_a13b2d1388278d1f.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0038838606411111254,
+      "max_pad_lateral_shift_m": 0.027251465554887326,
+      "median_last25_predicted_up_n": 0.09886830956679954,
+      "median_last25_actual_robot_up_n": -0.17610081565291943,
+      "last25_stage_steps": 25,
       "transport_started": false,
       "max_ready_streak": 2,
       "errors": []
