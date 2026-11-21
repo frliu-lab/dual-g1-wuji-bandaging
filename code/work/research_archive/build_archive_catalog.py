@@ -238,6 +238,7 @@ SELECTED = [
     'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank3.json',
     'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank4.json',
     'bandage_v0/joint_b_tail_tip_pinch_grasp_gate.json',
+    'bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap.json',
     'bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml',
     'bandage_v0/joint_dressing_grip_support_tradeoff_audit.json',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4',

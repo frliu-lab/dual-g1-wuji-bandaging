@@ -20,6 +20,7 @@ parser.add_argument('--pose-servo',action='store_true')
 parser.add_argument('--optimized-tip-seed',action='store_true')
 parser.add_argument('--tip-pinch-seed',action='store_true')
 parser.add_argument('--tip-pinch-rank',type=int,default=0)
+parser.add_argument('--gap-servo',action='store_true')
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -106,12 +107,41 @@ tip_offsets={digit:data.xpos[bid].copy()-initial_tab for digit,bid in tip_bodies
 tip_offsets['thumb'][0]-=args.squeeze_mm/1000
 tip_offsets['index_finger'][0]+=args.squeeze_mm/1000
 tip_local_offsets={digit:initial_tab_rotation.T@offset for digit,offset in tip_offsets.items()}
+gap_data=mujoco.MjData(model)
+tab_geom=model.geom('bandage_tail_proxy_contact').id
+gap_digits={}
+for digit,bid in tip_bodies.items():
+    gid=next(i for i in range(model.ngeom) if model.geom_bodyid[i]==bid)
+    joints=[j for j in range(model.njnt) if model.joint(j).name.startswith(
+        f'g1_b/wuji_right/r_{digit}_') and 'abd' not in model.joint(j).name]
+    gap_digits[digit]=(gid,joints)
+initial_hand_reference=wbc.qref.copy()
 fractions={'thumb':0,'index':0,'opposing':0,'two_feet':0}
 max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[];bad_acc_bounds=[]
 control_trace=[]
 duration=.5;interval=round(.02/model.opt.timestep)
 for _ in range(round(duration/.02)):
     try:
+        if args.gap_servo:
+            for digit,(gid,joints) in gap_digits.items():
+                gap_data.qpos[:]=data.qpos
+                mujoco.mj_forward(model,gap_data)
+                distance=mujoco.mj_geomDistance(model,gap_data,tab_geom,gid,1.,None)
+                gradient=[]
+                for j in joints:
+                    adr=model.jnt_qposadr[j]
+                    gap_data.qpos[adr]+=.002
+                    mujoco.mj_forward(model,gap_data)
+                    shifted=mujoco.mj_geomDistance(model,gap_data,tab_geom,gid,1.,None)
+                    gradient.append((shifted-distance)/.002)
+                    gap_data.qpos[adr]=data.qpos[adr]
+                gradient=np.asarray(gradient)
+                step=-.4*(distance+.0005)*gradient/(gradient@gradient+.001)
+                for j,delta in zip(joints,np.clip(step,-.03,.03)):
+                    adr=model.jnt_qposadr[j]
+                    wbc.qref[adr]=np.clip(wbc.qref[adr]+delta,
+                        max(model.jnt_range[j,0]+.01,initial_hand_reference[adr]-.2),
+                        min(model.jnt_range[j,1]-.01,initial_hand_reference[adr]+.2))
         if args.tip_servo:
             tab_now=data.xpos[tab_id].copy()
             tab_rotation=data.xmat[tab_id].reshape(3,3)
@@ -186,6 +216,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'seed':seed,'initial_tail_contacts':initial_tail_contacts,
         'optimized_tip_seed':args.optimized_tip_seed,
         'tip_pinch_seed':args.tip_pinch_seed,
+        'gap_servo':args.gap_servo,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'tip_position_weight':args.tip_weight,
@@ -200,5 +231,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))

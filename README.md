@@ -131,3 +131,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 **指尖几何复核：** 先前带端种子的食指接触实际在食指中节。静态脚本曾在 MuJoCo 编译后更改带端朝向，导致碰撞标志未按预期更新；原先「3360 组中 0 组双指尖接触」结论已撤回。修正为编译前确定朝向后，[3360 组静态筛选](media/bandage_v0/joint_b_tail_tip_pinch_static_screen.json)找到 5 个双指尖相向接触候选。[可移动带端基线](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch.json)的相向接触占比为 21.6%，但 WBC 于 0.44 s 不可行；[物体姿态跟踪试验](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_tip_servo_1mm_w1000_pose.json)的相向接触占比为 17.5%，WBC 于 0.20 s 失效。两者都没有形成持续抓持或离架，不能进入缠绕阶段。
 
 **五个双指尖种子的动态验收：** [统一质量门槛](media/bandage_v0/joint_b_tail_tip_pinch_grasp_gate.json)要求 0.5 s 完整求解、双脚接地 ≥99%、相向双指接触 ≥90%、带端中心位移 ≤5 mm、非地面穿透 <3 mm；结果 **0/5 通过**。最佳早期候选在 0.44 s 前相向接触约 21.6%，带端位移 14.5 mm，随后 WBC 不可行；能跑满 0.5 s 的两组带端分别移动约 0.42/0.64 m。此门槛仅用于代理模型比较，绝非实机安全阈值。
+
+**间隙闭环反例：** [B 右两指接触网格距离反馈](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap.json)逐控制周期小幅更新手指关节参考，最优静态种子的相向接触占比为 19.5%，带端位移 12.7 mm，0.44 s 时 WBC 仍不可行；相比无反馈的 21.6% / 14.5 mm，并未跨越质量门槛。说明当前失效同时涉及物体姿态、接触时序和全身 QP 可行性，不能只靠手指关节距离纠正。
