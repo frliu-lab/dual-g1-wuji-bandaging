@@ -275,6 +275,7 @@ class JointWBC:
   if self.hand_position_mode:
    for actuator in fixed_hand:self.hand_tau_correction[actuator]=tau.value[actuator]-requested_hand_tau[int(np.flatnonzero(self.hand_indices==actuator)[0])]
   self.last_tau=tau.value.copy();self.last_pad_force_targets={}
+  self.last_predicted_dressing_up_force_n=float(dressing_up_coeff@f.value)
   for k,(ga,gb) in enumerate(ids):
    if not any(m.body(m.geom_bodyid[g]).name.startswith('shared_joystick') for g in (ga,gb)):continue
    for geom in (ga,gb):

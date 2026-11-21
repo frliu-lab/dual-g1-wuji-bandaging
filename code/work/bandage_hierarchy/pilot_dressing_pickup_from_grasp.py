@@ -407,6 +407,7 @@ for step in range(round(args.duration_s*50)):
         wbc.qref[ik_qa]=fit.x
     try:
         data.ctrl[:],_,_=wbc.solve(data)
+        predicted_dressing_up_n=wbc.last_predicted_dressing_up_force_n
         impulses={};feet=set();deep=False;support_peak=0.;spool_grip={}
         for _ in range(interval):
             mujoco.mj_step(model,data)
@@ -442,6 +443,7 @@ for step in range(round(args.duration_s*50)):
                  'spool_shift_m':float(np.linalg.norm(data.xpos[spool]-start_spool))})
     recorded_qpos.append(data.qpos.copy())
     rows[-1].update({'support_valid':bool(support_valid),'support_quality':support_monitor.last_report,
+                     'predicted_dressing_up_force_n':predicted_dressing_up_n,
                      'support_impulse_by_body_ns':impulses,
                      'feet_supported':feet=={'g1_a','g1_b'},'deep_robot_contact':deep,
                      'spool_grip_impulse_by_body_ns':spool_grip})
