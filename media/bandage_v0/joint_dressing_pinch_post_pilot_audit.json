@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Thirty isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. A measured-contact phase gate correctly blocks transport when the simulated hand presses downward despite a positive predicted upward force. Raising the finger target 8 mm reduces downward loading but still slides the pad; stronger lateral feedback restores downward loading. Adaptive fingertip-height feedback does not fix this. Contact inspection shows the index often loads its middle/proximal links instead of the distal pad. Relaxing wrist hold, reducing force targets, increasing index tracking, and constraining index DIP extension do not recover distal contact. The current grasp pose/approach must be replanned before more force tuning. A static collision-screened tip-first IK pose has both distal contacts under 1 mm penetration, but its fixed-pose and moving-object online replays lose index distal contact dynamically. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
+  "finding": "Thirty-one isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. A measured-contact phase gate correctly blocks transport when the simulated hand presses downward despite a positive predicted upward force. Raising the finger target 8 mm reduces downward loading but still slides the pad; stronger lateral feedback restores downward loading. Adaptive fingertip-height feedback does not fix this. Contact inspection shows the index often loads its middle/proximal links instead of the distal pad. Relaxing wrist hold, reducing force targets, increasing index tracking, and constraining index DIP extension do not recover distal contact. The current grasp pose/approach must be replanned before more force tuning. A static collision-screened tip-first IK pose has both distal contacts under 1 mm penetration, but its fixed-pose and moving-object online replays lose index distal contact dynamically. Starting the moving-object IK a full second earlier reduces lateral drift but still yields no index distal contact. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
   "trials": [
     {
       "name": "side_pinch",
@@ -425,6 +425,22 @@
       "last25_thumb_distal_contact_steps": 25,
       "transport_started": false,
       "max_ready_streak": 2,
+      "errors": []
+    },
+    {
+      "name": "post_moving_tipfirst_early",
+      "report": "joint_dressing_pilot_f83bb337695a4309.json",
+      "completed": true,
+      "steps": 180,
+      "pad_center_lift_m": -0.0013493935738040364,
+      "max_pad_lateral_shift_m": 0.012876810281617988,
+      "median_last25_predicted_up_n": 0.00826958273371857,
+      "median_last25_actual_robot_up_n": -0.2279297284949316,
+      "last25_stage_steps": 25,
+      "last25_index_distal_contact_steps": 0,
+      "last25_thumb_distal_contact_steps": 24,
+      "transport_started": false,
+      "max_ready_streak": 0,
       "errors": []
     }
   ],
