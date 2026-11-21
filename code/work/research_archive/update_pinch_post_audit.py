@@ -10,6 +10,7 @@ TAGS = (
     'post_force_model_check', 'post_late_transport35', 'post_padpose_weak',
     'post_xy_force30', 'post_xy_force10', 'post_xy_force10_up04',
     'post_early_unload',
+    'post_contact_gate',
 )
 
 
@@ -39,13 +40,18 @@ def main():
             'median_last25_predicted_up_n': median(f['predicted_dressing_up_force_n'] for f in tail),
             'median_last25_actual_robot_up_n': median(pad_robot_force(f) for f in tail),
             'last25_stage_steps': sum(any('dressing_stage' in c['geoms'] for c in f['pad_contacts']) for f in tail),
+            'transport_started': data.get('transport_started'),
+            'max_ready_streak': max((f.get('transport_gate', {}).get('consecutive_ready_frames', 0)
+                                     for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Nineteen isolated pinch-post pilots fail pickup. World-frame force logging '
+    audit['finding'] = ('Twenty isolated pinch-post pilots fail pickup. World-frame force logging '
                         'confirms some predicted upward grip is realized, but the pad slides laterally '
                         'or remains supported by the stage. Lateral-force feedback limits drift to about '
                         '30 mm in one run, without clearing the stage. Moving the upward force target '
-                        'earlier also fails to unload the stage. This diagnostic prop is not the '
+                        'earlier also fails to unload the stage. A measured-contact phase gate correctly '
+                        'blocks transport when the simulated hand presses downward despite a positive '
+                        'predicted upward force. This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False
     AUDIT.write_text(json.dumps(audit, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')

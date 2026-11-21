@@ -17,6 +17,7 @@ OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 sys.path.insert(0,str(ROOT/'work/wuji_multiagent'))
 from joint_wbc import JointWBC
 from support_quality import SupportQualityMonitor, SupportSample
+from pickup_phase_gate import evaluate_pickup_gate
 
 p=argparse.ArgumentParser()
 p.add_argument('--lift-m',type=float,default=.01)
@@ -59,6 +60,8 @@ p.add_argument('--thumb-ik-target-rad',type=float,nargs=4,default=None,
 p.add_argument('--transport-grasp-after-s',type=float,default=None,
                help='After grasp, move digit targets with planned pickup instead of observed pad')
 p.add_argument('--transport-extra-lift-m',type=float,default=0.)
+p.add_argument('--contact-gated-transport',action='store_true',
+               help='Begin transport only after five consecutive measured grip/unload frames')
 p.add_argument('--late-tab-pinch-after-s',type=float,default=None)
 p.add_argument('--late-thumb-ik-target-rad',type=float,nargs=4,default=None)
 p.add_argument('--late-index-ik-target-rad',type=float,nargs=4,default=None)
@@ -231,6 +234,8 @@ recorded_qpos=[]
 pad_hold_quat=None
 fixed_digit_rot=None
 transport_anchor=None
+transport_ready_streak=0
+transport_gate_last=None
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
@@ -243,7 +248,8 @@ for step in range(round(args.duration_s*50)):
     motion_u=min(1.,lift_elapsed/lift_duration)
     if args.smooth_motion:motion_u=motion_u*motion_u*(3.-2.*motion_u)
     planned=args.lift_m*motion_u
-    if args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s:
+    if (args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s and
+            (not args.contact_gated_transport or transport_anchor is not None)):
         planned+=args.transport_extra_lift_m*np.clip((t-args.transport_grasp_after_s)/.8,0.,1.)
     force_elapsed=max(0.,t-args.dressing_force_start_s)
     wbc.dressing_lift_min_n=(args.dressing_lift_min_n*min(1.,force_elapsed/.2)
@@ -348,7 +354,9 @@ for step in range(round(args.duration_s*50)):
         delta=np.linalg.solve(jac.T@jac+1e-3*np.eye(len(info['va'])),jac.T@(.6*(target-data.xpos[body])))
         wbc.qref[info['qa']]+=np.clip(delta,-.08,.08)
     rot=data.xmat[pad].reshape(3,3)
-    if args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s and transport_anchor is None:
+    if (args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s and
+            transport_anchor is None and
+            (not args.contact_gated_transport or transport_ready_streak>=5)):
         transport_anchor=(data.xpos[pad].copy(),rot.copy(),float(planned),float(motion_u))
         for info in digit_info.values():
             info['local']=rot.T@(data.xpos[info['body']]-data.xpos[pad])
@@ -489,6 +497,12 @@ for step in range(round(args.duration_s*50)):
         'pad_to_other_normal_world':((1. if model.geom(c.geom1).name in ('dressing_pad_contact','dressing_pull_tab') else -1.)*
                                       np.asarray(c.frame[:3])).tolist()} for ci,c in enumerate(data.contact)
         if any(name in (model.geom(c.geom1).name,model.geom(c.geom2).name) for name in ('dressing_pad_contact','dressing_pull_tab'))]
+    if args.contact_gated_transport:
+        transport_gate_last=evaluate_pickup_gate(rows[-1])
+        transport_ready_streak=(transport_ready_streak+1 if transport_gate_last.ready else 0)
+        rows[-1]['transport_gate']={**vars(transport_gate_last),
+                                    'consecutive_ready_frames':transport_ready_streak,
+                                    'transport_started':transport_anchor is not None}
     lateral_limit=(args.max_pad_lateral_shift_m if args.max_pad_lateral_shift_m is not None
                    else max(.01,abs(args.wrist_x_shift_m)+.01))
     if rows[-1]['pad_lateral_shift_m']>lateral_limit:
@@ -531,6 +545,11 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_wrist_hold_weight':args.online_tab_wrist_hold_weight,
         'transport_grasp_after_s':args.transport_grasp_after_s,
         'transport_extra_lift_m':args.transport_extra_lift_m,
+        'contact_gated_transport':args.contact_gated_transport,
+        'transport_started':transport_anchor is not None,
+        'final_transport_gate':({**vars(transport_gate_last),
+                                 'consecutive_ready_frames':transport_ready_streak}
+                                if transport_gate_last is not None else None),
         'pull_tab_scene':args.pull_tab_scene,
         'pinch_post_scene':args.pinch_post_scene,
         'index_tip_offset_m':args.index_tip_offset_m,
