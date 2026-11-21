@@ -113,3 +113,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 静态筛选又发现一处质量漏洞：低/中目标的食指实际指尖高度都约 0.735 m，最大目标误差分别约 16.4/12.2 mm，导致动态仍从卷轴端盖接触。现在另列“严格静态”标记，要求指尖误差不超过 10 mm、单指静态力不超过 2 N 且无食指端盖接触；[低](media/bandage_v0/joint_spool_grasp_static_closure0p004_root0p55_rooty0p1_spoolz0p702_screen.json)、[中](media/bandage_v0/joint_spool_grasp_static_z0p725_closure0p004_root0p55_rooty0p1_spoolz0p702_screen.json)不通过，[高](media/bandage_v0/joint_spool_grasp_static_z0p73_closure0p004_root0p55_rooty0p1_spoolz0p702_screen.json)虽然静态通过，动态已显示高力与穿透。静态标记仍不是抓持资格。
 
 [27 组 B 固定站位与高度网格](media/bandage_v0/joint_spool_layout_grid_summary.json)中仅一组通过严格静态筛选，而它的动态重放已因高力和穿透失败。继续在当前双指末态模板上调站位不具备可验证的成功候选；下一步需要整手接近姿态、卷轴表面接触点与法线的联合规划，以及训练并验证适配 Wuji 硬件的手部策略。
+
+**直接初始化的短时保持：** [1 秒 WBC 闭环报告](media/bandage_v0/joint_b_planted_stance_wbc_rollout_audit.json)中，B 双脚接地覆盖率 100%，骨盆最大漂移 4.52 mm，右腕目标最大误差 10.37 mm，B 非地面最大穿透 2.15 mm。该试验从目标姿态直接初始化；没有验证站位过渡、B 右手对带材的抓持或完整包扎。

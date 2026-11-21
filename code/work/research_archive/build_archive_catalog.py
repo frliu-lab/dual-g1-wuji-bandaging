@@ -213,6 +213,7 @@ SELECTED = [
     'bandage_v0/joint_b_reposition_static_screen.json',
     'bandage_v0/joint_b_planted_stance_preshape_lowered_audit.json',
     'bandage_v0/joint_b_planted_stance_wbc_one_frame_audit.json',
+    'bandage_v0/joint_b_planted_stance_wbc_rollout_audit.json',
     'bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml',
     'bandage_v0/joint_dressing_grip_support_tradeoff_audit.json',
     'bandage_v0/joint_dressing_pickup_sustained_one_second_demo.mp4',
