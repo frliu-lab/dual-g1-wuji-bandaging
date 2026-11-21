@@ -125,3 +125,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 **带端力反馈反例：** [指尖任务权重提高十倍](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w10000.json)后，相向双指接触仍只有 1.8%；[分别给拇指和食指设置 1 N 法向力目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w1000_force1n.json)也只有 1.8%。目标力仅在接触存在时进入 WBC；接触失去后，当前控制没有重新捕获带端的机制。这些试验均不满足抓持门槛，不能展示为成功包扎。
 
 **带端姿态跟踪复核：** [物体局部坐标指尖目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w1000_pose.json)将拇指单独接触占比从 16.8% 提至 29.8%，食指仍为 14.4%，相向双指接触仍只有 1.8%。当前问题不是单纯漏掉带端旋转；后续需要带端再捕获与接触力约束共同控制。
+
+**手部模型选型：** [RPent](https://github.com/RLinf/RPent) 是物理智能体编排框架，不是直接可用的 Wuji 包扎手部策略；[Wuji-MJLab](https://github.com/wuji-technology/wuji-mjlab) 的公开权重面向魔方/转笔；[DexTaG](https://github.com/UMass-Embodied-AGI/DexTaG) 的 Wuji 控制训练基于 xArm7 工具操作；[HandsOn](https://github.com/TsinghuaC3I/HandsOn) 有 Wuji 双手柔性物体基准。它们可提供手部控制或评价参考，但现阶段都不能替代本场景中缺失的持续带端抓持。
