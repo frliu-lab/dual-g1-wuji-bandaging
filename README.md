@@ -123,3 +123,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 **带材末端代理抓持试验：** [7 mm 圆柱带端静态筛选](media/bandage_v0/joint_b_tail_static_proxy_contact_fine_screen_7mm.json)在 2000 个配置中找到 128 个拇指与食指相向接触且无大于 3 mm 深碰撞的几何种子。给带端加入自由质量、与卷轴之间的质量可忽略拉线和窄支架后，[0.5 秒动态基线](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm.json)的相向双指接触占比仅 1.6%；[指尖位置反馈](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm.json)仅 1.8%。带端靠支架保持位置，不能算机器人抓持；该代理也不模拟柔性绷带缠绕。修正了四腕任务在直接 WBC 求解器中的权重维度，使短时试验能够继续，但不放宽求解器约束。
 
 **带端力反馈反例：** [指尖任务权重提高十倍](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w10000.json)后，相向双指接触仍只有 1.8%；[分别给拇指和食指设置 1 N 法向力目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w1000_force1n.json)也只有 1.8%。目标力仅在接触存在时进入 WBC；接触失去后，当前控制没有重新捕获带端的机制。这些试验均不满足抓持门槛，不能展示为成功包扎。
+
+**带端姿态跟踪复核：** [物体局部坐标指尖目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w1000_pose.json)将拇指单独接触占比从 16.8% 提至 29.8%，食指仍为 14.4%，相向双指接触仍只有 1.8%。当前问题不是单纯漏掉带端旋转；后续需要带端再捕获与接触力约束共同控制。

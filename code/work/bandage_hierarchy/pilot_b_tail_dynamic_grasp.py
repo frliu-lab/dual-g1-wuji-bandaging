@@ -16,6 +16,7 @@ parser.add_argument('--tip-servo',action='store_true')
 parser.add_argument('--squeeze-mm',type=float,default=1.)
 parser.add_argument('--tip-weight',type=float,default=1000.)
 parser.add_argument('--normal-goal-n',type=float,default=None)
+parser.add_argument('--pose-servo',action='store_true')
 args=parser.parse_args()
 sys.path.insert(0,str(ROOT/'work/wuji_multiagent'))
 from joint_wbc import JointWBC
@@ -61,6 +62,8 @@ for digit,key in (('thumb','thumb_flex_rad'),('index','index_flex_rad')):
                                                       model.jnt_range[j,1]-.01)
 mujoco.mj_forward(model,data)
 initial_tab=data.xpos[model.body('bandage_tail_dynamic_proxy').id].copy()
+tab_id=model.body('bandage_tail_dynamic_proxy').id
+initial_tab_rotation=data.xmat[tab_id].reshape(3,3).copy()
 palms=('g1_a/wuji_left/l_wrist','g1_a/wuji_right/r_wrist',
        'g1_b/wuji_left/l_wrist','g1_b/wuji_right/r_wrist')
 def robot_contact_only(m,c):
@@ -75,15 +78,18 @@ tip_bodies={digit:model.body(f'g1_b/wuji_right/r_{digit}_tip_sensor_frame').id
 tip_offsets={digit:data.xpos[bid].copy()-initial_tab for digit,bid in tip_bodies.items()}
 tip_offsets['thumb'][0]-=args.squeeze_mm/1000
 tip_offsets['index_finger'][0]+=args.squeeze_mm/1000
+tip_local_offsets={digit:initial_tab_rotation.T@offset for digit,offset in tip_offsets.items()}
 fractions={'thumb':0,'index':0,'opposing':0,'two_feet':0}
 max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[]
 duration=.5;interval=round(.02/model.opt.timestep)
 for _ in range(round(duration/.02)):
     try:
         if args.tip_servo:
-            tab_now=data.xpos[model.body('bandage_tail_dynamic_proxy').id].copy()
-            wbc.tip_position_targets={model.body(bid).name:tab_now+tip_offsets[digit]
-                                      for digit,bid in tip_bodies.items()}
+            tab_now=data.xpos[tab_id].copy()
+            tab_rotation=data.xmat[tab_id].reshape(3,3)
+            wbc.tip_position_targets={model.body(bid).name:tab_now+
+                (tab_rotation@tip_local_offsets[digit] if args.pose_servo else tip_offsets[digit])
+                for digit,bid in tip_bodies.items()}
         ctrl,meta,_=wbc.solve(data)
         data.ctrl[:]=ctrl
         steps+=1
@@ -129,6 +135,7 @@ den=max(1,steps*interval)
 report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flexible cloth or wrapping',
         'seed':seed,'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'tip_position_weight':args.tip_weight,
+        'pose_servo':args.pose_servo,
         'tail_digit_normal_goal_n':args.normal_goal_n,
         'duration_s':float(data.time),'error':error,
         'direct_solver_error_at_failure':direct_error,'control_solves':steps,
@@ -137,5 +144,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
