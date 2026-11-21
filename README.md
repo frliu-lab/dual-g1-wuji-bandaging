@@ -117,3 +117,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 **直接初始化的短时保持：** [1 秒 WBC 闭环报告](media/bandage_v0/joint_b_planted_stance_wbc_rollout_audit.json)中，B 双脚接地覆盖率 100%，骨盆最大漂移 4.52 mm，右腕目标最大误差 10.37 mm，B 非地面最大穿透 2.15 mm。该试验从目标姿态直接初始化；没有验证站位过渡、B 右手对带材的抓持或完整包扎。
 
 **B 站位过渡审计：** [同步插值反例](media/bandage_v0/joint_b_planted_transition_synchronous_kinematic_audit.json)在中途使 B 右手指侵入假人前臂约 34 mm。加入右臂避障修正、降低机身终点高度 10 mm 后，[密集插值审计](media/bandage_v0/joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json)的最大穿透约 2.19 mm，双脚位置误差小于 0.2 mm。[4 秒 WBC 闭环](media/bandage_v0/joint_b_planted_transition_wbc_4s_lowered10mm_audit.json)完成 200 次控制求解，B 双脚接地覆盖率 100%，无关节越限，非地面最大穿透约 0.82 mm；B 右手与前臂接触仅占 0.075% 仿真时间。这是双脚原地不迈步的站位微调，尚未实现第四只手的持续交互或绷带缠绕。
+
+**第四手接触身份复核：** [闭环报告](media/bandage_v0/joint_b_planted_transition_wbc_4s_lowered10mm_audit.json)中的短暂前臂接触只来自 B 右手中指中节。[静态屈指扫描](media/bandage_v0/joint_b_right_forearm_flex_contact_scan.json)显示，统一屈指 0.45 rad 时接触主要在无名指中节，最大侵入约 1.92 mm；0.50 rad 无接触，较直的手指侵入更深。现有姿态没有拇指与食指的有效夹持，不能把碰到前臂当作引导带材末端。

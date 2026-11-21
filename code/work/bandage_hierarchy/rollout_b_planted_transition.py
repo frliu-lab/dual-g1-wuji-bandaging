@@ -1,6 +1,7 @@
 """Closed-loop B posture transition along screened planted-foot path (simulation only)."""
 import json
 import argparse
+from collections import Counter
 import sys
 from pathlib import Path
 
@@ -44,6 +45,7 @@ min_joint_margin=float('inf');min_joint_name=None;min_joint_time=None
 max_nonfloor_pen=0.;max_root_speed=0.;max_foot_drift=0.
 support_frames=0;control_solves=0;error=None
 role_contact_frames={role:0 for role in ('a_left_forearm','a_right_dressing','b_left_spool','b_right_forearm')}
+b_right_forearm_contact_bodies=Counter()
 duration=args.duration;dt=.02;substeps=round(dt/model.opt.timestep)
 for k in range(round(duration/dt)):
     u=np.clip((k*dt)/(duration*.75),0,1)
@@ -84,6 +86,9 @@ for k in range(round(duration/dt)):
                         roles_this_step.add('b_left_spool')
                     if 'training_forearm_dynamic' in bodies and any(n.startswith('g1_b/wuji_right/') for n in bodies):
                         roles_this_step.add('b_right_forearm')
+                        for n in bodies:
+                            if n.startswith('g1_b/wuji_right/'):
+                                b_right_forearm_contact_bodies[n]+=1
             for role in roles_this_step:
                 role_contact_frames[role]+=1
             support_frames+=floor_sides=={'left','right'}
@@ -111,6 +116,7 @@ report={'scope':'Simulated planted-foot B posture transition from saved checkpoi
         'b_final_right_wrist_error_m':float(np.linalg.norm(data.xpos[right_id]-right_target)),
         'b_final_left_wrist_error_m':float(np.linalg.norm(data.xpos[left_id]-left_target))}
 report['role_contact_fractions']={k:v/max(1,control_solves*substeps) for k,v in role_contact_frames.items()}
+report['b_right_forearm_contact_body_frames']=dict(b_right_forearm_contact_bodies)
 suffix='_lowered10mm' if 'lowered10mm' in args.path_file else ''
 (OUT/f'joint_b_planted_transition_wbc_{duration:g}s{suffix}_audit.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
