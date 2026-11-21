@@ -115,3 +115,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 [27 组 B 固定站位与高度网格](media/bandage_v0/joint_spool_layout_grid_summary.json)中仅一组通过严格静态筛选，而它的动态重放已因高力和穿透失败。继续在当前双指末态模板上调站位不具备可验证的成功候选；下一步需要整手接近姿态、卷轴表面接触点与法线的联合规划，以及训练并验证适配 Wuji 硬件的手部策略。
 
 **直接初始化的短时保持：** [1 秒 WBC 闭环报告](media/bandage_v0/joint_b_planted_stance_wbc_rollout_audit.json)中，B 双脚接地覆盖率 100%，骨盆最大漂移 4.52 mm，右腕目标最大误差 10.37 mm，B 非地面最大穿透 2.15 mm。该试验从目标姿态直接初始化；没有验证站位过渡、B 右手对带材的抓持或完整包扎。
+
+**B 站位过渡审计：** [同步插值反例](media/bandage_v0/joint_b_planted_transition_synchronous_kinematic_audit.json)在中途使 B 右手指侵入假人前臂约 34 mm。加入右臂避障修正、降低机身终点高度 10 mm 后，[密集插值审计](media/bandage_v0/joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json)的最大穿透约 2.19 mm，双脚位置误差小于 0.2 mm。[4 秒 WBC 闭环](media/bandage_v0/joint_b_planted_transition_wbc_4s_lowered10mm_audit.json)完成 200 次控制求解，B 双脚接地覆盖率 100%，无关节越限，非地面最大穿透约 0.82 mm；B 右手与前臂接触仅占 0.075% 仿真时间。这是双脚原地不迈步的站位微调，尚未实现第四只手的持续交互或绷带缠绕。
