@@ -42,12 +42,13 @@ wrist_start = data.xpos[body['wrist']].copy()
 results = []
 for side_sign in (1,):
     for z_offset in (-.004, .002):
+     for index_z_delta in (-.006, -.003, 0.):
         for thumb_offset in (.019, .021):
           for index_offset in (.012, .014, .016, .018, .020):
             middle_clearance = .030
             targets = {
                 'thumb': center + side_sign * rotation[:, 1] * thumb_offset + rotation[:, 2] * z_offset,
-                'index': center - side_sign * rotation[:, 1] * index_offset + rotation[:, 2] * z_offset,
+                'index': center - side_sign * rotation[:, 1] * index_offset + rotation[:, 2] * (z_offset+index_z_delta),
             }
 
             def residual(x):
@@ -88,7 +89,12 @@ for side_sign in (1,):
             max_penetration = max((max(0., -float(c.dist)) for c in post_contacts), default=0.)
             contact_bodies = [model.body(model.geom_bodyid[c.geom2 if c.geom1 == post else c.geom1]).name
                               for c in post_contacts]
+            index_distal_up_normals = [float((-1. if c.geom1 == post else 1.)*c.frame[2])
+                for c in post_contacts if model.body(model.geom_bodyid[c.geom2 if c.geom1 == post else c.geom1]).name
+                .startswith(('g1_a/wuji_right/r_index_finger_distal',
+                             'g1_a/wuji_right/r_index_finger_tip_sensor_frame'))]
             results.append({'side_sign': side_sign, 'z_offset_m': z_offset,
+                            'index_z_delta_m': index_z_delta,
                             'thumb_offset_m': thumb_offset, 'index_offset_m': index_offset,
                             'middle_clearance_target_m': middle_clearance,
                             'thumb_tip_error_m': thumb_error, 'index_tip_error_m': index_error,
@@ -96,6 +102,7 @@ for side_sign in (1,):
                             'wrist_shift_m': float(np.linalg.norm(data.xpos[body['wrist']] - wrist_start)),
                             'max_post_penetration_m': max_penetration,
                             'post_contact_bodies': contact_bodies,
+                            'index_distal_up_normal_components': index_distal_up_normals,
                             'arm_delta_norm_rad': float(np.linalg.norm(fit.x[:7] - start[:7])),
                             'qpos': fit.x.tolist()})
 

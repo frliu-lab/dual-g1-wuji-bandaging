@@ -22,6 +22,8 @@ class JointWBC:
   self.dressing_lift_min_n=None
   self.dressing_up_force_goal_n=None
   self.dressing_lateral_force_target_n=None
+  self.tip_position_targets={}
+  self.tip_position_weight=1000.
   self.spool_contact_normal_goal_n=None
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
@@ -92,10 +94,12 @@ class JointWBC:
  def solve(self,d):
   m=self.m;J,target,mus,ids=self.contacts(d);nc=len(ids)
   if nc==0:raise RuntimeError('No physical supporting contacts')
-  mask=np.flatnonzero(np.isfinite(target));pad_flags=tuple(any(m.body(m.geom_bodyid[g]).name.endswith('_tip_sensor_frame') for g in (a,b)) and any(m.body(m.geom_bodyid[g]).name.startswith('shared_joystick') for g in (a,b)) for a,b in ids);fixed_hand=np.array([i for i in self.hand_indices if i not in self.force_control_indices],dtype=int);hard_hand=np.array(sorted(self.hard_hand_indices),dtype=int);forearm_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any(m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') for g in (a,b)) for a,b in ids) if self.forearm_contact_force_limit_n is not None else tuple();finger_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any(m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') and any(token in m.body(m.geom_bodyid[g]).name for token in ('finger','pinky','thumb')) for g in (a,b)) for a,b in ids) if self.forearm_finger_force_limit_n is not None else tuple();b_spool_flags=tuple(tuple('bandage_handle_prototype' in (m.geom(a).name,m.geom(b).name) and any(m.body(m.geom_bodyid[g]).name.startswith(f'g1_b/wuji_left/l_{digit}_') for g in (a,b)) for a,b in ids) for digit in ('thumb','index_finger')) if self.b_spool_contact_force_cap_n is not None else tuple();handle_stick_flags=tuple('bandage_handle_prototype' in (m.geom(a).name,m.geom(b).name) and any(m.body(m.geom_bodyid[g]).name.startswith(('g1_b/wuji_left/l_thumb_','g1_b/wuji_left/l_index_finger_')) for g in (a,b)) for a,b in ids) if self.b_handle_stick else tuple();key=(nc,tuple(mask),self.hand_position_mode,tuple(fixed_hand),tuple(hard_hand),pad_flags,forearm_flags,finger_flags,b_spool_flags,handle_stick_flags,self.b_handle_lift_min_n is not None,self.b_handle_lateral_force_target_n is not None,self.dressing_lift_min_n is not None)
+  tip_names=tuple(sorted(self.tip_position_targets))
+  task_dim=self.task_dim+3*len(tip_names)
+  mask=np.flatnonzero(np.isfinite(target));pad_flags=tuple(any(m.body(m.geom_bodyid[g]).name.endswith('_tip_sensor_frame') for g in (a,b)) and any(m.body(m.geom_bodyid[g]).name.startswith('shared_joystick') for g in (a,b)) for a,b in ids);fixed_hand=np.array([i for i in self.hand_indices if i not in self.force_control_indices],dtype=int);hard_hand=np.array(sorted(self.hard_hand_indices),dtype=int);forearm_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any(m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') for g in (a,b)) for a,b in ids) if self.forearm_contact_force_limit_n is not None else tuple();finger_flags=tuple(('manikin_forearm' in (m.geom(a).name,m.geom(b).name)) and any(m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') and any(token in m.body(m.geom_bodyid[g]).name for token in ('finger','pinky','thumb')) for g in (a,b)) for a,b in ids) if self.forearm_finger_force_limit_n is not None else tuple();b_spool_flags=tuple(tuple('bandage_handle_prototype' in (m.geom(a).name,m.geom(b).name) and any(m.body(m.geom_bodyid[g]).name.startswith(f'g1_b/wuji_left/l_{digit}_') for g in (a,b)) for a,b in ids) for digit in ('thumb','index_finger')) if self.b_spool_contact_force_cap_n is not None else tuple();handle_stick_flags=tuple('bandage_handle_prototype' in (m.geom(a).name,m.geom(b).name) and any(m.body(m.geom_bodyid[g]).name.startswith(('g1_b/wuji_left/l_thumb_','g1_b/wuji_left/l_index_finger_')) for g in (a,b)) for a,b in ids) if self.b_handle_stick else tuple();key=(nc,tuple(mask),self.hand_position_mode,tuple(fixed_hand),tuple(hard_hand),pad_flags,forearm_flags,finger_flags,b_spool_flags,handle_stick_flags,self.b_handle_lift_min_n is not None,self.b_handle_lateral_force_target_n is not None,self.dressing_lift_min_n is not None,tip_names)
   if key not in self.cache:
    a=cp.Variable(m.nv);tau=cp.Variable(m.nu);f=cp.Variable(3*nc)
-   P={name:cp.Parameter(shape) for name,shape in [('M',(m.nv,m.nv)),('h',(m.nv,)),('J',(3*nc,m.nv)),('target',(len(mask),)),('desired',(m.nv,)),('lo',(m.nu,)),('hi',(m.nu,)),('mu',(nc,)),('forcegoal',(3*nc,)),('forceweight',(3*nc,)),('acc_weight',(m.nv,)),('acc_lo',(m.nv,)),('acc_hi',(m.nv,)),('taskJ',(self.task_dim,m.nv)),('tasktarget',(self.task_dim,)),('task_weight',(self.task_dim,)),('fixed_hand_tau',(len(self.hand_indices),)),('forearm_cap',()),('finger_forearm_cap',()),('b_spool_cap',()),('b_spool_up_coeff',(3*nc,)),('b_spool_up_min',()),('b_spool_lateral_coeff',(2,3*nc)),('b_spool_lateral_target',(2,)),('dressing_up_coeff',(3*nc,)),('dressing_up_min',()),('dressing_up_goal',())]}
+   P={name:cp.Parameter(shape) for name,shape in [('M',(m.nv,m.nv)),('h',(m.nv,)),('J',(3*nc,m.nv)),('target',(len(mask),)),('desired',(m.nv,)),('lo',(m.nu,)),('hi',(m.nu,)),('mu',(nc,)),('forcegoal',(3*nc,)),('forceweight',(3*nc,)),('acc_weight',(m.nv,)),('acc_lo',(m.nv,)),('acc_hi',(m.nv,)),('taskJ',(task_dim,m.nv)),('tasktarget',(task_dim,)),('task_weight',(task_dim,)),('fixed_hand_tau',(len(self.hand_indices),)),('forearm_cap',()),('finger_forearm_cap',()),('b_spool_cap',()),('b_spool_up_coeff',(3*nc,)),('b_spool_up_min',()),('b_spool_lateral_coeff',(2,3*nc)),('b_spool_lateral_target',(2,)),('dressing_up_coeff',(3*nc,)),('dressing_up_min',()),('dressing_up_goal',())]}
    constraints=[P['M']@a+P['h']==self.B@tau+P['J'].T@f,tau>=P['lo'],tau<=P['hi'],a>=P['acc_lo'],a<=P['acc_hi']]
 
    if self.hand_position_mode and len(hard_hand):constraints.append(tau[hard_hand]==P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in hard_hand]])
@@ -245,8 +249,21 @@ class JointWBC:
    rp=np.zeros_like(jp);rr=np.zeros_like(jp);rdp=np.zeros_like(jp);rdr=np.zeros_like(jp);mujoco.mj_jacBody(m,ref,rp,rr,bid);mujoco.mj_jacDot(m,ref,rdp,rdr,ref.xpos[bid],bid)
    Jtask=np.vstack((jp,jr));Jref=np.vstack((rp,rr));Jdot=np.vstack((jdp,jdr));Jrefdot=np.vstack((rdp,rdr));R=d.xmat[bid].reshape(3,3);Rref=ref.xmat[bid].reshape(3,3);orientation=.5*sum((np.cross(R[:,k],Rref[:,k]) for k in range(3)),start=np.zeros(3));error_task=np.r_[ref.xpos[bid]-d.xpos[bid],orientation]
    taskJs.append(Jtask);taskTargets.append(80*error_task+18*(Jref@self.vref-Jtask@d.qvel)+Jref@self.aref+Jrefdot@self.vref-Jdot@d.qvel)
+  for name in tip_names:
+   bid=m.body(name).id
+   desired_tip=np.asarray(self.tip_position_targets[name],dtype=float)
+   if desired_tip.shape!=(3,) or not np.all(np.isfinite(desired_tip)):
+    raise ValueError('Tip target must be a finite 3D point')
+   jp=np.zeros((3,m.nv));jr=np.zeros_like(jp);jdp=np.zeros_like(jp);jdr=np.zeros_like(jp)
+   mujoco.mj_jacBody(m,d,jp,jr,bid)
+   mujoco.mj_jacDot(m,d,jdp,jdr,d.xpos[bid],bid)
+   taskJs.append(jp)
+   taskTargets.append(80*(desired_tip-d.xpos[bid])-18*(jp@d.qvel)-jdp@d.qvel)
   taskJ=np.concatenate(taskJs);tasktarget=np.concatenate(taskTargets)
-  task_weights=np.concatenate([np.r_[np.full(3,np.sqrt(pos)),np.full(3,np.sqrt(rot))] for pos,rot in zip(self.palm_position_weights,self.palm_rotation_weights)])
+  task_weights=np.concatenate(
+   [np.r_[np.full(3,np.sqrt(pos)),np.full(3,np.sqrt(rot))]
+    for pos,rot in zip(self.palm_position_weights,self.palm_rotation_weights)]
+   +[np.full(3,np.sqrt(self.tip_position_weight)) for _ in tip_names])
   P['dressing_up_goal'].value=(float(self.dressing_up_force_goal_n)
        if self.dressing_up_force_goal_n is not None else 0.)
   P['dressing_up_weight'].value=25. if self.dressing_up_force_goal_n is not None else 0.

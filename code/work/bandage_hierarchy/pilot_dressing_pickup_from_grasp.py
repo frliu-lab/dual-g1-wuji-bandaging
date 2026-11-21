@@ -60,6 +60,10 @@ p.add_argument('--thumb-ik-target-rad',type=float,nargs=4,default=None,
 p.add_argument('--transport-grasp-after-s',type=float,default=None,
                help='After grasp, move digit targets with planned pickup instead of observed pad')
 p.add_argument('--transport-extra-lift-m',type=float,default=0.)
+p.add_argument('--unload-start-s',type=float,default=None,
+               help='Start a small finger-and-wrist upward unload before gated transport')
+p.add_argument('--unload-lift-m',type=float,default=0.)
+p.add_argument('--unload-ramp-s',type=float,default=.6)
 p.add_argument('--contact-gated-transport',action='store_true',
                help='Begin transport only after five consecutive measured grip/unload frames')
 p.add_argument('--late-tab-pinch-after-s',type=float,default=None)
@@ -82,6 +86,8 @@ p.add_argument('--online-tab-up-force-feedback-gain',type=float,default=0.,
 p.add_argument('--online-tab-up-force-target-n',type=float,default=.15)
 p.add_argument('--online-tab-index-dip-min-rad',type=float,default=None,
                help='Optional natural-flexion lower bound for the online index DIP IK')
+p.add_argument('--online-tab-tip-task-weight',type=float,default=0.,
+               help='WBC Cartesian fingertip target weight; zero disables the task')
 p.add_argument('--tip-first-candidate-index',type=int,default=None,
                help='Replay a collision-screened static post IK target after online IK start')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
@@ -136,8 +142,11 @@ if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=5. or args.index_preposit
 motion_end=args.motion_end_s if args.motion_end_s is not None else args.duration_s
 if not args.index_preposition_s<motion_end<=args.duration_s:p.error('motion end must follow preposition and precede duration')
 if args.pull_tab_scene and args.pinch_post_scene:p.error('Choose one diagnostic scene')
+if args.unload_lift_m<0. or args.unload_lift_m>.015 or args.unload_ramp_s<=0.:
+    p.error('unload lift must be 0-15 mm and ramp positive')
 if not 0. <= args.online_tab_up_force_feedback_gain <= .1:
     p.error('online force feedback gain must be in [0, 0.1] m/N')
+if args.online_tab_tip_task_weight<0.:p.error('tip task weight must be nonnegative')
 scene_name=('joint_spool_grasp_dressing_pinch_post_variant.xml' if args.pinch_post_scene else
             'joint_spool_grasp_dressing_pull_tab_variant.xml' if args.pull_tab_scene else
             'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml')
@@ -274,11 +283,16 @@ elbow=model.joint('training_elbow_hinge')
 wbc.weights[elbow.dofadr[0]]=args.elbow_hold_weight
 for step in range(round(args.duration_s*50)):
     t=step*.02
+    online_ik_diagnostic=None
+    wbc.tip_position_targets={}
     lift_elapsed=max(0.,t-(args.index_preposition_s if pregrasp_candidate is not None else 0.))
     lift_duration=motion_end-(args.index_preposition_s if pregrasp_candidate is not None else 0.)
     motion_u=min(1.,lift_elapsed/lift_duration)
     if args.smooth_motion:motion_u=motion_u*motion_u*(3.-2.*motion_u)
     planned=args.lift_m*motion_u
+    unload_offset=(args.unload_lift_m*np.clip((t-args.unload_start_s)/args.unload_ramp_s,0.,1.)
+                   if args.unload_start_s is not None else 0.)
+    planned+=unload_offset
     if (args.transport_grasp_after_s is not None and t>=args.transport_grasp_after_s and
             (not args.contact_gated_transport or transport_anchor is not None)):
         planned+=args.transport_extra_lift_m*np.clip((t-args.transport_grasp_after_s)/.8,0.,1.)
@@ -443,9 +457,12 @@ for step in range(round(args.duration_s*50)):
         blend=np.clip((t-args.online_tab_ik_after_s)/.6,0.,1.)
         wbc.qref[ik_qa]=(1.-blend)*data.qpos[ik_qa]+blend*tip_first_target
       else:
-        ik_data.qpos[:]=data.qpos;mujoco.mj_forward(model,ik_data)
+        ik_data.qpos[:]=wbc.qref
+        ik_data.qpos[pad_qadr:pad_qadr+7]=data.qpos[pad_qadr:pad_qadr+7]
+        mujoco.mj_forward(model,ik_data)
         tab_R=ik_data.geom_xmat[tab_geom].reshape(3,3)
         tab_pos=ik_data.geom_xpos[tab_geom].copy()
+        tab_pos[2]+=unload_offset
         if transport_anchor is not None:
             tab_pos[2]+=planned-transport_anchor[2]
         if args.online_tab_up_force_feedback_gain and rows:
@@ -465,7 +482,11 @@ for step in range(round(args.duration_s*50)):
         if args.online_tab_middle:
             middle_target=tab_targets[1]+tab_R[:,0]*.010
         thumb_id=digit_info['thumb']['body'];index_id=digit_info['index']['body']
-        wrist_start=ik_data.xpos[wrist].copy();ik_start=data.qpos[ik_qa].copy()
+        if args.online_tab_tip_task_weight:
+            wbc.tip_position_weight=args.online_tab_tip_task_weight
+            wbc.tip_position_targets={model.body(thumb_id).name:tab_targets[0],
+                                      model.body(index_id).name:tab_targets[1]}
+        wrist_start=ik_data.xpos[wrist].copy();ik_start=wbc.qref[ik_qa].copy()
         def tab_residual(x):
             ik_data.qpos[ik_qa]=x;mujoco.mj_forward(model,ik_data)
             parts=[ik_data.xpos[thumb_id]-tab_targets[0],
@@ -485,6 +506,14 @@ for step in range(round(args.duration_s*50)):
         fit=least_squares(tab_residual,np.clip(ik_start,ik_lo,ik_hi),bounds=(ik_lo,ik_hi),
                           max_nfev=35)
         wbc.qref[ik_qa]=fit.x
+        ref.qpos[:]=wbc.qref;mujoco.mj_forward(model,ref)
+        online_ik_diagnostic={
+            'fit_thumb_target_error_m':float(np.linalg.norm(fit.fun[:3])),
+            'fit_index_target_error_m':float(np.linalg.norm(fit.fun[3:6])),
+            'reference_thumb_target_error_m':float(np.linalg.norm(ref.xpos[thumb_id]-tab_targets[0])),
+            'reference_index_target_error_m':float(np.linalg.norm(ref.xpos[index_id]-tab_targets[1])),
+            'target_thumb_m':tab_targets[0].tolist(),
+            'target_index_m':tab_targets[1].tolist()}
     try:
         data.ctrl[:],_,_=wbc.solve(data)
         predicted_dressing_up_n=wbc.last_predicted_dressing_up_force_n
@@ -530,6 +559,13 @@ for step in range(round(args.duration_s*50)):
     rows[-1]['digit_tip_m']={name:data.xpos[info['body']].tolist() for name,info in digit_info.items()}
     rows[-1]['digit_joint_error_rad']={name:(data.qpos[info['qa']]-wbc.qref[info['qa']]).tolist()
                                          for name,info in digit_info.items()}
+    rows[-1]['arm_joint_error_rad']=(data.qpos[arm_qa]-wbc.qref[arm_qa]).tolist()
+    if online_ik_diagnostic is not None:
+        online_ik_diagnostic['actual_thumb_target_error_m']=float(np.linalg.norm(
+            data.xpos[digit_info['thumb']['body']]-online_ik_diagnostic['target_thumb_m']))
+        online_ik_diagnostic['actual_index_target_error_m']=float(np.linalg.norm(
+            data.xpos[digit_info['index']['body']]-online_ik_diagnostic['target_index_m']))
+        rows[-1]['online_ik_diagnostic']=online_ik_diagnostic
     actual_up_by_source={}
     for ci,c in enumerate(data.contact):
         if c.geom1<0 or c.geom2<0:continue
@@ -542,6 +578,7 @@ for step in range(round(args.duration_s*50)):
         up=float((sign*c.frame.reshape(3,3).T@wrench[:3])[2])
         actual_up_by_source[other_body]=actual_up_by_source.get(other_body,0.)+up
     rows[-1]['actual_pad_up_force_by_body_n']=actual_up_by_source
+    rows[-1]['planned_unload_m']=unload_offset
     rows[-1]['effective_online_tab_target_z_m']=effective_tab_target_z
     rows[-1]['pad_contacts']=[{
         'geoms':[model.geom(c.geom1).name,model.geom(c.geom2).name],
@@ -604,9 +641,13 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_up_force_feedback_gain':args.online_tab_up_force_feedback_gain,
         'online_tab_up_force_target_n':args.online_tab_up_force_target_n,
         'online_tab_index_dip_min_rad':args.online_tab_index_dip_min_rad,
+        'online_tab_tip_task_weight':args.online_tab_tip_task_weight,
         'tip_first_candidate_index':args.tip_first_candidate_index,
         'transport_grasp_after_s':args.transport_grasp_after_s,
         'transport_extra_lift_m':args.transport_extra_lift_m,
+        'unload_start_s':args.unload_start_s,
+        'unload_lift_m':args.unload_lift_m,
+        'unload_ramp_s':args.unload_ramp_s,
         'contact_gated_transport':args.contact_gated_transport,
         'transport_started':transport_anchor is not None,
         'final_transport_gate':({**vars(transport_gate_last),

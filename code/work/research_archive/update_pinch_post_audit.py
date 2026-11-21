@@ -16,6 +16,9 @@ TAGS = (
     'post_gate_wrist002', 'post_gate_index50_force02', 'post_gate_dipmin0',
     'post_tipfirst_candidate3', 'post_moving_tipfirst_ik',
     'post_moving_tipfirst_early',
+    'post_ik_gap_diagnosis', 'post_ik_frame_fix', 'post_framefix_lowforce',
+    'post_framefix_lowforce_zplus2', 'post_tip_task1000',
+    'post_tip_task_up15_xy20', 'post_unload3mm', 'post_unload3mm_xyearly',
 )
 
 
@@ -49,9 +52,13 @@ def main():
             'completed': data['completed'],
             'steps': len(data['trace']),
             'pad_center_lift_m': data['final_pad_lift_m'],
+            'peak_pad_center_lift_m': max(f['pad_lift_m'] for f in data['trace']),
             'max_pad_lateral_shift_m': max(f['pad_lateral_shift_m'] for f in data['trace']),
             'median_last25_predicted_up_n': median(f['predicted_dressing_up_force_n'] for f in tail),
             'median_last25_actual_robot_up_n': median(pad_robot_force(f) for f in tail),
+            'median_last25_actual_a_right_up_n': median(
+                sum(v for body, v in f.get('actual_pad_up_force_by_body_n', {}).items()
+                    if body.startswith('g1_a/wuji_right/')) for f in tail),
             'last25_stage_steps': sum(any('dressing_stage' in c['geoms'] for c in f['pad_contacts']) for f in tail),
             'last25_index_distal_contact_steps': distal_contact_frames(tail, 'index_finger'),
             'last25_thumb_distal_contact_steps': distal_contact_frames(tail, 'thumb'),
@@ -60,24 +67,15 @@ def main():
                                      for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Thirty-one isolated pinch-post pilots fail pickup. World-frame force logging '
-                        'confirms some predicted upward grip is realized, but the pad slides laterally '
-                        'or remains supported by the stage. Lateral-force feedback limits drift to about '
-                        '30 mm in one run, without clearing the stage. Moving the upward force target '
-                        'earlier also fails to unload the stage. A measured-contact phase gate correctly '
-                        'blocks transport when the simulated hand presses downward despite a positive '
-                        'predicted upward force. Raising the finger target 8 mm reduces downward loading '
-                        'but still slides the pad; stronger lateral feedback restores downward loading. '
-                        'Adaptive fingertip-height feedback does not fix this. Contact inspection shows '
-                        'the index often loads its middle/proximal links instead of the distal pad. '
-                        'Relaxing wrist hold, reducing force targets, increasing index tracking, and '
-                        'constraining index DIP extension do not recover distal contact. The current '
-                        'grasp pose/approach must be replanned before more force tuning. A static '
-                        'collision-screened tip-first IK pose has both distal contacts under 1 mm '
-                        'penetration, but its fixed-pose and moving-object online replays lose index '
-                        'distal contact dynamically. Starting the moving-object IK a full second '
-                        'earlier reduces lateral drift but still yields no index distal contact. '
-                        'This diagnostic prop is not the '
+    audit['finding'] = ('Thirty-nine isolated pinch-post pilots do not establish a repeatable pickup. '
+                        'The online IK initially mixed current and reference robot frames, producing '
+                        'roughly 34 mm reference fingertip error; correcting it reduced the error to '
+                        'about 0.3 mm. A WBC Cartesian fingertip task then achieved 25/25 terminal '
+                        'index distal contacts. A 3 mm unloading stage briefly raised the pad center '
+                        'about 5.9 mm with some zero stage-load frames, but lateral drift reached '
+                        '33 mm and the lift was not sustained. Earlier lateral feedback reduced drift '
+                        'to about 24 mm but lost the unloading effect. The measured-contact gate '
+                        'never authorized transport. This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False
     AUDIT.write_text(json.dumps(audit, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
