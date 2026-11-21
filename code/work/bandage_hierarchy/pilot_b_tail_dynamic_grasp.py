@@ -19,6 +19,7 @@ parser.add_argument('--normal-goal-n',type=float,default=None)
 parser.add_argument('--pose-servo',action='store_true')
 parser.add_argument('--optimized-tip-seed',action='store_true')
 parser.add_argument('--tip-pinch-seed',action='store_true')
+parser.add_argument('--tip-pinch-rank',type=int,default=0)
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -36,11 +37,11 @@ if args.optimized_tip_seed:
     seed=tip_ik['results'][2]
 if args.tip_pinch_seed:
     tip_pinch=json.loads((OUT/'joint_b_tail_tip_pinch_static_screen.json').read_text())
-    seed=tip_pinch['best_candidates'][0]
+    seed=tip_pinch['best_candidates'][args.tip_pinch_rank]
 pos=np.asarray(tip_ik['proxy_center_m'] if tip_ik else
-               tip_pinch['best_candidates'][0]['proxy_center_m'] if tip_pinch else seed['proxy_pos_m'])
+               seed['proxy_center_m'] if tip_pinch else seed['proxy_pos_m'])
 geom_quat=np.asarray(tip_ik['proxy_quaternion_wxyz'] if tip_ik else
-                     tip_pinch['best_candidates'][0]['proxy_quaternion_wxyz'] if tip_pinch else
+                     seed['proxy_quaternion_wxyz'] if tip_pinch else
                      [.70710678,0,.70710678,0])
 root=ET.parse(OUT/screen['scene']).getroot()
 world=root.find('worldbody')
@@ -62,7 +63,7 @@ line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':
                                         pos-np.array([.38,-.44,.702]))))})
 ET.SubElement(line,'site',{'site':'bandage_spool_anchor'})
 ET.SubElement(line,'site',{'site':'bandage_tail_proxy_anchor'})
-xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else "_tip_pinch" if tip_pinch else ""}.xml'
+xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
 data=mujoco.MjData(model)
@@ -185,6 +186,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'seed':seed,'initial_tail_contacts':initial_tail_contacts,
         'optimized_tip_seed':args.optimized_tip_seed,
         'tip_pinch_seed':args.tip_pinch_seed,
+        'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'tip_position_weight':args.tip_weight,
         'pose_servo':args.pose_servo,
@@ -198,5 +200,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else "_tip_pinch" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
