@@ -61,6 +61,9 @@ for digit,key in (('thumb','thumb_flex_rad'),('index','index_flex_rad')):
             data.qpos[model.jnt_qposadr[j]]=np.clip(seed[key],model.jnt_range[j,0]+.01,
                                                       model.jnt_range[j,1]-.01)
 mujoco.mj_forward(model,data)
+initial_tail_contacts=[{'bodies':[model.body(model.geom_bodyid[g]).name for g in c.geom],
+                        'distance_m':float(c.dist)} for c in data.contact if
+                       model.geom('bandage_tail_proxy_contact').id in c.geom]
 initial_tab=data.xpos[model.body('bandage_tail_dynamic_proxy').id].copy()
 tab_id=model.body('bandage_tail_dynamic_proxy').id
 initial_tab_rotation=data.xmat[tab_id].reshape(3,3).copy()
@@ -81,6 +84,7 @@ tip_offsets['index_finger'][0]+=args.squeeze_mm/1000
 tip_local_offsets={digit:initial_tab_rotation.T@offset for digit,offset in tip_offsets.items()}
 fractions={'thumb':0,'index':0,'opposing':0,'two_feet':0}
 max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[]
+control_trace=[]
 duration=.5;interval=round(.02/model.opt.timestep)
 for _ in range(round(duration/.02)):
     try:
@@ -93,6 +97,8 @@ for _ in range(round(duration/.02)):
         ctrl,meta,_=wbc.solve(data)
         data.ctrl[:]=ctrl
         steps+=1
+        interval_contacts={digit:0 for digit in ('thumb','index')}
+        interval_opposing=0
         for _ in range(interval):
             mujoco.mj_step(model,data)
             if not np.all(np.isfinite(data.qpos)):
@@ -117,8 +123,20 @@ for _ in range(round(duration/.02)):
                         normals[digit].append(normal)
             for digit in normals:
                 fractions[digit]+=bool(normals[digit])
-            fractions['opposing']+=any(float(np.dot(a,b))<-.5 for a in normals['thumb'] for b in normals['index'])
+                interval_contacts[digit]+=bool(normals[digit])
+            is_opposing=any(float(np.dot(a,b))<-.5 for a in normals['thumb'] for b in normals['index'])
+            fractions['opposing']+=is_opposing
+            interval_opposing+=is_opposing
             fractions['two_feet']+=floor=={'left','right'}
+        center=data.xpos[tab_id].copy()
+        control_trace.append({'time_s':float(data.time),
+                              'tail_center_m':center.tolist(),
+                              'tail_quaternion':data.xquat[tab_id].tolist(),
+                              'thumb_tip_m':data.xpos[tip_bodies['thumb']].tolist(),
+                              'index_tip_m':data.xpos[tip_bodies['index_finger']].tolist(),
+                              'thumb_contact_fraction':interval_contacts['thumb']/interval,
+                              'index_contact_fraction':interval_contacts['index']/interval,
+                              'opposing_fraction':interval_opposing/interval})
     except Exception as exc:
         error=f'{type(exc).__name__}: {exc}'
         failure_contacts=sorted([{'geoms':[model.geom(g).name for g in c.geom],
@@ -133,13 +151,15 @@ for _ in range(round(duration/.02)):
         break
 den=max(1,steps*interval)
 report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flexible cloth or wrapping',
-        'seed':seed,'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
+        'seed':seed,'initial_tail_contacts':initial_tail_contacts,
+        'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'tip_position_weight':args.tip_weight,
         'pose_servo':args.pose_servo,
         'tail_digit_normal_goal_n':args.normal_goal_n,
         'duration_s':float(data.time),'error':error,
         'direct_solver_error_at_failure':direct_error,'control_solves':steps,
         'failure_contacts':failure_contacts,
+        'control_trace':control_trace,
         'contact_fractions':{k:v/den for k,v in fractions.items()},
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,

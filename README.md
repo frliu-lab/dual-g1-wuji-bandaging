@@ -127,3 +127,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 **带端姿态跟踪复核：** [物体局部坐标指尖目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_servo_1mm_w1000_pose.json)将拇指单独接触占比从 16.8% 提至 29.8%，食指仍为 14.4%，相向双指接触仍只有 1.8%。当前问题不是单纯漏掉带端旋转；后续需要带端再捕获与接触力约束共同控制。
 
 **手部模型选型：** [RPent](https://github.com/RLinf/RPent) 是物理智能体编排框架，不是直接可用的 Wuji 包扎手部策略；[Wuji-MJLab](https://github.com/wuji-technology/wuji-mjlab) 的公开权重面向魔方/转笔；[DexTaG](https://github.com/UMass-Embodied-AGI/DexTaG) 的 Wuji 控制训练基于 xArm7 工具操作；[HandsOn](https://github.com/TsinghuaC3I/HandsOn) 有 Wuji 双手柔性物体基准。它们可提供手部控制或评价参考，但现阶段都不能替代本场景中缺失的持续带端抓持。
+
+**指尖几何复核：** 先前带端种子的食指接触实际在食指中节；食指尖碰撞体中心比带端更低且更靠左。按真实碰撞体位置重排带端方向与位置的[3360 组静态筛选](media/bandage_v0/joint_b_tail_tip_pinch_static_screen.json)中，拇指尖单独接触 315 组、食指尖单独接触 56 组，双指尖同时接触 0 组。此结论只覆盖当前固定腕姿及扫描范围；下一步需联合优化腕姿、手指和带端，而不能仅调控制增益。
