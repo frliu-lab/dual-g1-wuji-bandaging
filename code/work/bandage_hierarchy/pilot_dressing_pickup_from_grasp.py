@@ -84,6 +84,9 @@ p.add_argument('--pad-orientation-use-start',action='store_true',
 p.add_argument('--wrist-x-shift-m',type=float,default=0.)
 p.add_argument('--max-pad-lateral-shift-m',type=float,default=None,
                help='Diagnostic stop threshold; reports still retain measured lateral drift')
+p.add_argument('--pad-lateral-feedback-gain',type=float,default=0.,
+               help='Soft contact-force correction in N/m toward starting pad XY')
+p.add_argument('--pad-lateral-feedback-start-s',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-offset-rad',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-late-offset-rad',type=float,default=0.)
@@ -248,6 +251,10 @@ for step in range(round(args.duration_s*50)):
                               (args.dressing_force_end_s is None or t<args.dressing_force_end_s) else None)
     wbc.dressing_up_force_goal_n=(args.dressing_up_goal_n
         if args.dressing_up_goal_n is not None and t>=args.dressing_up_goal_start_s else None)
+    wbc.dressing_lateral_force_target_n=(
+        np.clip(-args.pad_lateral_feedback_gain*(data.xpos[pad,:2]-start_pad[:2])-
+                2.*data.qvel[pad_vadr:pad_vadr+2],-1.,1.)
+        if args.pad_lateral_feedback_gain>0. and t>=args.pad_lateral_feedback_start_s else None)
     if args.start_state_token=='947858479e10':
         spool_velocity=float(data.qvel[spool_free.dofadr[0]+2])
         spool_error=float(start_spool[2]-data.xpos[spool,2])
@@ -461,6 +468,18 @@ for step in range(round(args.duration_s*50)):
     rows[-1]['digit_tip_m']={name:data.xpos[info['body']].tolist() for name,info in digit_info.items()}
     rows[-1]['digit_joint_error_rad']={name:(data.qpos[info['qa']]-wbc.qref[info['qa']]).tolist()
                                          for name,info in digit_info.items()}
+    actual_up_by_source={}
+    for ci,c in enumerate(data.contact):
+        if c.geom1<0 or c.geom2<0:continue
+        ga=model.geom(c.geom1).name;gb=model.geom(c.geom2).name
+        if not any(name in (ga,gb) for name in ('dressing_pad_contact','dressing_pull_tab')):continue
+        other_geom=c.geom2 if ga in ('dressing_pad_contact','dressing_pull_tab') else c.geom1
+        other_body=model.body(model.geom_bodyid[other_geom]).name
+        wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
+        sign=-1. if ga in ('dressing_pad_contact','dressing_pull_tab') else 1.
+        up=float((sign*c.frame.reshape(3,3).T@wrench[:3])[2])
+        actual_up_by_source[other_body]=actual_up_by_source.get(other_body,0.)+up
+    rows[-1]['actual_pad_up_force_by_body_n']=actual_up_by_source
     rows[-1]['pad_contacts']=[{
         'geoms':[model.geom(c.geom1).name,model.geom(c.geom2).name],
         'bodies':[model.body(model.geom_bodyid[c.geom1]).name,
@@ -530,6 +549,8 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'pad_orientation_use_start':args.pad_orientation_use_start,
         'wrist_x_shift_m':args.wrist_x_shift_m,
         'max_pad_lateral_shift_m':args.max_pad_lateral_shift_m,
+        'pad_lateral_feedback_gain':args.pad_lateral_feedback_gain,
+        'pad_lateral_feedback_start_s':args.pad_lateral_feedback_start_s,
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
         'support_wrist_yaw_late_offset_rad':args.support_wrist_yaw_late_offset_rad,

@@ -21,6 +21,7 @@ class JointWBC:
   self.dressing_digit_normal_goals_n=None
   self.dressing_lift_min_n=None
   self.dressing_up_force_goal_n=None
+  self.dressing_lateral_force_target_n=None
   self.spool_contact_normal_goal_n=None
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
@@ -110,7 +111,10 @@ class JointWBC:
     constraints.extend([P['b_spool_lateral_coeff']@f-P['b_spool_lateral_target']<=.1,
                         P['b_spool_lateral_coeff']@f-P['b_spool_lateral_target']>=-.1])
    P['dressing_up_weight']=cp.Parameter(nonneg=True)
-   objective=cp.sum_squares(cp.multiply(P['task_weight'],P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+P['dressing_up_weight']*cp.square(P['dressing_up_coeff']@f-P['dressing_up_goal'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] or handle_stick_flags and handle_stick_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(P['acc_weight'],a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
+   P['dressing_lateral_weight']=cp.Parameter(nonneg=True)
+   P['dressing_lateral_coeff']=cp.Parameter((2,3*nc))
+   P['dressing_lateral_target']=cp.Parameter(2)
+   objective=cp.sum_squares(cp.multiply(P['task_weight'],P['taskJ']@a-P['tasktarget']))+cp.sum_squares(cp.multiply(P['forceweight'],f)-P['forcegoal'])+P['dressing_up_weight']*cp.square(P['dressing_up_coeff']@f-P['dressing_up_goal'])+P['dressing_lateral_weight']*cp.sum_squares(P['dressing_lateral_coeff']@f-P['dressing_lateral_target'])+cp.sum_squares(cp.multiply(np.array([100. if pad_flags[row//3] or handle_stick_flags and handle_stick_flags[row//3] else 10. for row in mask]),P['J'][mask]@a-P['target']))+cp.sum_squares(cp.multiply(P['acc_weight'],a-P['desired']))+1e-4*cp.sum_squares(tau)+1e-6*cp.sum_squares(f)
    if self.hand_position_mode and len(fixed_hand):objective+=1e4*cp.sum_squares(tau[fixed_hand]-P['fixed_hand_tau'][[int(np.flatnonzero(self.hand_indices==i)[0]) for i in fixed_hand]])
    self.cache[key]=(cp.Problem(cp.Minimize(objective),constraints),P,a,tau,f)
   problem,P,a,tau,f=self.cache[key]
@@ -135,6 +139,7 @@ class JointWBC:
   goals=np.zeros(3*nc);forceweight=np.zeros(3*nc)
   spool_up_coeff=np.zeros(3*nc)
   dressing_up_coeff=np.zeros(3*nc)
+  dressing_lateral_coeff=np.zeros((2,3*nc))
   spool_lateral_coeff=np.zeros((2,3*nc))
   for k,(ga,gb) in enumerate(ids):
    if any(name in (m.geom(ga).name,m.geom(gb).name) for name in ('dressing_pad_contact','dressing_pull_tab')):
@@ -142,6 +147,7 @@ class JointWBC:
     if any(n.startswith(('g1_a/wuji_right/r_thumb_','g1_a/wuji_right/r_index_finger_','g1_a/wuji_right/r_middle_finger_')) for n in names):
      sign=-1. if m.geom(ga).name in ('dressing_pad_contact','dressing_pull_tab') else 1.
      dressing_up_coeff[k*3:k*3+3]=sign*d.contact[self.contact_indices[k]].frame.reshape(3,3)[:,2]
+     dressing_lateral_coeff[:,k*3:k*3+3]=sign*d.contact[self.contact_indices[k]].frame.reshape(3,3).T[:2,:]
    if 'bandage_handle_prototype' not in (m.geom(ga).name,m.geom(gb).name):continue
    names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
    if not any(n.startswith(('g1_b/wuji_left/l_thumb_','g1_b/wuji_left/l_index_finger_')) for n in names):continue
@@ -244,6 +250,10 @@ class JointWBC:
   P['dressing_up_goal'].value=(float(self.dressing_up_force_goal_n)
        if self.dressing_up_force_goal_n is not None else 0.)
   P['dressing_up_weight'].value=25. if self.dressing_up_force_goal_n is not None else 0.
+  P['dressing_lateral_weight'].value=15. if self.dressing_lateral_force_target_n is not None else 0.
+  P['dressing_lateral_coeff'].value=dressing_lateral_coeff
+  P['dressing_lateral_target'].value=(np.asarray(self.dressing_lateral_force_target_n,dtype=float)
+       if self.dressing_lateral_force_target_n is not None else np.zeros(2))
   for k,v in {'M':M,'h':h,'J':J,'target':target[mask],'desired':desired,'lo':lo,'hi':hi,'mu':mus,'forcegoal':forceweight*goals,'forceweight':forceweight,'acc_weight':self.weights,'acc_lo':acc_lo,'acc_hi':acc_hi,'taskJ':taskJ,'tasktarget':tasktarget,'task_weight':task_weights,'fixed_hand_tau':requested_hand_tau,'forearm_cap':float(self.forearm_contact_force_limit_n) if self.forearm_contact_force_limit_n is not None else 1000.,'finger_forearm_cap':float(self.forearm_finger_force_limit_n) if self.forearm_finger_force_limit_n is not None else 1000.,'b_spool_cap':float(self.b_spool_contact_force_cap_n) if self.b_spool_contact_force_cap_n is not None else 1000.,'b_spool_up_coeff':spool_up_coeff,'b_spool_up_min':float(self.b_handle_lift_min_n) if self.b_handle_lift_min_n is not None else 0.,'b_spool_lateral_coeff':spool_lateral_coeff,'b_spool_lateral_target':np.asarray(self.b_handle_lateral_force_target_n) if self.b_handle_lateral_force_target_n is not None else np.zeros(2),'dressing_up_coeff':dressing_up_coeff,'dressing_up_min':float(self.dressing_lift_min_n) if self.dressing_lift_min_n is not None else 0.}.items():P[k].value=v
   self.last_numeric={'M':M.copy(),'B':self.B.copy(),'J':J.copy(),'h':h.copy(),'mask':mask.copy(),'target':target.copy(),'pad_flags':pad_flags,'weights':self.weights.copy(),'desired':desired.copy(),'taskJ':taskJ.copy(),'tasktarget':tasktarget.copy(),'forceweight':forceweight.copy(),'force_goal_weighted':(forceweight*goals).copy(),'mu':mus.copy(),'acc_lo':acc_lo.copy(),'acc_hi':acc_hi.copy(),'lo':lo.copy(),'hi':hi.copy(),'hard_hand':hard_hand.copy() if self.hand_position_mode else np.array([],dtype=int),'hard_tau':np.array([requested_hand_tau[int(np.flatnonzero(self.hand_indices==i)[0])] for i in hard_hand]) if self.hand_position_mode else np.array([]),'fixed_hand':fixed_hand.copy() if self.hand_position_mode else np.array([],dtype=int),'fixed_tau':P['fixed_hand_tau'].value[[int(np.flatnonzero(self.hand_indices==i)[0]) for i in fixed_hand]].copy() if self.hand_position_mode else np.array([])}
   solve_started=time.perf_counter();used_backend=self.backend;fallback=False;direct_success=False;direct_report=None

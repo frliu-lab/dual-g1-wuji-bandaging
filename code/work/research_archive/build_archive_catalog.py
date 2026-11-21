@@ -323,6 +323,7 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/screen_support_pinky_clearance.py',
     'work/bandage_hierarchy/build_joint_pickup_audits.py',
     'work/bandage_hierarchy/pilot_dressing_pickup_from_grasp.py',
+    'work/research_archive/update_pinch_post_audit.py',
     'work/bandage_hierarchy/check_index_reachability.py',
     'work/bandage_hierarchy/check_thumb_side_reachability.py',
     'work/bandage_hierarchy/audit_pad_clearance.py',
