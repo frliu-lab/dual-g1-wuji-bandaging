@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Forty-one isolated pinch-post pilots do not establish a repeatable pickup. The online IK initially mixed current and reference robot frames, producing roughly 34 mm reference fingertip error; correcting it reduced the error to about 0.3 mm. A WBC Cartesian fingertip task then achieved 25/25 terminal index distal contacts. A 3 mm unloading stage briefly raised the pad center about 5.9 mm with some zero stage-load frames, but a full-pad corner audit found peak conservative underside clearance only 0.15 mm and zero frames above 2 mm. The same run repeated with an integrated strict per-frame pickup gate also scored zero passing frames in the terminal 25. Lateral drift reached 33 mm. Earlier lateral feedback reduced drift to about 24 mm but lost the unloading effect. A soft pad-orientation hold also reduced center rise and index distal contact, leaving no full-pad clearance. The measured-contact gate never authorized transport. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
+  "finding": "Forty-two isolated pinch-post pilots do not establish a repeatable pickup. The online IK initially mixed current and reference robot frames, producing roughly 34 mm reference fingertip error; correcting it reduced the error to about 0.3 mm. A WBC Cartesian fingertip task then achieved 25/25 terminal index distal contacts. A 3 mm unloading stage briefly raised the pad center about 5.9 mm with some zero stage-load frames, but a full-pad corner audit found peak conservative underside clearance only 0.15 mm and zero frames above 2 mm. The same run repeated with an integrated strict per-frame pickup gate also scored zero passing frames in the terminal 25. Lateral drift reached 33 mm. Earlier lateral feedback reduced drift to about 24 mm but lost the unloading effect. A soft pad-orientation hold also reduced center rise and index distal contact, leaving no full-pad clearance. Holding fingertip target offsets at the initial level orientation also worsened lateral drift and produced no clearance. The measured-contact gate never authorized transport. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
   "trials": [
     {
       "name": "side_pinch",
@@ -715,6 +715,26 @@
       "last25_stage_steps": 25,
       "last25_index_distal_contact_steps": 4,
       "last25_thumb_distal_contact_steps": 4,
+      "transport_started": false,
+      "max_ready_streak": 0,
+      "errors": []
+    },
+    {
+      "name": "post_frozen_target_rotation",
+      "report": "joint_dressing_pilot_d83511cda156eae3.json",
+      "completed": true,
+      "steps": 190,
+      "pad_center_lift_m": -0.002951903246674825,
+      "peak_pad_center_lift_m": 0.0032651806947473494,
+      "peak_min_pad_underside_clearance_m": -3.9645617489147966e-05,
+      "pickup_pass": false,
+      "max_pad_lateral_shift_m": 0.052878231319407845,
+      "median_last25_predicted_up_n": 0.12479977896803861,
+      "median_last25_actual_robot_up_n": -0.07610000031160007,
+      "median_last25_actual_a_right_up_n": -0.07610000031160007,
+      "last25_stage_steps": 25,
+      "last25_index_distal_contact_steps": 25,
+      "last25_thumb_distal_contact_steps": 25,
       "transport_started": false,
       "max_ready_streak": 0,
       "errors": []

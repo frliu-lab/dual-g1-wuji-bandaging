@@ -77,6 +77,8 @@ p.add_argument('--online-tab-thumb-offset-m',type=float,default=None)
 p.add_argument('--online-tab-index-offset-m',type=float,default=None)
 p.add_argument('--online-tab-middle-clearance-m',type=float,default=None,
                help='Keep the index middle link radially clear of the diagnostic post')
+p.add_argument('--freeze-tab-target-orientation',action='store_true',
+               help='Use the checkpoint tab orientation for fingertip offsets while tracking its position')
 p.add_argument('--online-tab-ik-transport',action='store_true',
                help='Keep online side-pinch IK during planned upward transport')
 p.add_argument('--online-tab-middle',action='store_true',help='Bring middle finger to post with online IK')
@@ -260,6 +262,7 @@ if args.online_tab_ik_after_s is not None:
         ik_lo[dip_i]=max(ik_lo[dip_i],args.online_tab_index_dip_min_rad)
         if ik_lo[dip_i]>=ik_hi[dip_i]:p.error('index DIP minimum exceeds joint range')
     tab_geom=model.geom('dressing_pull_tab').id
+    initial_tab_rotation=data.geom_xmat[tab_geom].reshape(3,3).copy()
     tip_first_target=None
     if args.tip_first_candidate_index is not None:
         search=json.loads((OUT/'joint_post_tip_first_ik_search.json').read_text(encoding='utf8'))
@@ -466,7 +469,8 @@ for step in range(round(args.duration_s*50)):
         ik_data.qpos[:]=wbc.qref
         ik_data.qpos[pad_qadr:pad_qadr+7]=data.qpos[pad_qadr:pad_qadr+7]
         mujoco.mj_forward(model,ik_data)
-        tab_R=ik_data.geom_xmat[tab_geom].reshape(3,3)
+        tab_R=(initial_tab_rotation if args.freeze_tab_target_orientation else
+               ik_data.geom_xmat[tab_geom].reshape(3,3))
         tab_pos=ik_data.geom_xpos[tab_geom].copy()
         tab_pos[2]+=unload_offset
         if transport_anchor is not None:
@@ -655,6 +659,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_thumb_offset_m':args.online_tab_thumb_offset_m,
         'online_tab_index_offset_m':args.online_tab_index_offset_m,
         'online_tab_middle_clearance_m':args.online_tab_middle_clearance_m,
+        'freeze_tab_target_orientation':args.freeze_tab_target_orientation,
         'online_tab_ik_transport':args.online_tab_ik_transport,
         'online_tab_middle':args.online_tab_middle,
         'online_tab_wrist_hold_weight':args.online_tab_wrist_hold_weight,

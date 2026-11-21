@@ -21,6 +21,7 @@ TAGS = (
     'post_tip_task_up15_xy20', 'post_unload3mm', 'post_unload3mm_xyearly',
     'post_unload3mm_strict',
     'post_unload_pose1',
+    'post_frozen_target_rotation',
 )
 
 
@@ -71,7 +72,7 @@ def main():
                                      for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Forty-one isolated pinch-post pilots do not establish a repeatable pickup. '
+    audit['finding'] = ('Forty-two isolated pinch-post pilots do not establish a repeatable pickup. '
                         'The online IK initially mixed current and reference robot frames, producing '
                         'roughly 34 mm reference fingertip error; correcting it reduced the error to '
                         'about 0.3 mm. A WBC Cartesian fingertip task then achieved 25/25 terminal '
@@ -83,7 +84,8 @@ def main():
                         '33 mm. Earlier lateral feedback reduced drift '
                         'to about 24 mm but lost the unloading effect. A soft pad-orientation hold '
                         'also reduced center rise and index distal contact, leaving no full-pad '
-                        'clearance. The measured-contact gate '
+                        'clearance. Holding fingertip target offsets at the initial level orientation '
+                        'also worsened lateral drift and produced no clearance. The measured-contact gate '
                         'never authorized transport. This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False
