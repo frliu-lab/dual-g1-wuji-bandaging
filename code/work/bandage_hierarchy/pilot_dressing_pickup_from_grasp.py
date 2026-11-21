@@ -69,6 +69,7 @@ p.add_argument('--online-tab-side-offset-m',type=float,default=.008)
 p.add_argument('--online-tab-ik-transport',action='store_true',
                help='Keep online side-pinch IK during planned upward transport')
 p.add_argument('--online-tab-middle',action='store_true',help='Bring middle finger to post with online IK')
+p.add_argument('--online-tab-wrist-hold-weight',type=float,default=.2)
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-up-goal-n',type=float,default=None)
 p.add_argument('--dressing-up-goal-start-s',type=float,default=0.)
@@ -409,7 +410,7 @@ for step in range(round(args.duration_s*50)):
                    ik_data.xpos[index_id]-tab_targets[1]]
             if args.online_tab_middle:
                 parts.append(ik_data.xpos[digit_info['middle']['body']]-middle_target)
-            parts.extend((.2*(ik_data.xpos[wrist]-wrist_start),
+            parts.extend((args.online_tab_wrist_hold_weight*(ik_data.xpos[wrist]-wrist_start),
                           .002*(x[:len(arm_qa)]-ik_start[:len(arm_qa)])))
             return np.concatenate(parts)
         fit=least_squares(tab_residual,np.clip(ik_start,ik_lo,ik_hi),bounds=(ik_lo,ik_hi),
@@ -508,6 +509,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_side_offset_m':args.online_tab_side_offset_m,
         'online_tab_ik_transport':args.online_tab_ik_transport,
         'online_tab_middle':args.online_tab_middle,
+        'online_tab_wrist_hold_weight':args.online_tab_wrist_hold_weight,
         'transport_grasp_after_s':args.transport_grasp_after_s,
         'transport_extra_lift_m':args.transport_extra_lift_m,
         'pull_tab_scene':args.pull_tab_scene,

@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Ten pilots fail true pickup. Corrected previously unmatched index force-goal names. Three-digit run reaches 0.194 N predicted upward force but slides pad 57 mm off stage; zero commanded x shift still slides 75 mm and retains stage contact.",
+  "finding": "Twelve pilots fail pickup. Stronger wrist hold reduces lateral drift (75 to 40 mm) but loses effective upward grasp; intermediate hold still drifts 63 mm and stays on stage.",
   "trials": [
     {
       "name": "side_pinch",
@@ -112,6 +112,28 @@
       "pad_center_lift_m": 0.009623789603609656,
       "max_pad_lateral_shift_m": 0.07480137512729396,
       "median_last25_predicted_up_n": -0.0004484112001651791,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "wrist_hold_2",
+      "report": "joint_dressing_pilot_3da3982fc9ed7fcd.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0051215338902289576,
+      "max_pad_lateral_shift_m": 0.04051088602745919,
+      "median_last25_predicted_up_n": 0.010460362558184385,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "wrist_hold_0p6",
+      "report": "joint_dressing_pilot_095792e24a2e29d1.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": 0.008482045688088524,
+      "max_pad_lateral_shift_m": 0.06306597813915889,
+      "median_last25_predicted_up_n": -0.0008950747239325695,
       "last25_stage_steps": 25,
       "errors": []
     }
