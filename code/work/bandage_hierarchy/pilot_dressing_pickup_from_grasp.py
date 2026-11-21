@@ -68,6 +68,7 @@ p.add_argument('--online-tab-target-z-m',type=float,default=-.006)
 p.add_argument('--online-tab-side-offset-m',type=float,default=.008)
 p.add_argument('--online-tab-ik-transport',action='store_true',
                help='Keep online side-pinch IK during planned upward transport')
+p.add_argument('--online-tab-middle',action='store_true',help='Bring middle finger to post with online IK')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-up-goal-n',type=float,default=None)
 p.add_argument('--dressing-up-goal-start-s',type=float,default=0.)
@@ -80,6 +81,8 @@ p.add_argument('--pad-orientation-after-s',type=float,default=None)
 p.add_argument('--pad-orientation-use-start',action='store_true',
                help='Hold checkpoint pad orientation instead of the orientation at activation')
 p.add_argument('--wrist-x-shift-m',type=float,default=0.)
+p.add_argument('--max-pad-lateral-shift-m',type=float,default=None,
+               help='Diagnostic stop threshold; reports still retain measured lateral drift')
 p.add_argument('--support-wrist-yaw-offset-rad',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-start-s',type=float,default=0.)
 p.add_argument('--support-wrist-yaw-late-offset-rad',type=float,default=0.)
@@ -208,8 +211,10 @@ if args.online_tab_ik_after_s is not None:
     ik_data=mujoco.MjData(model)
     ik_ids=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/right_')
             and any(s in model.joint(j).name for s in ('shoulder','elbow','wrist'))]
-    for prefix in ('r_thumb_','r_index_finger_'):
+    for prefix in (('r_thumb_','r_index_finger_','r_middle_finger_')
+                   if args.online_tab_middle else ('r_thumb_','r_index_finger_')):
         ik_ids += [j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/wuji_right/'+prefix)]
+    if args.online_tab_middle and 'middle' not in digit_info:p.error('online middle requires --middle-support-candidate')
     ik_qa=np.array([model.jnt_qposadr[j] for j in ik_ids]);ik_lo=model.jnt_range[ik_ids,0]+1e-5
     ik_hi=model.jnt_range[ik_ids,1]-1e-5
     tab_geom=model.geom('dressing_pull_tab').id
@@ -394,14 +399,19 @@ for step in range(round(args.duration_s*50)):
             tab_pos[2]+=planned-transport_anchor[2]
         tab_targets=(tab_pos+tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*args.online_tab_target_z_m,
                      tab_pos-tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*args.online_tab_target_z_m)
+        if args.online_tab_middle:
+            middle_target=tab_targets[1]+tab_R[:,0]*.010
         thumb_id=digit_info['thumb']['body'];index_id=digit_info['index']['body']
         wrist_start=ik_data.xpos[wrist].copy();ik_start=data.qpos[ik_qa].copy()
         def tab_residual(x):
             ik_data.qpos[ik_qa]=x;mujoco.mj_forward(model,ik_data)
-            return np.r_[ik_data.xpos[thumb_id]-tab_targets[0],
-                         ik_data.xpos[index_id]-tab_targets[1],
-                         .2*(ik_data.xpos[wrist]-wrist_start),
-                         .002*(x[:len(arm_qa)]-ik_start[:len(arm_qa)])]
+            parts=[ik_data.xpos[thumb_id]-tab_targets[0],
+                   ik_data.xpos[index_id]-tab_targets[1]]
+            if args.online_tab_middle:
+                parts.append(ik_data.xpos[digit_info['middle']['body']]-middle_target)
+            parts.extend((.2*(ik_data.xpos[wrist]-wrist_start),
+                          .002*(x[:len(arm_qa)]-ik_start[:len(arm_qa)])))
+            return np.concatenate(parts)
         fit=least_squares(tab_residual,np.clip(ik_start,ik_lo,ik_hi),bounds=(ik_lo,ik_hi),
                           max_nfev=35)
         wbc.qref[ik_qa]=fit.x
@@ -459,7 +469,9 @@ for step in range(round(args.duration_s*50)):
         'pad_to_other_normal_world':((1. if model.geom(c.geom1).name in ('dressing_pad_contact','dressing_pull_tab') else -1.)*
                                       np.asarray(c.frame[:3])).tolist()} for ci,c in enumerate(data.contact)
         if any(name in (model.geom(c.geom1).name,model.geom(c.geom2).name) for name in ('dressing_pad_contact','dressing_pull_tab'))]
-    if rows[-1]['pad_lateral_shift_m']>max(.01,abs(args.wrist_x_shift_m)+.01):
+    lateral_limit=(args.max_pad_lateral_shift_m if args.max_pad_lateral_shift_m is not None
+                   else max(.01,abs(args.wrist_x_shift_m)+.01))
+    if rows[-1]['pad_lateral_shift_m']>lateral_limit:
         errors.append('pad_lateral_shift_over_plan_plus_10mm');break
     if rows[-1]['spool_shift_m']>.005:errors.append('spool_shift_over_5mm');break
 report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
@@ -495,6 +507,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_target_z_m':args.online_tab_target_z_m,
         'online_tab_side_offset_m':args.online_tab_side_offset_m,
         'online_tab_ik_transport':args.online_tab_ik_transport,
+        'online_tab_middle':args.online_tab_middle,
         'transport_grasp_after_s':args.transport_grasp_after_s,
         'transport_extra_lift_m':args.transport_extra_lift_m,
         'pull_tab_scene':args.pull_tab_scene,
@@ -514,6 +527,7 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'pad_orientation_after_s':args.pad_orientation_after_s,
         'pad_orientation_use_start':args.pad_orientation_use_start,
         'wrist_x_shift_m':args.wrist_x_shift_m,
+        'max_pad_lateral_shift_m':args.max_pad_lateral_shift_m,
         'support_wrist_yaw_offset_rad':args.support_wrist_yaw_offset_rad,
         'support_wrist_yaw_start_s':args.support_wrist_yaw_start_s,
         'support_wrist_yaw_late_offset_rad':args.support_wrist_yaw_late_offset_rad,

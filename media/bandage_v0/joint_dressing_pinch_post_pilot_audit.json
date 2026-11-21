@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Seven pilots fail pickup. In a 0.2 N soft upward-force request, QP predicts only 0.075 N median over the last 25 control frames, below the roughly 0.13 N dressing weight; stage contact remains.",
+  "finding": "Ten pilots fail true pickup. Corrected previously unmatched index force-goal names. Three-digit run reaches 0.194 N predicted upward force but slides pad 57 mm off stage; zero commanded x shift still slides 75 mm and retains stage contact.",
   "trials": [
     {
       "name": "side_pinch",
@@ -79,6 +79,39 @@
       "requested_soft_upward_goal_n": 0.2,
       "median_last25_predicted_upward_force_n": 0.07475246916297903,
       "pad_center_lift_m": -0.0019085608749311866,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "index_force_name_fix",
+      "report": "joint_dressing_pilot_bc575de349880aa8.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.000269514383767433,
+      "max_pad_lateral_shift_m": 0.033016076510067625,
+      "median_last25_predicted_up_n": -0.0026477659902225913,
+      "last25_stage_steps": 25,
+      "errors": []
+    },
+    {
+      "name": "three_digit_transport",
+      "report": "joint_dressing_pilot_07359c4857431ea5.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": -0.0005447909156692798,
+      "max_pad_lateral_shift_m": 0.05748322573926934,
+      "median_last25_predicted_up_n": 0.19412150811877446,
+      "last25_stage_steps": 12,
+      "errors": []
+    },
+    {
+      "name": "three_digit_vertical",
+      "report": "joint_dressing_pilot_823dfb6f284c47f4.json",
+      "completed": true,
+      "steps": 210,
+      "pad_center_lift_m": 0.009623789603609656,
+      "max_pad_lateral_shift_m": 0.07480137512729396,
+      "median_last25_predicted_up_n": -0.0004484112001651791,
       "last25_stage_steps": 25,
       "errors": []
     }

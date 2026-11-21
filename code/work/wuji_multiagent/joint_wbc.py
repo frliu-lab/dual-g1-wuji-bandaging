@@ -139,7 +139,7 @@ class JointWBC:
   for k,(ga,gb) in enumerate(ids):
    if any(name in (m.geom(ga).name,m.geom(gb).name) for name in ('dressing_pad_contact','dressing_pull_tab')):
     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
-    if any(n.startswith(('g1_a/wuji_right/r_thumb_','g1_a/wuji_right/r_index_finger_')) for n in names):
+    if any(n.startswith(('g1_a/wuji_right/r_thumb_','g1_a/wuji_right/r_index_finger_','g1_a/wuji_right/r_middle_finger_')) for n in names):
      sign=-1. if m.geom(ga).name in ('dressing_pad_contact','dressing_pull_tab') else 1.
      dressing_up_coeff[k*3:k*3+3]=sign*d.contact[self.contact_indices[k]].frame.reshape(3,3)[:,2]
    if 'bandage_handle_prototype' not in (m.geom(ga).name,m.geom(gb).name):continue
@@ -168,12 +168,13 @@ class JointWBC:
   if self.dressing_contact_normal_goal_n is not None:
    if not np.isfinite(self.dressing_contact_normal_goal_n) or self.dressing_contact_normal_goal_n<0:
     raise ValueError('Dressing contact normal goal must be finite and nonnegative')
-   dressing_contacts={digit:[] for digit in ('thumb','index')}
+   dressing_contacts={digit:[] for digit in ('thumb','index','middle')}
+   digit_prefix={'thumb':'r_thumb_','index':'r_index_finger_','middle':'r_middle_finger_'}
    for k,(ga,gb) in enumerate(ids):
     if not any(name in (m.geom(ga).name,m.geom(gb).name) for name in ('dressing_pad_contact','dressing_pull_tab')):continue
     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
     for digit in dressing_contacts:
-     if any(n.startswith(f'g1_a/wuji_right/r_{digit}_') for n in names):dressing_contacts[digit].append(k)
+     if any(n.startswith('g1_a/wuji_right/'+digit_prefix[digit]) for n in names):dressing_contacts[digit].append(k)
    for digit,entries in dressing_contacts.items():
     digit_goal=(self.dressing_digit_normal_goals_n or {}).get(digit,self.dressing_contact_normal_goal_n)
     if not np.isfinite(digit_goal) or digit_goal<0:raise ValueError('Dressing digit force goal must be finite and nonnegative')
