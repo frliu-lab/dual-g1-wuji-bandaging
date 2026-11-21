@@ -17,7 +17,11 @@ parser.add_argument('--squeeze-mm',type=float,default=1.)
 parser.add_argument('--tip-weight',type=float,default=1000.)
 parser.add_argument('--normal-goal-n',type=float,default=None)
 parser.add_argument('--pose-servo',action='store_true')
+parser.add_argument('--optimized-tip-seed',action='store_true')
+parser.add_argument('--tip-pinch-seed',action='store_true')
 args=parser.parse_args()
+if args.optimized_tip_seed and args.tip_pinch_seed:
+    parser.error('Choose one alternate seed')
 sys.path.insert(0,str(ROOT/'work/wuji_multiagent'))
 from joint_wbc import JointWBC
 
@@ -25,41 +29,60 @@ screen=json.loads((OUT/'joint_b_reposition_static_screen.json').read_text())
 path=json.loads((OUT/'joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json').read_text())
 suffix=f'_{round(args.radius*1000):g}mm' if args.radius!=.009 else ''
 seed=json.loads((OUT/f'joint_b_tail_static_proxy_contact_fine_screen{suffix}.json').read_text())['best_candidates'][0]
-pos=np.asarray(seed['proxy_pos_m'])
+tip_ik=None
+tip_pinch=None
+if args.optimized_tip_seed:
+    tip_ik=json.loads((OUT/'joint_b_tail_arm_digit_ik_screen.json').read_text())
+    seed=tip_ik['results'][2]
+if args.tip_pinch_seed:
+    tip_pinch=json.loads((OUT/'joint_b_tail_tip_pinch_static_screen.json').read_text())
+    seed=tip_pinch['best_candidates'][0]
+pos=np.asarray(tip_ik['proxy_center_m'] if tip_ik else
+               tip_pinch['best_candidates'][0]['proxy_center_m'] if tip_pinch else seed['proxy_pos_m'])
+geom_quat=np.asarray(tip_ik['proxy_quaternion_wxyz'] if tip_ik else
+                     tip_pinch['best_candidates'][0]['proxy_quaternion_wxyz'] if tip_pinch else
+                     [.70710678,0,.70710678,0])
 root=ET.parse(OUT/screen['scene']).getroot()
 world=root.find('worldbody')
 ET.SubElement(world,'geom',{'name':'bandage_tail_rest','type':'cylinder',
-                            'pos':f'{pos[0]} {pos[1]} {pos[2]-.024}',
-                            'size':'.005 .017','rgba':'.45 .47 .50 1',
+                            'pos':f'{pos[0]} {pos[1]} {pos[2]-(.029 if tip_pinch else .028 if tip_ik else .024)}',
+                            'size':f'.005 {(.014 if tip_ik or tip_pinch else .017)}','rgba':'.45 .47 .50 1',
                             'friction':'1 .005 .0001'})
 tab=ET.SubElement(world,'body',{'name':'bandage_tail_dynamic_proxy',
                                 'pos':' '.join(map(str,pos))})
 ET.SubElement(tab,'freejoint',{'name':'bandage_tail_proxy_free'})
 ET.SubElement(tab,'geom',{'name':'bandage_tail_proxy_contact','type':'cylinder',
-                          'quat':'.70710678 0 .70710678 0','size':f'{args.radius} .025',
+                          'quat':' '.join(map(str,geom_quat)),'size':f'{args.radius} .025',
                           'mass':'.008','rgba':'.95 .89 .70 1','friction':'1 .005 .0001'})
 ET.SubElement(tab,'site',{'name':'bandage_tail_proxy_anchor','size':'.002'})
 tendon=root.find('tendon')
 line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':'.007',
                                     'rgba':'.95 .89 .70 1','stiffness':'10',
-                                    'damping':'.1','springlength':'.683'})
+                                    'damping':'.1','springlength':str(float(np.linalg.norm(
+                                        pos-np.array([.38,-.44,.702]))))})
 ET.SubElement(line,'site',{'site':'bandage_spool_anchor'})
 ET.SubElement(line,'site',{'site':'bandage_tail_proxy_anchor'})
-xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}.xml'
+xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else "_tip_pinch" if tip_pinch else ""}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
 data=mujoco.MjData(model)
 baseq=np.asarray(path['samples'][-1]['qpos'])
 assert model.nq==len(baseq)+7
 data.qpos[:len(baseq)]=baseq
+if tip_ik:
+    for name,value in zip(tip_ik['joint_names'],seed['joint_targets_rad']):
+        data.qpos[model.joint(name).qposadr[0]]=value
 free_adr=model.joint('bandage_tail_proxy_free').qposadr[0]
 data.qpos[free_adr:free_adr+7]=[*pos,1,0,0,0]
-for digit,key in (('thumb','thumb_flex_rad'),('index','index_flex_rad')):
-    for j in range(model.njnt):
-        name=model.joint(j).name
-        if name.startswith(f'g1_b/wuji_right/r_{digit}_') and 'abd' not in name:
-            data.qpos[model.jnt_qposadr[j]]=np.clip(seed[key],model.jnt_range[j,0]+.01,
-                                                      model.jnt_range[j,1]-.01)
+if not tip_ik:
+    for digit,key in (('thumb','thumb_flex_rad'),('index','index_flex_rad')):
+        if tip_pinch:
+            key=f'{digit}_flex_rad'
+        for j in range(model.njnt):
+            name=model.joint(j).name
+            if name.startswith(f'g1_b/wuji_right/r_{digit}_') and 'abd' not in name:
+                data.qpos[model.jnt_qposadr[j]]=np.clip(seed[key],model.jnt_range[j,0]+.01,
+                                                          model.jnt_range[j,1]-.01)
 mujoco.mj_forward(model,data)
 initial_tail_contacts=[{'bodies':[model.body(model.geom_bodyid[g]).name for g in c.geom],
                         'distance_m':float(c.dist)} for c in data.contact if
@@ -83,7 +106,7 @@ tip_offsets['thumb'][0]-=args.squeeze_mm/1000
 tip_offsets['index_finger'][0]+=args.squeeze_mm/1000
 tip_local_offsets={digit:initial_tab_rotation.T@offset for digit,offset in tip_offsets.items()}
 fractions={'thumb':0,'index':0,'opposing':0,'two_feet':0}
-max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[]
+max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[];bad_acc_bounds=[]
 control_trace=[]
 duration=.5;interval=round(.02/model.opt.timestep)
 for _ in range(round(duration/.02)):
@@ -139,6 +162,14 @@ for _ in range(round(duration/.02)):
                               'opposing_fraction':interval_opposing/interval})
     except Exception as exc:
         error=f'{type(exc).__name__}: {exc}'
+        numeric=getattr(wbc,'last_numeric',None)
+        if numeric is not None:
+            for dof in np.flatnonzero(numeric['acc_lo']>numeric['acc_hi']+1e-9):
+                j=int(model.dof_jntid[dof])
+                bad_acc_bounds.append({'joint':model.joint(j).name,
+                    'inversion':float(numeric['acc_lo'][dof]-numeric['acc_hi'][dof]),
+                    'q':float(data.qpos[model.jnt_qposadr[j]]),
+                    'v':float(data.qvel[dof])})
         failure_contacts=sorted([{'geoms':[model.geom(g).name for g in c.geom],
                                   'bodies':[model.body(model.geom_bodyid[g]).name for g in c.geom],
                                   'distance_m':float(c.dist)} for c in data.contact],
@@ -152,6 +183,8 @@ for _ in range(round(duration/.02)):
 den=max(1,steps*interval)
 report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flexible cloth or wrapping',
         'seed':seed,'initial_tail_contacts':initial_tail_contacts,
+        'optimized_tip_seed':args.optimized_tip_seed,
+        'tip_pinch_seed':args.tip_pinch_seed,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'tip_position_weight':args.tip_weight,
         'pose_servo':args.pose_servo,
@@ -159,10 +192,11 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'duration_s':float(data.time),'error':error,
         'direct_solver_error_at_failure':direct_error,'control_solves':steps,
         'failure_contacts':failure_contacts,
+        'bad_acceleration_bounds':bad_acc_bounds,
         'control_trace':control_trace,
         'contact_fractions':{k:v/den for k,v in fractions.items()},
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else "_tip_pinch" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))

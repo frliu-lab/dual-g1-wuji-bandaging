@@ -11,30 +11,35 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 screen=json.loads((OUT/'joint_b_reposition_static_screen.json').read_text())
 path=json.loads((OUT/'joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json').read_text())
-root=ET.parse(OUT/screen['scene']).getroot()
-geom=ET.SubElement(root.find('worldbody'),'geom',{
-    'name':'bandage_tail_tip_pinch_proxy','type':'cylinder','pos':'.05 .166 .785',
-    'size':'.007 .025','rgba':'.95 .89 .70 1','friction':'1 .005 .0001'})
-model=mujoco.MjModel.from_xml_string(ET.tostring(root,encoding='unicode'))
-data=mujoco.MjData(model)
 q=np.asarray(path['samples'][-1]['qpos'])
-thumb_id=model.body('g1_b/wuji_right/r_thumb_tip_sensor_frame').id
-index_id=model.body('g1_b/wuji_right/r_index_finger_tip_sensor_frame').id
-thumb_js=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/wuji_right/r_thumb_') and 'abd' not in model.joint(j).name]
-index_js=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/wuji_right/r_index_') and 'abd' not in model.joint(j).name]
-data.qpos[:]=q
-for j in index_js:
- data.qpos[model.jnt_qposadr[j]]=.325
-mujoco.mj_forward(model,data)
-thumb_geom=next(i for i in range(model.ngeom) if model.geom_bodyid[i]==thumb_id)
-index_geom=next(i for i in range(model.ngeom) if model.geom_bodyid[i]==index_id)
-axis=data.geom_xpos[thumb_geom]-data.geom_xpos[index_geom]
+base_model=mujoco.MjModel.from_xml_path(str(OUT/screen['scene']))
+base_data=mujoco.MjData(base_model)
+base_data.qpos[:]=q
+for j in range(base_model.njnt):
+ if base_model.joint(j).name.startswith('g1_b/wuji_right/r_index_') and 'abd' not in base_model.joint(j).name:
+  base_data.qpos[base_model.jnt_qposadr[j]]=.325
+mujoco.mj_forward(base_model,base_data)
+thumb_base=base_model.body('g1_b/wuji_right/r_thumb_tip_sensor_frame').id
+index_base=base_model.body('g1_b/wuji_right/r_index_finger_tip_sensor_frame').id
+thumb_base_geom=next(i for i in range(base_model.ngeom) if base_model.geom_bodyid[i]==thumb_base)
+index_base_geom=next(i for i in range(base_model.ngeom) if base_model.geom_bodyid[i]==index_base)
+axis=base_data.geom_xpos[thumb_base_geom]-base_data.geom_xpos[index_base_geom]
 axis/=np.linalg.norm(axis)
 rotation,_=Rotation.align_vectors([axis],[[0,0,1]])
 xyzw=rotation.as_quat()
 quat=np.r_[xyzw[3],xyzw[:3]]
+root=ET.parse(OUT/screen['scene']).getroot()
+ET.SubElement(root.find('worldbody'),'geom',{
+    'name':'bandage_tail_tip_pinch_proxy','type':'cylinder','pos':'.05 .166 .785',
+    'quat':' '.join(map(str,quat)),
+    'size':'.007 .025','rgba':'.95 .89 .70 1','friction':'1 .005 .0001'})
+model=mujoco.MjModel.from_xml_string(ET.tostring(root,encoding='unicode'))
+data=mujoco.MjData(model)
+thumb_id=model.body('g1_b/wuji_right/r_thumb_tip_sensor_frame').id
+index_id=model.body('g1_b/wuji_right/r_index_finger_tip_sensor_frame').id
+thumb_js=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/wuji_right/r_thumb_') and 'abd' not in model.joint(j).name]
+index_js=[j for j in range(model.njnt) if model.joint(j).name.startswith('g1_b/wuji_right/r_index_') and 'abd' not in model.joint(j).name]
 geom_id=model.geom('bandage_tail_tip_pinch_proxy').id
-model.geom_quat[geom_id]=quat
 rows=[]
 for x in (.03,.035,.04,.045):
  for y in np.linspace(.15,.17,6):
