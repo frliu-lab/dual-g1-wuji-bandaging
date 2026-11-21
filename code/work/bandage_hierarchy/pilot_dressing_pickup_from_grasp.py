@@ -73,6 +73,11 @@ p.add_argument('--online-tab-ik-transport',action='store_true',
                help='Keep online side-pinch IK during planned upward transport')
 p.add_argument('--online-tab-middle',action='store_true',help='Bring middle finger to post with online IK')
 p.add_argument('--online-tab-wrist-hold-weight',type=float,default=.2)
+p.add_argument('--online-tab-up-force-feedback-gain',type=float,default=0.,
+               help='Causal fingertip target-height correction in m/N from measured pad upward force')
+p.add_argument('--online-tab-up-force-target-n',type=float,default=.15)
+p.add_argument('--online-tab-index-dip-min-rad',type=float,default=None,
+               help='Optional natural-flexion lower bound for the online index DIP IK')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-up-goal-n',type=float,default=None)
 p.add_argument('--dressing-up-goal-start-s',type=float,default=0.)
@@ -125,6 +130,8 @@ if not 0.<args.lift_m<=.06 or not .5<=args.duration_s<=5. or args.index_preposit
 motion_end=args.motion_end_s if args.motion_end_s is not None else args.duration_s
 if not args.index_preposition_s<motion_end<=args.duration_s:p.error('motion end must follow preposition and precede duration')
 if args.pull_tab_scene and args.pinch_post_scene:p.error('Choose one diagnostic scene')
+if not 0. <= args.online_tab_up_force_feedback_gain <= .1:
+    p.error('online force feedback gain must be in [0, 0.1] m/N')
 scene_name=('joint_spool_grasp_dressing_pinch_post_variant.xml' if args.pinch_post_scene else
             'joint_spool_grasp_dressing_pull_tab_variant.xml' if args.pull_tab_scene else
             'joint_spool_grasp_static_z0p78_axisx_root0p55_rooty0p1_rootyawm30p0_spoolz0p702_handle_variant.xml')
@@ -224,6 +231,11 @@ if args.online_tab_ik_after_s is not None:
     if args.online_tab_middle and 'middle' not in digit_info:p.error('online middle requires --middle-support-candidate')
     ik_qa=np.array([model.jnt_qposadr[j] for j in ik_ids]);ik_lo=model.jnt_range[ik_ids,0]+1e-5
     ik_hi=model.jnt_range[ik_ids,1]-1e-5
+    if args.online_tab_index_dip_min_rad is not None:
+        dip_name='g1_a/wuji_right/r_index_finger_dip'
+        dip_i=next(i for i,j in enumerate(ik_ids) if model.joint(j).name==dip_name)
+        ik_lo[dip_i]=max(ik_lo[dip_i],args.online_tab_index_dip_min_rad)
+        if ik_lo[dip_i]>=ik_hi[dip_i]:p.error('index DIP minimum exceeds joint range')
     tab_geom=model.geom('dressing_pull_tab').id
 interval=round(.02/model.opt.timestep)
 def contact_force(ci):
@@ -236,6 +248,8 @@ fixed_digit_rot=None
 transport_anchor=None
 transport_ready_streak=0
 transport_gate_last=None
+tab_feedback_z=0.
+effective_tab_target_z=args.online_tab_target_z_m
 support_monitor=SupportQualityMonitor()
 support_yaw_qa=model.joint('g1_a/left_wrist_yaw_joint').qposadr[0]
 support_pinky_qa=model.joint('g1_a/wuji_left/l_pinky_mcp_flex').qposadr[0]
@@ -413,8 +427,16 @@ for step in range(round(args.duration_s*50)):
         tab_pos=ik_data.geom_xpos[tab_geom].copy()
         if transport_anchor is not None:
             tab_pos[2]+=planned-transport_anchor[2]
-        tab_targets=(tab_pos+tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*args.online_tab_target_z_m,
-                     tab_pos-tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*args.online_tab_target_z_m)
+        if args.online_tab_up_force_feedback_gain and rows:
+            recent=rows[-5:]
+            measured_up=float(np.median([sum(v for k,v in r['actual_pad_up_force_by_body_n'].items()
+                                             if k.startswith('g1_a/wuji_right/')) for r in recent]))
+            desired_correction=np.clip(args.online_tab_up_force_feedback_gain*
+                (args.online_tab_up_force_target_n-measured_up),-.008,.008)
+            tab_feedback_z=.8*tab_feedback_z+.2*desired_correction
+        effective_tab_target_z=args.online_tab_target_z_m+tab_feedback_z
+        tab_targets=(tab_pos+tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*effective_tab_target_z,
+                     tab_pos-tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*effective_tab_target_z)
         if args.online_tab_middle:
             middle_target=tab_targets[1]+tab_R[:,0]*.010
         thumb_id=digit_info['thumb']['body'];index_id=digit_info['index']['body']
@@ -488,6 +510,7 @@ for step in range(round(args.duration_s*50)):
         up=float((sign*c.frame.reshape(3,3).T@wrench[:3])[2])
         actual_up_by_source[other_body]=actual_up_by_source.get(other_body,0.)+up
     rows[-1]['actual_pad_up_force_by_body_n']=actual_up_by_source
+    rows[-1]['effective_online_tab_target_z_m']=effective_tab_target_z
     rows[-1]['pad_contacts']=[{
         'geoms':[model.geom(c.geom1).name,model.geom(c.geom2).name],
         'bodies':[model.body(model.geom_bodyid[c.geom1]).name,
@@ -543,6 +566,9 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_ik_transport':args.online_tab_ik_transport,
         'online_tab_middle':args.online_tab_middle,
         'online_tab_wrist_hold_weight':args.online_tab_wrist_hold_weight,
+        'online_tab_up_force_feedback_gain':args.online_tab_up_force_feedback_gain,
+        'online_tab_up_force_target_n':args.online_tab_up_force_target_n,
+        'online_tab_index_dip_min_rad':args.online_tab_index_dip_min_rad,
         'transport_grasp_after_s':args.transport_grasp_after_s,
         'transport_extra_lift_m':args.transport_extra_lift_m,
         'contact_gated_transport':args.contact_gated_transport,

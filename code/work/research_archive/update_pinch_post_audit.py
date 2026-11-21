@@ -12,12 +12,22 @@ TAGS = (
     'post_early_unload',
     'post_contact_gate',
     'post_gate_zplus2', 'post_gate_zplus2_xy30',
+    'post_adaptive_z', 'post_adaptive_z06', 'post_adaptive_z06_side8',
+    'post_gate_wrist002', 'post_gate_index50_force02', 'post_gate_dipmin0',
 )
 
 
 def pad_robot_force(frame):
     return sum(value for name, value in frame.get('actual_pad_up_force_by_body_n', {}).items()
                if name.startswith(('g1_a/', 'g1_b/')))
+
+
+def distal_contact_frames(frames, digit):
+    prefix = 'g1_a/wuji_right/r_' + digit
+    return sum(any(any(body.startswith(prefix + suffix) for body in contact['bodies'])
+                   and contact['normal_force_n'] >= 0.04
+                   for suffix in ('_distal', '_tip_sensor_frame')
+                   for contact in frame['pad_contacts']) for frame in frames)
 
 
 def main():
@@ -41,12 +51,14 @@ def main():
             'median_last25_predicted_up_n': median(f['predicted_dressing_up_force_n'] for f in tail),
             'median_last25_actual_robot_up_n': median(pad_robot_force(f) for f in tail),
             'last25_stage_steps': sum(any('dressing_stage' in c['geoms'] for c in f['pad_contacts']) for f in tail),
+            'last25_index_distal_contact_steps': distal_contact_frames(tail, 'index_finger'),
+            'last25_thumb_distal_contact_steps': distal_contact_frames(tail, 'thumb'),
             'transport_started': data.get('transport_started'),
             'max_ready_streak': max((f.get('transport_gate', {}).get('consecutive_ready_frames', 0)
                                      for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Twenty-two isolated pinch-post pilots fail pickup. World-frame force logging '
+    audit['finding'] = ('Twenty-eight isolated pinch-post pilots fail pickup. World-frame force logging '
                         'confirms some predicted upward grip is realized, but the pad slides laterally '
                         'or remains supported by the stage. Lateral-force feedback limits drift to about '
                         '30 mm in one run, without clearing the stage. Moving the upward force target '
@@ -54,6 +66,11 @@ def main():
                         'blocks transport when the simulated hand presses downward despite a positive '
                         'predicted upward force. Raising the finger target 8 mm reduces downward loading '
                         'but still slides the pad; stronger lateral feedback restores downward loading. '
+                        'Adaptive fingertip-height feedback does not fix this. Contact inspection shows '
+                        'the index often loads its middle/proximal links instead of the distal pad. '
+                        'Relaxing wrist hold, reducing force targets, increasing index tracking, and '
+                        'constraining index DIP extension do not recover distal contact. The current '
+                        'grasp pose/approach must be replanned before more force tuning. '
                         'This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False

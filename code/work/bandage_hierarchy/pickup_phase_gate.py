@@ -25,9 +25,13 @@ def evaluate_pickup_gate(frame, *, min_digit_n=0.04, min_up_n=0.10,
         bodies = contact['bodies']
         if 'dressing_stage' in geoms or 'equipment_tray' in geoms:
             stage += normal
-        for name, prefix in (('thumb', 'g1_a/wuji_right/r_thumb_'),
-                             ('index', 'g1_a/wuji_right/r_index_finger_')):
-            if any(body.startswith(prefix) for body in bodies):
+        for name, prefixes in (
+            ('thumb', ('g1_a/wuji_right/r_thumb_distal',
+                       'g1_a/wuji_right/r_thumb_tip_sensor_frame')),
+            ('index', ('g1_a/wuji_right/r_index_finger_distal',
+                       'g1_a/wuji_right/r_index_finger_tip_sensor_frame')),
+        ):
+            if any(body.startswith(prefix) for body in bodies for prefix in prefixes):
                 digit[name] += normal
     up = sum(float(value) for body, value in
              frame.get('actual_pad_up_force_by_body_n', {}).items()
