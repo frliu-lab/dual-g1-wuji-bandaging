@@ -19,6 +19,7 @@ TAGS = (
     'post_ik_gap_diagnosis', 'post_ik_frame_fix', 'post_framefix_lowforce',
     'post_framefix_lowforce_zplus2', 'post_tip_task1000',
     'post_tip_task_up15_xy20', 'post_unload3mm', 'post_unload3mm_xyearly',
+    'post_unload3mm_strict',
 )
 
 
@@ -53,6 +54,8 @@ def main():
             'steps': len(data['trace']),
             'pad_center_lift_m': data['final_pad_lift_m'],
             'peak_pad_center_lift_m': max(f['pad_lift_m'] for f in data['trace']),
+            'peak_min_pad_underside_clearance_m': data.get('peak_min_pad_underside_clearance_m'),
+            'pickup_pass': data.get('pickup_pass'),
             'max_pad_lateral_shift_m': max(f['pad_lateral_shift_m'] for f in data['trace']),
             'median_last25_predicted_up_n': median(f['predicted_dressing_up_force_n'] for f in tail),
             'median_last25_actual_robot_up_n': median(pad_robot_force(f) for f in tail),
@@ -67,14 +70,16 @@ def main():
                                      for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Thirty-nine isolated pinch-post pilots do not establish a repeatable pickup. '
+    audit['finding'] = ('Forty isolated pinch-post pilots do not establish a repeatable pickup. '
                         'The online IK initially mixed current and reference robot frames, producing '
                         'roughly 34 mm reference fingertip error; correcting it reduced the error to '
                         'about 0.3 mm. A WBC Cartesian fingertip task then achieved 25/25 terminal '
                         'index distal contacts. A 3 mm unloading stage briefly raised the pad center '
                         'about 5.9 mm with some zero stage-load frames, but a full-pad corner audit '
                         'found peak conservative underside clearance only 0.15 mm and zero frames '
-                        'above 2 mm. Lateral drift reached 33 mm. Earlier lateral feedback reduced drift '
+                        'above 2 mm. The same run repeated with an integrated strict per-frame pickup '
+                        'gate also scored zero passing frames in the terminal 25. Lateral drift reached '
+                        '33 mm. Earlier lateral feedback reduced drift '
                         'to about 24 mm but lost the unloading effect. The measured-contact gate '
                         'never authorized transport. This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')

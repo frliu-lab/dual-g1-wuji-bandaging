@@ -186,6 +186,12 @@ wrist=model.body('g1_a/wuji_right/r_wrist').id
 pad=model.body('dressing_pad').id
 pad_free=model.joint('dressing_pad_free')
 pad_qadr=pad_free.qposadr[0];pad_vadr=pad_free.dofadr[0]
+pad_box_half_size=model.geom_size[model.geom('dressing_pad_contact').id].copy()
+stage_geom=model.geom('dressing_stage').id
+stage_top=float(model.geom_pos[stage_geom,2]+model.geom_size[stage_geom,2])
+pad_underside_corners=np.array([[x,y,-pad_box_half_size[2]]
+    for x in (-pad_box_half_size[0],pad_box_half_size[0])
+    for y in (-pad_box_half_size[1],pad_box_half_size[1])])
 if args.track_pad_pose:wbc.weights[pad_vadr:pad_vadr+6]=args.pad_pose_weight
 elif args.track_pad_orientation:wbc.weights[pad_vadr+3:pad_vadr+6]=args.pad_pose_weight
 original_pad_orientation_weights=wbc.weights[pad_vadr+3:pad_vadr+6].copy()
@@ -589,6 +595,20 @@ for step in range(round(args.duration_s*50)):
         'pad_to_other_normal_world':((1. if model.geom(c.geom1).name in ('dressing_pad_contact','dressing_pull_tab') else -1.)*
                                       np.asarray(c.frame[:3])).tolist()} for ci,c in enumerate(data.contact)
         if any(name in (model.geom(c.geom1).name,model.geom(c.geom2).name) for name in ('dressing_pad_contact','dressing_pull_tab'))]
+    pad_rotation=data.xmat[pad].reshape(3,3)
+    underside_z=data.xpos[pad,2]+pad_underside_corners@pad_rotation[2,:]
+    rows[-1]['min_pad_underside_clearance_m']=float(underside_z.min()-stage_top)
+    rows[-1]['pad_supported_by_world']=any(
+        'dressing_stage' in c['geoms'] or 'equipment_tray' in c['geoms']
+        for c in rows[-1]['pad_contacts'])
+    strict_grip=evaluate_pickup_gate(rows[-1])
+    rows[-1]['strict_dual_distal_grip']=strict_grip.thumb_n>=.04 and strict_grip.index_n>=.04
+    rows[-1]['strict_pickup_step']=(rows[-1]['min_pad_underside_clearance_m']>.002
+        and not rows[-1]['pad_supported_by_world']
+        and rows[-1]['strict_dual_distal_grip']
+        and rows[-1]['pad_lateral_shift_m']<.02
+        and rows[-1]['feet_supported'] and not rows[-1]['deep_robot_contact']
+        and rows[-1]['support_valid'])
     if args.contact_gated_transport:
         transport_gate_last=evaluate_pickup_gate(rows[-1])
         transport_ready_streak=(transport_ready_streak+1 if transport_gate_last.ready else 0)
@@ -706,6 +726,11 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'final_pad_lift_m':rows[-1]['pad_lift_m'] if rows else 0.,
         'max_pad_lateral_shift_m':max((r['pad_lateral_shift_m'] for r in rows),default=0.),
         'completed':len(rows)==round(args.duration_s*50) and not errors,'errors':errors,'trace':rows}
+report['pickup_pass']=(report['completed'] and len(rows)>=25
+                       and all(r['strict_pickup_step'] for r in rows[-25:]))
+report['pickup_last25_strict_steps']=sum(r['strict_pickup_step'] for r in rows[-25:])
+report['peak_min_pad_underside_clearance_m']=max(
+    (r['min_pad_underside_clearance_m'] for r in rows),default=float('-inf'))
 report['final_pad_contacts']=rows[-1]['pad_contacts'] if rows else []
 stem=f'joint_dressing_pickup_checkpoint_lift{args.lift_m:g}_force{args.dressing_force_goal_n:g}_iclose{args.index_closure_m:g}_ipre{args.index_pregrasp_candidate}_side{args.side_pregrasp_candidate}_iw{args.index_weight:g}_up{args.dressing_lift_min_n:g}_start{args.dressing_force_start_s:g}'
 if args.duration_s!=3.:stem+=f'_duration{args.duration_s:g}'
