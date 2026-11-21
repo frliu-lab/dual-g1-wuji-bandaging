@@ -136,6 +136,12 @@ class JointWBC:
     if actuator in self.hard_hand_indices:continue
     requested=requested_hand_tau[int(np.flatnonzero(self.hand_indices==actuator)[0])];lo[actuator]=max(lo[actuator],requested-.03);hi[actuator]=min(hi[actuator],requested+.03)
   acc_lo=np.full(m.nv,-200.);acc_hi=np.full(m.nv,200.)
+  actuated_joints=set(map(int,m.actuator_trnid[:,0]))
+  for joint in range(m.njnt):
+   name=m.joint(joint).name
+   if joint in actuated_joints or name.startswith(('g1_a/','g1_b/')):continue
+   dof=int(m.jnt_dofadr[joint]);width=6 if m.jnt_type[joint]==mujoco.mjtJoint.mjJNT_FREE else 1
+   acc_lo[dof:dof+width]=-2000.;acc_hi[dof:dof+width]=2000.
   for joint in range(m.njnt):
    if not m.jnt_limited[joint] or m.jnt_type[joint]!=mujoco.mjtJoint.mjJNT_HINGE:continue
    if joint not in m.actuator_trnid[:,0]:continue

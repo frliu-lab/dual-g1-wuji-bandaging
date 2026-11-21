@@ -118,6 +118,7 @@ for digit,bid in tip_bodies.items():
 initial_hand_reference=wbc.qref.copy()
 fractions={'thumb':0,'index':0,'opposing':0,'two_feet':0}
 max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[];bad_acc_bounds=[]
+failure_tail_unforced_acc=None
 control_trace=[]
 duration=.5;interval=round(.02/model.opt.timestep)
 for _ in range(round(duration/.02)):
@@ -195,6 +196,9 @@ for _ in range(round(duration/.02)):
         error=f'{type(exc).__name__}: {exc}'
         numeric=getattr(wbc,'last_numeric',None)
         if numeric is not None:
+            tail_dof=model.joint('bandage_tail_proxy_free').dofadr[0]
+            unforced=np.linalg.solve(numeric['M'],-numeric['h'])
+            failure_tail_unforced_acc=unforced[tail_dof:tail_dof+6].tolist()
             for dof in np.flatnonzero(numeric['acc_lo']>numeric['acc_hi']+1e-9):
                 j=int(model.dof_jntid[dof])
                 bad_acc_bounds.append({'joint':model.joint(j).name,
@@ -226,6 +230,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'direct_solver_error_at_failure':direct_error,'control_solves':steps,
         'failure_contacts':failure_contacts,
         'bad_acceleration_bounds':bad_acc_bounds,
+        'failure_tail_unforced_acceleration':failure_tail_unforced_acc,
         'control_trace':control_trace,
         'contact_fractions':{k:v/den for k,v in fractions.items()},
         'max_tail_center_drift_m':max_tab_drift,
