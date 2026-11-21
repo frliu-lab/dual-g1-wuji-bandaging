@@ -25,6 +25,7 @@ class JointWBC:
   self.tip_position_targets={}
   self.tip_position_weight=1000.
   self.spool_contact_normal_goal_n=None
+  self.tail_proxy_digit_normal_goal_n=None
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
   self.b_handle_lift_min_n=None
@@ -200,6 +201,19 @@ class JointWBC:
      if any(n.startswith(f'g1_b/wuji_left/l_{digit}_') for n in names):spool_contacts[digit].append(k)
    for entries in spool_contacts.values():
     for k in entries:goals[k*3]=self.spool_contact_normal_goal_n/len(entries);forceweight[k*3]=5.
+  if self.tail_proxy_digit_normal_goal_n is not None:
+   if not np.isfinite(self.tail_proxy_digit_normal_goal_n) or self.tail_proxy_digit_normal_goal_n<0:
+    raise ValueError('Tail proxy digit normal goal must be finite and nonnegative')
+   tail_contacts={digit:[] for digit in ('thumb','index_finger')}
+   for k,(ga,gb) in enumerate(ids):
+    if 'bandage_tail_proxy_contact' not in (m.geom(ga).name,m.geom(gb).name):continue
+    names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
+    for digit in tail_contacts:
+     if any(n.startswith(f'g1_b/wuji_right/r_{digit}_') for n in names):tail_contacts[digit].append(k)
+   for entries in tail_contacts.values():
+    for k in entries:
+     goals[k*3]=self.tail_proxy_digit_normal_goal_n/len(entries)
+     forceweight[k*3]=5.
   if self.b_handle_lift_force_goal_n is not None:
    if not np.isfinite(self.b_handle_lift_force_goal_n) or self.b_handle_lift_force_goal_n<0:
     raise ValueError('B handle lift force goal must be finite and nonnegative')

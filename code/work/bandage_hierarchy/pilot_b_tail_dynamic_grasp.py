@@ -14,6 +14,8 @@ parser=argparse.ArgumentParser()
 parser.add_argument('--radius',type=float,default=.009)
 parser.add_argument('--tip-servo',action='store_true')
 parser.add_argument('--squeeze-mm',type=float,default=1.)
+parser.add_argument('--tip-weight',type=float,default=1000.)
+parser.add_argument('--normal-goal-n',type=float,default=None)
 args=parser.parse_args()
 sys.path.insert(0,str(ROOT/'work/wuji_multiagent'))
 from joint_wbc import JointWBC
@@ -66,6 +68,8 @@ def robot_contact_only(m,c):
                for g in c.geom if g>=0)
 wbc=JointWBC(model,data.qpos.copy(),palm_names=palms,contact_filter=robot_contact_only)
 wbc.backend='CLARABEL' if args.tip_servo else 'DIRECT'
+wbc.tip_position_weight=args.tip_weight
+wbc.tail_proxy_digit_normal_goal_n=args.normal_goal_n
 tip_bodies={digit:model.body(f'g1_b/wuji_right/r_{digit}_tip_sensor_frame').id
             for digit in ('thumb','index_finger')}
 tip_offsets={digit:data.xpos[bid].copy()-initial_tab for digit,bid in tip_bodies.items()}
@@ -124,6 +128,8 @@ for _ in range(round(duration/.02)):
 den=max(1,steps*interval)
 report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flexible cloth or wrapping',
         'seed':seed,'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
+        'tip_position_weight':args.tip_weight,
+        'tail_digit_normal_goal_n':args.normal_goal_n,
         'duration_s':float(data.time),'error':error,
         'direct_solver_error_at_failure':direct_error,'control_solves':steps,
         'failure_contacts':failure_contacts,
@@ -131,5 +137,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm" if args.tip_servo else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
