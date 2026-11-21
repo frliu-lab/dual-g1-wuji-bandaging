@@ -72,8 +72,9 @@ def main():
                         'roughly 34 mm reference fingertip error; correcting it reduced the error to '
                         'about 0.3 mm. A WBC Cartesian fingertip task then achieved 25/25 terminal '
                         'index distal contacts. A 3 mm unloading stage briefly raised the pad center '
-                        'about 5.9 mm with some zero stage-load frames, but lateral drift reached '
-                        '33 mm and the lift was not sustained. Earlier lateral feedback reduced drift '
+                        'about 5.9 mm with some zero stage-load frames, but a full-pad corner audit '
+                        'found peak conservative underside clearance only 0.15 mm and zero frames '
+                        'above 2 mm. Lateral drift reached 33 mm. Earlier lateral feedback reduced drift '
                         'to about 24 mm but lost the unloading effect. The measured-contact gate '
                         'never authorized transport. This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
