@@ -69,6 +69,10 @@ p.add_argument('--late-arm-offsets-rad',type=float,nargs=7,default=(0.,)*7)
 p.add_argument('--online-tab-ik-after-s',type=float,default=None)
 p.add_argument('--online-tab-target-z-m',type=float,default=-.006)
 p.add_argument('--online-tab-side-offset-m',type=float,default=.008)
+p.add_argument('--online-tab-thumb-offset-m',type=float,default=None)
+p.add_argument('--online-tab-index-offset-m',type=float,default=None)
+p.add_argument('--online-tab-middle-clearance-m',type=float,default=None,
+               help='Keep the index middle link radially clear of the diagnostic post')
 p.add_argument('--online-tab-ik-transport',action='store_true',
                help='Keep online side-pinch IK during planned upward transport')
 p.add_argument('--online-tab-middle',action='store_true',help='Bring middle finger to post with online IK')
@@ -78,6 +82,8 @@ p.add_argument('--online-tab-up-force-feedback-gain',type=float,default=0.,
 p.add_argument('--online-tab-up-force-target-n',type=float,default=.15)
 p.add_argument('--online-tab-index-dip-min-rad',type=float,default=None,
                help='Optional natural-flexion lower bound for the online index DIP IK')
+p.add_argument('--tip-first-candidate-index',type=int,default=None,
+               help='Replay a collision-screened static post IK target after online IK start')
 p.add_argument('--dressing-lift-min-n',type=float,default=0.)
 p.add_argument('--dressing-up-goal-n',type=float,default=None)
 p.add_argument('--dressing-up-goal-start-s',type=float,default=0.)
@@ -229,6 +235,8 @@ if args.online_tab_ik_after_s is not None:
                    if args.online_tab_middle else ('r_thumb_','r_index_finger_')):
         ik_ids += [j for j in range(model.njnt) if model.joint(j).name.startswith('g1_a/wuji_right/'+prefix)]
     if args.online_tab_middle and 'middle' not in digit_info:p.error('online middle requires --middle-support-candidate')
+    if args.tip_first_candidate_index is not None and args.online_tab_middle:
+        p.error('tip-first candidate currently contains arm, thumb and index only')
     ik_qa=np.array([model.jnt_qposadr[j] for j in ik_ids]);ik_lo=model.jnt_range[ik_ids,0]+1e-5
     ik_hi=model.jnt_range[ik_ids,1]-1e-5
     if args.online_tab_index_dip_min_rad is not None:
@@ -237,6 +245,15 @@ if args.online_tab_ik_after_s is not None:
         ik_lo[dip_i]=max(ik_lo[dip_i],args.online_tab_index_dip_min_rad)
         if ik_lo[dip_i]>=ik_hi[dip_i]:p.error('index DIP minimum exceeds joint range')
     tab_geom=model.geom('dressing_pull_tab').id
+    tip_first_target=None
+    if args.tip_first_candidate_index is not None:
+        search=json.loads((OUT/'joint_post_tip_first_ik_search.json').read_text(encoding='utf8'))
+        selected=search['results'][args.tip_first_candidate_index]
+        if search['joint_names']!=[model.joint(j).name for j in ik_ids]:
+            p.error('tip-first search joint order differs from pilot IK')
+        if selected['max_post_penetration_m']>.001:
+            p.error('tip-first candidate has more than 1 mm static post penetration')
+        tip_first_target=np.asarray(selected['qpos'])
 interval=round(.02/model.opt.timestep)
 def contact_force(ci):
     wrench=np.zeros(6);mujoco.mj_contactForce(model,data,ci,wrench)
@@ -422,6 +439,10 @@ for step in range(round(args.duration_s*50)):
                 wbc.qref[qa]=(1.-late_blend)*wbc.qref[qa]+late_blend*np.asarray(target)
     if (args.online_tab_ik_after_s is not None and t>=args.online_tab_ik_after_s and
             (transport_anchor is None or args.online_tab_ik_transport)):
+      if tip_first_target is not None:
+        blend=np.clip((t-args.online_tab_ik_after_s)/.6,0.,1.)
+        wbc.qref[ik_qa]=(1.-blend)*data.qpos[ik_qa]+blend*tip_first_target
+      else:
         ik_data.qpos[:]=data.qpos;mujoco.mj_forward(model,ik_data)
         tab_R=ik_data.geom_xmat[tab_geom].reshape(3,3)
         tab_pos=ik_data.geom_xpos[tab_geom].copy()
@@ -435,8 +456,12 @@ for step in range(round(args.duration_s*50)):
                 (args.online_tab_up_force_target_n-measured_up),-.008,.008)
             tab_feedback_z=.8*tab_feedback_z+.2*desired_correction
         effective_tab_target_z=args.online_tab_target_z_m+tab_feedback_z
-        tab_targets=(tab_pos+tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*effective_tab_target_z,
-                     tab_pos-tab_R[:,1]*args.online_tab_side_offset_m+tab_R[:,2]*effective_tab_target_z)
+        thumb_offset=(args.online_tab_thumb_offset_m if args.online_tab_thumb_offset_m is not None
+                      else args.online_tab_side_offset_m)
+        index_offset=(args.online_tab_index_offset_m if args.online_tab_index_offset_m is not None
+                      else args.online_tab_side_offset_m)
+        tab_targets=(tab_pos+tab_R[:,1]*thumb_offset+tab_R[:,2]*effective_tab_target_z,
+                     tab_pos-tab_R[:,1]*index_offset+tab_R[:,2]*effective_tab_target_z)
         if args.online_tab_middle:
             middle_target=tab_targets[1]+tab_R[:,0]*.010
         thumb_id=digit_info['thumb']['body'];index_id=digit_info['index']['body']
@@ -447,6 +472,13 @@ for step in range(round(args.duration_s*50)):
                    ik_data.xpos[index_id]-tab_targets[1]]
             if args.online_tab_middle:
                 parts.append(ik_data.xpos[digit_info['middle']['body']]-middle_target)
+            if args.online_tab_middle_clearance_m is not None:
+                middle_body=model.body('g1_a/wuji_right/r_index_finger_middle').id
+                proximal_body=model.body('g1_a/wuji_right/r_index_finger_proximal_abd').id
+                middle_radius=np.linalg.norm(ik_data.xpos[middle_body,:2]-tab_pos[:2])
+                proximal_radius=np.linalg.norm(ik_data.xpos[proximal_body,:2]-tab_pos[:2])
+                parts.append(np.array([2.*max(0.,args.online_tab_middle_clearance_m-middle_radius),
+                                       2.*max(0.,.03-proximal_radius)]))
             parts.extend((args.online_tab_wrist_hold_weight*(ik_data.xpos[wrist]-wrist_start),
                           .002*(x[:len(arm_qa)]-ik_start[:len(arm_qa)])))
             return np.concatenate(parts)
@@ -563,12 +595,16 @@ report={'scope':'Checkpoint diagnostic; no full-sequence dressing pickup claim',
         'online_tab_ik_after_s':args.online_tab_ik_after_s,
         'online_tab_target_z_m':args.online_tab_target_z_m,
         'online_tab_side_offset_m':args.online_tab_side_offset_m,
+        'online_tab_thumb_offset_m':args.online_tab_thumb_offset_m,
+        'online_tab_index_offset_m':args.online_tab_index_offset_m,
+        'online_tab_middle_clearance_m':args.online_tab_middle_clearance_m,
         'online_tab_ik_transport':args.online_tab_ik_transport,
         'online_tab_middle':args.online_tab_middle,
         'online_tab_wrist_hold_weight':args.online_tab_wrist_hold_weight,
         'online_tab_up_force_feedback_gain':args.online_tab_up_force_feedback_gain,
         'online_tab_up_force_target_n':args.online_tab_up_force_target_n,
         'online_tab_index_dip_min_rad':args.online_tab_index_dip_min_rad,
+        'tip_first_candidate_index':args.tip_first_candidate_index,
         'transport_grasp_after_s':args.transport_grasp_after_s,
         'transport_extra_lift_m':args.transport_extra_lift_m,
         'contact_gated_transport':args.contact_gated_transport,

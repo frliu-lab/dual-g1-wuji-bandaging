@@ -14,6 +14,7 @@ TAGS = (
     'post_gate_zplus2', 'post_gate_zplus2_xy30',
     'post_adaptive_z', 'post_adaptive_z06', 'post_adaptive_z06_side8',
     'post_gate_wrist002', 'post_gate_index50_force02', 'post_gate_dipmin0',
+    'post_tipfirst_candidate3', 'post_moving_tipfirst_ik',
 )
 
 
@@ -58,7 +59,7 @@ def main():
                                      for f in data['trace']), default=0),
             'errors': data['errors'],
         })
-    audit['finding'] = ('Twenty-eight isolated pinch-post pilots fail pickup. World-frame force logging '
+    audit['finding'] = ('Thirty isolated pinch-post pilots fail pickup. World-frame force logging '
                         'confirms some predicted upward grip is realized, but the pad slides laterally '
                         'or remains supported by the stage. Lateral-force feedback limits drift to about '
                         '30 mm in one run, without clearing the stage. Moving the upward force target '
@@ -70,7 +71,10 @@ def main():
                         'the index often loads its middle/proximal links instead of the distal pad. '
                         'Relaxing wrist hold, reducing force targets, increasing index tracking, and '
                         'constraining index DIP extension do not recover distal contact. The current '
-                        'grasp pose/approach must be replanned before more force tuning. '
+                        'grasp pose/approach must be replanned before more force tuning. A static '
+                        'collision-screened tip-first IK pose has both distal contacts under 1 mm '
+                        'penetration, but its fixed-pose and moving-object online replays lose index '
+                        'distal contact dynamically. '
                         'This diagnostic prop is not the '
                         'original dressing geometry and does not establish physical feasibility.')
     audit['pass'] = False

@@ -1,7 +1,7 @@
 {
   "scope": "Isolated cylindrical pinch-post diagnostic; not original dressing geometry",
   "scene": "joint_spool_grasp_dressing_pinch_post_variant.xml",
-  "finding": "Twenty-eight isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. A measured-contact phase gate correctly blocks transport when the simulated hand presses downward despite a positive predicted upward force. Raising the finger target 8 mm reduces downward loading but still slides the pad; stronger lateral feedback restores downward loading. Adaptive fingertip-height feedback does not fix this. Contact inspection shows the index often loads its middle/proximal links instead of the distal pad. Relaxing wrist hold, reducing force targets, increasing index tracking, and constraining index DIP extension do not recover distal contact. The current grasp pose/approach must be replanned before more force tuning. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
+  "finding": "Thirty isolated pinch-post pilots fail pickup. World-frame force logging confirms some predicted upward grip is realized, but the pad slides laterally or remains supported by the stage. Lateral-force feedback limits drift to about 30 mm in one run, without clearing the stage. Moving the upward force target earlier also fails to unload the stage. A measured-contact phase gate correctly blocks transport when the simulated hand presses downward despite a positive predicted upward force. Raising the finger target 8 mm reduces downward loading but still slides the pad; stronger lateral feedback restores downward loading. Adaptive fingertip-height feedback does not fix this. Contact inspection shows the index often loads its middle/proximal links instead of the distal pad. Relaxing wrist hold, reducing force targets, increasing index tracking, and constraining index DIP extension do not recover distal contact. The current grasp pose/approach must be replanned before more force tuning. A static collision-screened tip-first IK pose has both distal contacts under 1 mm penetration, but its fixed-pose and moving-object online replays lose index distal contact dynamically. This diagnostic prop is not the original dressing geometry and does not establish physical feasibility.",
   "trials": [
     {
       "name": "side_pinch",
@@ -388,6 +388,38 @@
       "max_pad_lateral_shift_m": 0.020397701756101092,
       "median_last25_predicted_up_n": -0.08003723347977118,
       "median_last25_actual_robot_up_n": -0.050161015593597105,
+      "last25_stage_steps": 25,
+      "last25_index_distal_contact_steps": 0,
+      "last25_thumb_distal_contact_steps": 25,
+      "transport_started": false,
+      "max_ready_streak": 2,
+      "errors": []
+    },
+    {
+      "name": "post_tipfirst_candidate3",
+      "report": "joint_dressing_pilot_85158fdf2dfa42d9.json",
+      "completed": true,
+      "steps": 180,
+      "pad_center_lift_m": -0.002721661733453562,
+      "max_pad_lateral_shift_m": 0.023722160841034304,
+      "median_last25_predicted_up_n": -0.05550727270638128,
+      "median_last25_actual_robot_up_n": -0.35829524441926813,
+      "last25_stage_steps": 25,
+      "last25_index_distal_contact_steps": 0,
+      "last25_thumb_distal_contact_steps": 25,
+      "transport_started": false,
+      "max_ready_streak": 2,
+      "errors": []
+    },
+    {
+      "name": "post_moving_tipfirst_ik",
+      "report": "joint_dressing_pilot_21d988a8ffaa9d2e.json",
+      "completed": true,
+      "steps": 180,
+      "pad_center_lift_m": -0.0018156957141967078,
+      "max_pad_lateral_shift_m": 0.0209335015575813,
+      "median_last25_predicted_up_n": -0.17964155888827665,
+      "median_last25_actual_robot_up_n": -0.10236613471595632,
       "last25_stage_steps": 25,
       "last25_index_distal_contact_steps": 0,
       "last25_thumb_distal_contact_steps": 25,
