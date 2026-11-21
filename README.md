@@ -14,6 +14,8 @@
 
 另一项[细圆柱训练抓取柄](media/bandage_v0/joint_spool_grasp_dressing_pinch_post_variant.xml)用于独立的抓取诊断。[四十二组动态审计](media/bandage_v0/joint_dressing_pinch_post_pilot_audit.json)均未证明可重复拾取。早期在线逆运动学混用了机器人当前姿态和 WBC 参考姿态，导致参考指尖偏差约 34 mm；修正后降至约 0.3 mm。[静态指尖优先搜索](media/bandage_v0/joint_post_tip_first_ik_search.json)找到双指远端接触且最大穿透小于 1 mm 的姿势；加入 WBC 指尖空间任务后，动态食指远端接触达到末段 25/25 帧。另加 3 mm 缓慢卸载阶段，敷料中心曾短暂抬高约 5.9 mm，部分帧台面载荷为零；但[完整底面净空复核](media/bandage_v0/joint_post_unload3mm_clearance_audit.json)显示最低角点相对台面最高仅约 0.15 mm，没有一帧达到 2 mm 净空，且横移约 33 mm。将整片净空、双指远端接触、横移与双机支撑整合为逐帧门槛后，重复试验末段 25 帧通过数仍为 0。轻量姿态保持将中心最高抬升降至约 3 mm，食指远端接触末段仅 4/25 帧，整片净空依然没有通过。将指尖目标固定在初始水平朝向也使横移增至约 53 mm，整片净空仍失败。提前横向反馈把横移降至约 24 mm，[底面净空仍未通过](media/bandage_v0/joint_post_unload3mm_xyearly_clearance_audit.json)。实测接触门控从未允许搬运。**这些都不是合格拾取**；该圆柱柄也不是原敷料或真实 Wuji 手验收。
 
+**第四只手站位检查：** [B 右臂静态可达性审计](media/bandage_v0/joint_b_right_assist_static_reach_audit.json)从现有检查点的四组初值搜索 8 个目标：B 右腕到伤者前臂附近的最小残差约 12.4 cm，到卷轴附近的最小残差约 7.5 cm。该结果只覆盖当前站位与右臂关节，不能证明全身移动后不可达；但现有轨迹不能直接添加 B 右手精细任务，须先重规划双机站位、B 左手持卷轴和 B 右手接近的时序。
+
 另有[17.7 秒托臂、夹敷料、握手柄并抬卷轴视频](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_overview.mp4) · [运行与门槛](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_manifest.json) · [50 Hz 关节轨迹](media/bandage_v0/joint_handle_pickup_20mm_joint_pass_qpos.npz)。该版本卷轴实际抬高约 18.79 mm，末段 A 左掌面承担约 96.2% 托臂冲量，但敷料仍在桌上。两种子技能尚未同时通过。较小幅度的[10 mm 卷轴版本](media/bandage_v0/joint_handle_pickup_first_joint_pass_overview.mp4)也已存档。
 
 历史[30 mm 卷轴目标审计](media/bandage_v0/joint_handle_pickup_30mm_audit.json)通过数值门槛，但尚未录制/复核视频。早期[敷料拾取诊断](media/bandage_v0/joint_dressing_pickup_failure_audit.json)和[静态食指候选](media/bandage_v0/joint_dressing_index_tip_screen.json)记录了已被后续短时拾取方案改进的失败过程。后续需把卷轴悬空与敷料持物同时实现，再让带材绕臂、固定末端，并为 B 右手安排明确协作角色。
