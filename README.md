@@ -132,4 +132,4 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 
 **五个双指尖种子的动态验收：** [更新后的统一质量门槛](media/bandage_v0/joint_b_tail_tip_pinch_grasp_gate.json)要求 0.5 s 完整求解、双脚接地 ≥99%、相向双指接触 ≥90%、带端中心位移 ≤5 mm、非地面穿透 <3 mm；修正 WBC 后五组均跑满 0.5 s，但仍 **0/5 通过**。rank0 相向接触 17%、带端位移 23.8 mm；其余四组带端位移 0.32–0.64 m。此门槛仅用于代理模型比较，绝非实机安全阈值。
 
-**间隙闭环反例：** [B 右两指接触网格距离反馈](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap.json)是在修正 WBC 前运行的试验：相向接触占比 19.5%，带端位移 12.7 mm，0.44 s 时 WBC 不可行。该结果只说明旧求解器条件下指尖间隙反馈未跨越抓持门槛；修正后仍需重新比较，不能直接与更新基线做优劣结论。
+**修正后的手部反馈对照：** [碰撞网格间隙反馈](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap.json)让 rank0 的相向接触占比从 17% 升至 22.8%、带端位移从 23.8 mm 降至 9.4 mm，完成 0.5 s WBC；[再加入每指 1 N 预测法向力目标](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_force1n_gap.json)时相向占比 19%、位移 8.2 mm。[物体姿态指尖跟踪](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_tip_servo_1mm_w1000_pose.json)于 0.22 s 出现数值约束失效。[统一门槛](media/bandage_v0/joint_b_tail_tip_pinch_grasp_gate.json)下均不合格，尤其未达到 ≥90% 的相向接触。
