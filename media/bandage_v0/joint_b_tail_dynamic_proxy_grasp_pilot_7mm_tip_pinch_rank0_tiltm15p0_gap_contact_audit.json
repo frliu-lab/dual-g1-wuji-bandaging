@@ -1,0 +1,900 @@
+{
+  "scope": "Dynamic rigid tail proxy with massless tendon to spool; no flexible cloth or wrapping",
+  "seed": {
+    "proxy_center_m": [
+      0.04,
+      0.154,
+      0.779
+    ],
+    "proxy_quaternion_wxyz": [
+      0.8093447822618732,
+      -0.08671379979371882,
+      0.5710414659328654,
+      -0.10655226199410268
+    ],
+    "thumb_flex_rad": 0.55,
+    "index_flex_rad": 0.25,
+    "thumb_tip_distance_m": -0.00015141324694484872,
+    "index_tip_distance_m": -0.0004901725039815006,
+    "minimum_opposing_normal_dot": -0.7548895848602153,
+    "max_b_nonfloor_penetration_m": 0.002144381623146526,
+    "two_fingertip_seed_pass": true
+  },
+  "initial_tail_contacts": [
+    {
+      "bodies": [
+        "bandage_tail_dynamic_proxy",
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame"
+      ],
+      "distance_m": -0.00015141324694484872
+    },
+    {
+      "bodies": [
+        "bandage_tail_dynamic_proxy",
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame"
+      ],
+      "distance_m": -0.0004901725039815006
+    }
+  ],
+  "optimized_tip_seed": false,
+  "tip_pinch_seed": true,
+  "gap_servo": true,
+  "right_hand_position_mode": false,
+  "contact_audit": true,
+  "has_tail_rest": true,
+  "tip_pinch_rank": 0,
+  "tip_tilt_deg": -15.0,
+  "tip_servo": false,
+  "squeeze_mm": 1.0,
+  "direct_tip_solver": false,
+  "tip_position_weight": 1000.0,
+  "pose_servo": false,
+  "tail_digit_normal_goal_n": null,
+  "duration_s": 0.5000000000000003,
+  "error": null,
+  "direct_solver_error_at_failure": null,
+  "control_solves": 25,
+  "failure_contacts": [],
+  "bad_acceleration_bounds": [],
+  "failure_tail_unforced_acceleration": null,
+  "control_trace": [
+    {
+      "time_s": 0.02000000000000001,
+      "tail_center_m": [
+        0.04025645985509249,
+        0.15431696886312243,
+        0.7774404387045676
+      ],
+      "tail_quaternion": [
+        0.9996800258807248,
+        -0.013064219663350658,
+        0.008004818393943052,
+        -0.020126969523059646
+      ],
+      "thumb_tip_m": [
+        0.07615414363760206,
+        0.17161660418839184,
+        0.7931237906737136
+      ],
+      "index_tip_m": [
+        0.01809151866425498,
+        0.1358395646466532,
+        0.7752753830976467
+      ],
+      "thumb_contact_fraction": 0.3,
+      "index_contact_fraction": 0.65,
+      "opposing_fraction": 0.3,
+      "contact_body_counts": {
+        "thumb": {
+          "g1_b/wuji_right/r_thumb_tip_sensor_frame": 6
+        },
+        "index": {
+          "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 13
+        }
+      },
+      "min_contact_normal_dot": -0.7561822905545905,
+      "mean_min_contact_normal_dot": -0.7545806955131885
+    },
+    {
+      "time_s": 0.04000000000000003,
+      "tail_center_m": [
+        0.04042166622327875,
+        0.15505196941430813,
+        0.772209832840327
+      ],
+      "tail_quaternion": [
+        0.9979534237860289,
+        -0.0353425993136464,
+        0.02166033755148485,
+        -0.04868977720891995
+      ],
+      "thumb_tip_m": [
+        0.07658653153614894,
+        0.17145112640258858,
+        0.7931881606650228
+      ],
+      "index_tip_m": [
+        0.018423121022043545,
+        0.13584389778993397,
+        0.7753442353879483
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.060000000000000046,
+      "tail_center_m": [
+        0.04132759377644036,
+        0.15615042884476465,
+        0.7696815055080045
+      ],
+      "tail_quaternion": [
+        0.9856927235600226,
+        -0.11207247570128086,
+        0.09529368401705533,
+        -0.08227228389602895
+      ],
+      "thumb_tip_m": [
+        0.07680675093553413,
+        0.17113715537975419,
+        0.7929795221685292
+      ],
+      "index_tip_m": [
+        0.018512118811389925,
+        0.13574049311569317,
+        0.7752322239452986
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.08000000000000006,
+      "tail_center_m": [
+        0.04275090975736969,
+        0.15783630090515405,
+        0.7694245507071362
+      ],
+      "tail_quaternion": [
+        0.94150461284578,
+        -0.25022935658063583,
+        0.20130132592367897,
+        -0.10213769762790138
+      ],
+      "thumb_tip_m": [
+        0.07690301133361174,
+        0.17080406956999045,
+        0.7925928537008698
+      ],
+      "index_tip_m": [
+        0.018440214805902466,
+        0.13565529972784116,
+        0.774978937323789
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.10000000000000007,
+      "tail_center_m": [
+        0.04417255509828258,
+        0.1602808650874267,
+        0.7696815184481771
+      ],
+      "tail_quaternion": [
+        0.848980006127297,
+        -0.43658756295292245,
+        0.2807472546696888,
+        -0.09902135156801188
+      ],
+      "thumb_tip_m": [
+        0.07698787650216529,
+        0.17053350678522464,
+        0.7921058270724863
+      ],
+      "index_tip_m": [
+        0.01830910744525149,
+        0.1356870183712272,
+        0.774646231377363
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.12000000000000009,
+      "tail_center_m": [
+        0.045518453339339605,
+        0.16339678004061234,
+        0.7681416701309274
+      ],
+      "tail_quaternion": [
+        0.6805379570044018,
+        -0.6516577303939265,
+        0.3303951765198493,
+        -0.055220637686726956
+      ],
+      "thumb_tip_m": [
+        0.07718861853915941,
+        0.1703707844634413,
+        0.7916042398341998
+      ],
+      "index_tip_m": [
+        0.018233034919748193,
+        0.13590794955410623,
+        0.7743416666484355
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.1400000000000001,
+      "tail_center_m": [
+        0.04698687483558029,
+        0.16629979517388477,
+        0.7630870521583851
+      ],
+      "tail_quaternion": [
+        0.45319222753684957,
+        -0.8258428379037296,
+        0.3337095199077473,
+        0.03519045760207243
+      ],
+      "thumb_tip_m": [
+        0.07751107320786715,
+        0.17027610863422607,
+        0.7910701800752414
+      ],
+      "index_tip_m": [
+        0.018205795186543673,
+        0.1363056778731068,
+        0.7740810807830033
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.16000000000000011,
+      "tail_center_m": [
+        0.048884485665078484,
+        0.16841358370734236,
+        0.7540352479227075
+      ],
+      "tail_quaternion": [
+        0.20295941201699297,
+        -0.9243598031058664,
+        0.2817817347258688,
+        0.15800470072336387
+      ],
+      "thumb_tip_m": [
+        0.07796178634779805,
+        0.17022503356383428,
+        0.7905115020469594
+      ],
+      "index_tip_m": [
+        0.018229977483726456,
+        0.13687538622226014,
+        0.7738908373247766
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.18000000000000013,
+      "tail_center_m": [
+        0.05121718607516192,
+        0.16972113673910275,
+        0.7409951209034835
+      ],
+      "tail_quaternion": [
+        -0.0417502090945011,
+        -0.938887373017519,
+        0.1746071007986666,
+        0.2937001552255481
+      ],
+      "thumb_tip_m": [
+        0.07852892139248827,
+        0.170205511101305,
+        0.78991700490982
+      ],
+      "index_tip_m": [
+        0.018295141984456812,
+        0.13762262243740023,
+        0.773756154901021
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.20000000000000015,
+      "tail_center_m": [
+        0.053831750962697725,
+        0.17050255686120105,
+        0.7239984642591476
+      ],
+      "tail_quaternion": [
+        -0.25412413393533234,
+        -0.870745919161754,
+        0.01950762563867165,
+        0.42052576776781425
+      ],
+      "thumb_tip_m": [
+        0.07918802917916354,
+        0.1702099673913749,
+        0.7893051901316084
+      ],
+      "index_tip_m": [
+        0.018403167476456095,
+        0.13853230431028482,
+        0.7736642398126652
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.22000000000000017,
+      "tail_center_m": [
+        0.05656080772125447,
+        0.17106879368060163,
+        0.703069352781033
+      ],
+      "tail_quaternion": [
+        -0.4121424647408261,
+        -0.7305706448001937,
+        -0.16968664808966438,
+        0.5173118625874341
+      ],
+      "thumb_tip_m": [
+        0.07990994061499981,
+        0.1702333731518448,
+        0.7887109735324003
+      ],
+      "index_tip_m": [
+        0.018559867875019027,
+        0.13955746899261315,
+        0.7736213148062449
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.24000000000000019,
+      "tail_center_m": [
+        0.05930685608850585,
+        0.17160290450194277,
+        0.6782157719973565
+      ],
+      "tail_quaternion": [
+        -0.5011289837977868,
+        -0.536869949811785,
+        -0.37425681063694133,
+        0.5661909909904553
+      ],
+      "thumb_tip_m": [
+        0.08065475125190052,
+        0.1702658872895585,
+        0.7881432898936959
+      ],
+      "index_tip_m": [
+        0.0187470549269646,
+        0.14063592921707124,
+        0.7736201404283178
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.2600000000000002,
+      "tail_center_m": [
+        0.06212554874157478,
+        0.17199778259018988,
+        0.6494459470388807
+      ],
+      "tail_quaternion": [
+        -0.515360055512505,
+        -0.3136639231355223,
+        -0.5728084415474822,
+        0.5548958873494426
+      ],
+      "thumb_tip_m": [
+        0.08139233638336418,
+        0.17030188114113737,
+        0.7876049258461129
+      ],
+      "index_tip_m": [
+        0.018947063564824715,
+        0.14171846250686812,
+        0.7736485280689275
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.2800000000000002,
+      "tail_center_m": [
+        0.06527801263241438,
+        0.1717485410516353,
+        0.6168137148909101
+      ],
+      "tail_quaternion": [
+        -0.4585533943625184,
+        -0.08750539213921847,
+        -0.743804237522183,
+        0.47835849225159327
+      ],
+      "thumb_tip_m": [
+        0.08210915494698653,
+        0.1703390924957615,
+        0.7871016442916693
+      ],
+      "index_tip_m": [
+        0.019152879000246495,
+        0.14277254962720734,
+        0.7737038312052583
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.3000000000000002,
+      "tail_center_m": [
+        0.0691897990004436,
+        0.1700216982193998,
+        0.5804732875924823
+      ],
+      "tail_quaternion": [
+        -0.3431980238819176,
+        0.1157455728443923,
+        -0.8681070298546831,
+        0.339423428017793
+      ],
+      "thumb_tip_m": [
+        0.08279980571987702,
+        0.170372013451413,
+        0.7866404017802245
+      ],
+      "index_tip_m": [
+        0.019361748203871567,
+        0.14377534500403766,
+        0.7737864698768248
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.32000000000000023,
+      "tail_center_m": [
+        0.07433982387418522,
+        0.16586324347464634,
+        0.5407057044027164
+      ],
+      "tail_quaternion": [
+        -0.18882758844400985,
+        0.2740005850129152,
+        -0.9312282455012025,
+        0.14859938100729533
+      ],
+      "thumb_tip_m": [
+        0.08344891792195923,
+        0.17039591902191834,
+        0.7862170533461719
+      ],
+      "index_tip_m": [
+        0.01955713976618891,
+        0.14471479989352765,
+        0.7738984804085167
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.34000000000000025,
+      "tail_center_m": [
+        0.08114914964395073,
+        0.15841476161894374,
+        0.49790331848506253
+      ],
+      "tail_quaternion": [
+        -0.019464596528538783,
+        0.371507726407485,
+        -0.9250173005719755,
+        -0.0771111687374617
+      ],
+      "thumb_tip_m": [
+        0.08405455303628821,
+        0.17041053409602389,
+        0.7858289565663313
+      ],
+      "index_tip_m": [
+        0.01973138375391704,
+        0.14555097838266462,
+        0.7740231121377141
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.36000000000000026,
+      "tail_center_m": [
+        0.08992129823380522,
+        0.1470350007330259,
+        0.45253125096016933
+      ],
+      "tail_quaternion": [
+        0.13944147912462346,
+        0.4006036625208421,
+        -0.8485986187409186,
+        -0.3161537027229452
+      ],
+      "thumb_tip_m": [
+        0.08462315901043276,
+        0.17040882902359236,
+        0.7854762769083435
+      ],
+      "index_tip_m": [
+        0.019886806969446735,
+        0.14621431892533088,
+        0.7741358291986618
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.3800000000000003,
+      "tail_center_m": [
+        0.10084445319482928,
+        0.1313009873558945,
+        0.4050998719161228
+      ],
+      "tail_quaternion": [
+        0.26420469662183926,
+        0.3624577701072102,
+        -0.7084556989075231,
+        -0.5448951879557427
+      ],
+      "thumb_tip_m": [
+        0.08515139436937721,
+        0.17038672496419321,
+        0.7851534842006037
+      ],
+      "index_tip_m": [
+        0.02001456593664784,
+        0.14666361416650842,
+        0.7742294121330516
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.4000000000000003,
+      "tail_center_m": [
+        0.11403575922593719,
+        0.11092233514306826,
+        0.35617507435367624
+      ],
+      "tail_quaternion": [
+        0.33583580224773746,
+        0.26673720690932917,
+        -0.5176643703704078,
+        -0.7403304505609899
+      ],
+      "thumb_tip_m": [
+        0.08559266543776804,
+        0.1703380049827803,
+        0.7849261903428201
+      ],
+      "index_tip_m": [
+        0.020052422284979214,
+        0.14688016571673226,
+        0.7744091561605021
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.4200000000000003,
+      "tail_center_m": [
+        0.1295915019234581,
+        0.08564047274937564,
+        0.3064258231763374
+      ],
+      "tail_quaternion": [
+        0.3423698438966658,
+        0.13025185388135768,
+        -0.294377656927426,
+        -0.8826999148366117
+      ],
+      "thumb_tip_m": [
+        0.08603226607509062,
+        0.17027187799189739,
+        0.7847501191916896
+      ],
+      "index_tip_m": [
+        0.02011163832593116,
+        0.146825927652218,
+        0.774586256274116
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.44000000000000034,
+      "tail_center_m": [
+        0.1476111812326769,
+        0.05517768552278431,
+        0.2566803762453213
+      ],
+      "tail_quaternion": [
+        0.2803182954478924,
+        -0.025241719584459678,
+        -0.05975073668660559,
+        -0.9577130876703192
+      ],
+      "thumb_tip_m": [
+        0.0865658853457921,
+        0.1702135810473436,
+        0.7845537896393884
+      ],
+      "index_tip_m": [
+        0.020326166961547102,
+        0.14649569132095422,
+        0.7746101787398167
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.46000000000000035,
+      "tail_center_m": [
+        0.16818386481968056,
+        0.019262307898515685,
+        0.2079520698100332
+      ],
+      "tail_quaternion": [
+        0.15508433236805919,
+        -0.1758016431762645,
+        0.16444345982059977,
+        -0.9581236771068286
+      ],
+      "thumb_tip_m": [
+        0.08713287318305389,
+        0.1701820041260323,
+        0.7843797228568224
+      ],
+      "index_tip_m": [
+        0.020624036979866395,
+        0.14590872069951746,
+        0.7745620921662933
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.48000000000000037,
+      "tail_center_m": [
+        0.1913498700517337,
+        -0.022292897865245163,
+        0.16141394761272923
+      ],
+      "tail_quaternion": [
+        -0.019694694469304906,
+        -0.2982899297654667,
+        0.35822613094070366,
+        -0.8844824904550282
+      ],
+      "thumb_tip_m": [
+        0.08769320286253997,
+        0.1702004517055144,
+        0.7842217401754589
+      ],
+      "index_tip_m": [
+        0.02094890080382028,
+        0.1451219191456853,
+        0.7744476263481118
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    },
+    {
+      "time_s": 0.5000000000000003,
+      "tail_center_m": [
+        0.21705741758177924,
+        -0.06949721212416943,
+        0.11831967871926889
+      ],
+      "tail_quaternion": [
+        -0.2237864289287221,
+        -0.3732309661691547,
+        0.5055723869445163,
+        -0.7449931823037003
+      ],
+      "thumb_tip_m": [
+        0.08823872622266887,
+        0.17026605506216283,
+        0.784087920587364
+      ],
+      "index_tip_m": [
+        0.021300263247531828,
+        0.1441438365423784,
+        0.7742855616170864
+      ],
+      "thumb_contact_fraction": 0.0,
+      "index_contact_fraction": 0.0,
+      "opposing_fraction": 0.0,
+      "contact_body_counts": {
+        "thumb": {},
+        "index": {}
+      },
+      "min_contact_normal_dot": null,
+      "mean_min_contact_normal_dot": null
+    }
+  ],
+  "contact_fractions": {
+    "thumb": 0.012,
+    "index": 0.026,
+    "opposing": 0.012,
+    "two_feet": 1.0
+  },
+  "max_tail_center_drift_m": 0.7195823926942728,
+  "max_b_nonfloor_penetration_m": 0.002144381623146526,
+  "finite_state": true
+}

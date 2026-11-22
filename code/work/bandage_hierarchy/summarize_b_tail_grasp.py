@@ -38,11 +38,23 @@ for label,suffix in (('gap_feedback','_gap'),('gap_and_1n_force','_force1n_gap')
                      'opposing_contact_fraction':trial['contact_fractions']['opposing'],
                      'tail_center_drift_m':trial['max_tail_center_drift_m'],
                      'strict_proxy_grasp_pass':gate(trial)})
+orientation=[]
+for tilt,rank in ((-15,14),(-15,0),(-5,6)):
+    label=str(tilt).replace('-','m')+'p0'
+    name=f'joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank{rank}_tilt{label}_gap_contact_audit.json'
+    trial=json.loads((OUT/name).read_text())
+    orientation.append({'tilt_deg':tilt,'rank':rank,'source':name,
+                        'static_normal_dot':trial['seed']['minimum_opposing_normal_dot'],
+                        'duration_s':trial['duration_s'],
+                        'opposing_contact_fraction':trial['contact_fractions']['opposing'],
+                        'tail_center_drift_m':trial['max_tail_center_drift_m'],
+                        'strict_proxy_grasp_pass':gate(trial)})
 report={'scope':'Rigid tail with massless tether; includes rest-removal counterfactual, no flexible bandage or hardware claim',
         'thresholds':{'duration_s_min':.499,'two_foot_support_fraction_min':.99,
                       'opposing_contact_fraction_min':.9,'tail_center_drift_m_max':.005,
                       'max_b_nonfloor_penetration_m':.003,'wbc_error':None},
         'passed_count':sum(r['strict_proxy_grasp_pass'] for r in rows),
-        'trial_count':len(rows),'trials':rows,'feedback_trials':feedback}
+        'trial_count':len(rows),'trials':rows,'feedback_trials':feedback,
+        'orientation_trials':orientation}
 (OUT/'joint_b_tail_tip_pinch_grasp_gate.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))

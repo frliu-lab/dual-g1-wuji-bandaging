@@ -1,5 +1,6 @@
 """Screen rigid tail orientation for opposed thumb-tip and index-tip contact."""
 import json
+import argparse
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -9,6 +10,9 @@ from scipy.spatial.transform import Rotation
 
 ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
+parser=argparse.ArgumentParser()
+parser.add_argument('--tilt-deg',type=float,default=0.)
+args=parser.parse_args()
 screen=json.loads((OUT/'joint_b_reposition_static_screen.json').read_text())
 path=json.loads((OUT/'joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json').read_text())
 q=np.asarray(path['samples'][-1]['qpos'])
@@ -26,6 +30,8 @@ index_base_geom=next(i for i in range(base_model.ngeom) if base_model.geom_bodyi
 axis=base_data.geom_xpos[thumb_base_geom]-base_data.geom_xpos[index_base_geom]
 axis/=np.linalg.norm(axis)
 rotation,_=Rotation.align_vectors([axis],[[0,0,1]])
+if args.tilt_deg:
+ rotation=Rotation.from_rotvec(np.deg2rad(args.tilt_deg)*np.array([0.,0.,1.]))*rotation
 xyzw=rotation.as_quat()
 quat=np.r_[xyzw[3],xyzw[:3]]
 root=ET.parse(OUT/screen['scene']).getroot()
@@ -77,6 +83,7 @@ for x in (.03,.035,.04,.045):
                   'two_fingertip_seed_pass':passed})
 passed=[r for r in rows if r['two_fingertip_seed_pass']]
 report={'scope':'Fixed rigid proxy fingertip geometry only; no grasp dynamics',
+        'tilt_deg':args.tilt_deg,
         'axis_world':axis.tolist(),'candidates':len(rows),'passing_seeds':len(passed),
         'both_tip_contact_candidates':sum(r['thumb_tip_distance_m'] is not None and
                                           r['index_tip_distance_m'] is not None for r in rows),
@@ -87,6 +94,6 @@ report={'scope':'Fixed rigid proxy fingertip geometry only; no grasp dynamics',
                 key=lambda r:r['max_b_nonfloor_penetration_m'])[:20],
         'best_candidates':sorted(passed,key=lambda r:max(abs(r['thumb_tip_distance_m']),
                                                        abs(r['index_tip_distance_m'])))[:20]}
-(OUT/'joint_b_tail_tip_pinch_static_screen.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_tip_pinch_static_screen{"_tilt"+str(args.tilt_deg).replace("-","m").replace(".","p") if args.tilt_deg else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps({k:v for k,v in report.items() if k!='best_candidates'}|
                  {'best':report['best_candidates'][:3]}))

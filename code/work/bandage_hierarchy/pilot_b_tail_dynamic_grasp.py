@@ -21,9 +21,11 @@ parser.add_argument('--pose-servo',action='store_true')
 parser.add_argument('--optimized-tip-seed',action='store_true')
 parser.add_argument('--tip-pinch-seed',action='store_true')
 parser.add_argument('--tip-pinch-rank',type=int,default=0)
+parser.add_argument('--tip-tilt-deg',type=float,default=0.)
 parser.add_argument('--gap-servo',action='store_true')
 parser.add_argument('--no-rest',action='store_true')
 parser.add_argument('--right-hand-position-mode',action='store_true')
+parser.add_argument('--contact-audit',action='store_true')
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -40,7 +42,8 @@ if args.optimized_tip_seed:
     tip_ik=json.loads((OUT/'joint_b_tail_arm_digit_ik_screen.json').read_text())
     seed=tip_ik['results'][2]
 if args.tip_pinch_seed:
-    tip_pinch=json.loads((OUT/'joint_b_tail_tip_pinch_static_screen.json').read_text())
+    tilt_suffix='_tilt'+str(args.tip_tilt_deg).replace('-','m').replace('.','p') if args.tip_tilt_deg else ''
+    tip_pinch=json.loads((OUT/f'joint_b_tail_tip_pinch_static_screen{tilt_suffix}.json').read_text())
     seed=tip_pinch['best_candidates'][args.tip_pinch_rank]
 pos=np.asarray(tip_ik['proxy_center_m'] if tip_ik else
                seed['proxy_center_m'] if tip_pinch else seed['proxy_pos_m'])
@@ -68,7 +71,7 @@ line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':
                                         pos-np.array([.38,-.44,.702]))))})
 ET.SubElement(line,'site',{'site':'bandage_spool_anchor'})
 ET.SubElement(line,'site',{'site':'bandage_tail_proxy_anchor'})
-xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_w"+str(args.tip_weight) if args.tip_servo else ""}{"_no_rest" if args.no_rest else ""}.xml'
+xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_w"+str(args.tip_weight) if args.tip_servo else ""}{"_no_rest" if args.no_rest else ""}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
 data=mujoco.MjData(model)
@@ -166,6 +169,8 @@ for _ in range(round(duration/.02)):
         steps+=1
         interval_contacts={digit:0 for digit in ('thumb','index')}
         interval_opposing=0
+        contact_bodies={'thumb':{},'index':{}}
+        interval_normal_dot=[]
         for _ in range(interval):
             mujoco.mj_step(model,data)
             if not np.all(np.isfinite(data.qpos)):
@@ -188,10 +193,15 @@ for _ in range(round(duration/.02)):
                     if any(n.startswith(f'g1_b/wuji_right/r_{digit}_') for n in bodies):
                         normal=c.frame[:3]*(1 if names[0]=='bandage_tail_proxy_contact' else -1)
                         normals[digit].append(normal)
+                        if args.contact_audit:
+                            finger_body=next(n for n in bodies if n.startswith(f'g1_b/wuji_right/r_{digit}_'))
+                            contact_bodies[digit][finger_body]=contact_bodies[digit].get(finger_body,0)+1
             for digit in normals:
                 fractions[digit]+=bool(normals[digit])
                 interval_contacts[digit]+=bool(normals[digit])
             is_opposing=any(float(np.dot(a,b))<-.5 for a in normals['thumb'] for b in normals['index'])
+            if args.contact_audit and normals['thumb'] and normals['index']:
+                interval_normal_dot.append(min(float(np.dot(a,b)) for a in normals['thumb'] for b in normals['index']))
             fractions['opposing']+=is_opposing
             interval_opposing+=is_opposing
             fractions['two_feet']+=floor=={'left','right'}
@@ -203,7 +213,11 @@ for _ in range(round(duration/.02)):
                               'index_tip_m':data.xpos[tip_bodies['index_finger']].tolist(),
                               'thumb_contact_fraction':interval_contacts['thumb']/interval,
                               'index_contact_fraction':interval_contacts['index']/interval,
-                              'opposing_fraction':interval_opposing/interval})
+                              'opposing_fraction':interval_opposing/interval,
+                              **({'contact_body_counts':contact_bodies,
+                                  'min_contact_normal_dot':min(interval_normal_dot) if interval_normal_dot else None,
+                                  'mean_min_contact_normal_dot':float(np.mean(interval_normal_dot)) if interval_normal_dot else None}
+                                 if args.contact_audit else {})})
     except Exception as exc:
         error=f'{type(exc).__name__}: {exc}'
         numeric=getattr(wbc,'last_numeric',None)
@@ -234,8 +248,10 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'tip_pinch_seed':args.tip_pinch_seed,
         'gap_servo':args.gap_servo,
         'right_hand_position_mode':args.right_hand_position_mode,
+        'contact_audit':args.contact_audit,
         'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
+        'tip_tilt_deg':args.tip_tilt_deg if tip_pinch else None,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
         'direct_tip_solver':args.direct_tip_solver,
         'tip_position_weight':args.tip_weight,
@@ -251,5 +267,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
