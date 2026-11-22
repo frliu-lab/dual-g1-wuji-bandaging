@@ -5,7 +5,7 @@ from direct_wbc_qp import solve_direct
 base={
     'M':np.eye(1),'B':np.eye(1),'J':np.zeros((0,1)),
     'mask':np.array([],dtype=int),'pad_flags':(),
-    'target':np.array([]),'weights':np.ones(1),
+    'target':np.array([]),'contact_weight':np.array([]),'weights':np.ones(1),
     'desired':np.zeros(1),'taskJ':np.ones((2,1)),
     'tasktarget':np.array([0.,1.]),
     'fixed_hand':np.array([],dtype=int),'forceweight':np.array([]),

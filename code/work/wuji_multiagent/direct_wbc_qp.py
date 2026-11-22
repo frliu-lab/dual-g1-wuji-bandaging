@@ -5,7 +5,7 @@ import scipy.sparse as sp
 import clarabel
 
 def solve_direct(data):
- n,u=data['M'].shape[0],data['B'].shape[1];J=data['J'];nc=J.shape[0]//3;nf=3*nc;N=n+u+nf;mask=data['mask'];C=J[mask];cw=np.array([100. if data['pad_flags'][r//3] else 10. for r in mask]);C=cw[:,None]*C;ct=cw*data['target'][mask]
+ n,u=data['M'].shape[0],data['B'].shape[1];J=data['J'];nc=J.shape[0]//3;nf=3*nc;N=n+u+nf;mask=data['mask'];C=J[mask];cw=data['contact_weight'];C=cw[:,None]*C;ct=cw*data['target'][mask]
  tw=np.asarray(data['task_weight'],dtype=float)
  if tw.shape!=(len(data['tasktarget']),):raise ValueError('Task weight rows do not match task targets')
  T=tw[:,None]*data['taskJ'];tt=tw*data['tasktarget'];w2=data['weights']**2
