@@ -31,7 +31,10 @@ for label,suffix in (('gap_feedback','_gap'),('gap_and_1n_force','_force1n_gap')
                      ('low_weight_pose_gap_direct','_tip_servo_1mm_w25_direct_pose_gap'),
                      ('measured_force_gain0p003','_gap_measured_force0p5_gain0p003_contact_audit'),
                      ('measured_force_gain0p001','_gap_measured_force0p5_gain0p001_contact_audit'),
-                     ('measured_force_normal_gate','_gap_measured_force0p5_gain0p003_normal_gate_contact_audit')):
+                     ('measured_force_normal_gate','_gap_measured_force0p5_gain0p003_normal_gate_contact_audit'),
+                     ('reacquire_weight5','_gap_reacquire_w5p0_contact_audit'),
+                     ('reacquire_weight25','_gap_reacquire_w25p0_contact_audit'),
+                     ('reacquire_weight100','_gap_reacquire_w100p0_contact_audit')):
     name=f'joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0{suffix}.json'
     trial=json.loads((OUT/name).read_text())
     feedback.append({'label':label,'source':name,'duration_s':trial['duration_s'],

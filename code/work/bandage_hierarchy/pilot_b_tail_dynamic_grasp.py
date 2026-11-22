@@ -30,6 +30,7 @@ parser.add_argument('--measured-force-servo',action='store_true')
 parser.add_argument('--measured-force-target-n',type=float,default=.5)
 parser.add_argument('--measured-force-gain',type=float,default=.003)
 parser.add_argument('--normal-gated-force-servo',action='store_true')
+parser.add_argument('--reacquire-tip-servo',action='store_true')
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -109,7 +110,7 @@ def robot_contact_only(m,c):
     return any(m.body(m.geom_bodyid[int(g)]).name.startswith(('g1_a/','g1_b/'))
                for g in c.geom if g>=0)
 wbc=JointWBC(model,data.qpos.copy(),palm_names=palms,contact_filter=robot_contact_only)
-wbc.backend='DIRECT' if args.direct_tip_solver or not args.tip_servo else 'CLARABEL'
+wbc.backend='DIRECT' if args.direct_tip_solver or args.reacquire_tip_servo or not args.tip_servo else 'CLARABEL'
 wbc.tip_position_weight=args.tip_weight
 wbc.tail_proxy_digit_normal_goal_n=args.normal_goal_n
 if args.right_hand_position_mode:
@@ -172,6 +173,14 @@ for _ in range(round(duration/.02)):
             wbc.tip_position_targets={model.body(bid).name:tab_now+
                 (tab_rotation@tip_local_offsets[digit] if args.pose_servo else tip_offsets[digit])
                 for digit,bid in tip_bodies.items()}
+        if args.reacquire_tip_servo:
+            if previous_opposing_fraction<.5:
+                tab_now=data.xpos[tab_id].copy()
+                tab_rotation=data.xmat[tab_id].reshape(3,3)
+                wbc.tip_position_targets={model.body(bid).name:tab_now+tab_rotation@tip_local_offsets[digit]
+                    for digit,bid in tip_bodies.items()}
+            else:
+                wbc.tip_position_targets={}
         if args.right_hand_position_mode:
             for actuator in right_hand:
                 wbc.hand_commands[actuator]=wbc.qref[wbc.act_qadr[actuator]]
@@ -278,6 +287,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'measured_force_target_n':args.measured_force_target_n if args.measured_force_servo else None,
         'measured_force_gain':args.measured_force_gain if args.measured_force_servo else None,
         'normal_gated_force_servo':args.normal_gated_force_servo,
+        'reacquire_tip_servo':args.reacquire_tip_servo,
         'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_tilt_deg':args.tip_tilt_deg if tip_pinch else None,
@@ -296,5 +306,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_reacquire_w"+str(args.tip_weight).replace(".","p") if args.reacquire_tip_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))

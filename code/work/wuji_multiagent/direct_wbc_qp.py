@@ -6,9 +6,8 @@ import clarabel
 
 def solve_direct(data):
  n,u=data['M'].shape[0],data['B'].shape[1];J=data['J'];nc=J.shape[0]//3;nf=3*nc;N=n+u+nf;mask=data['mask'];C=J[mask];cw=np.array([100. if data['pad_flags'][r//3] else 10. for r in mask]);C=cw[:,None]*C;ct=cw*data['target'][mask]
- task_dim=len(data['tasktarget'])
- if task_dim%6:raise ValueError('Direct WBC requires six task rows per palm')
- tw=np.tile(np.r_[np.full(3,np.sqrt(1000.)),np.full(3,np.sqrt(10.))],task_dim//6)
+ tw=np.asarray(data['task_weight'],dtype=float)
+ if tw.shape!=(len(data['tasktarget']),):raise ValueError('Task weight rows do not match task targets')
  T=tw[:,None]*data['taskJ'];tt=tw*data['tasktarget'];w2=data['weights']**2
  H=np.diag(w2)+C.T@C+T.T@T;g=-2*(w2*data['desired']+C.T@ct+T.T@tt)
  fixed=data['fixed_hand'];torque_diag=np.full(u,1e-4);torque_linear=np.zeros(u)
