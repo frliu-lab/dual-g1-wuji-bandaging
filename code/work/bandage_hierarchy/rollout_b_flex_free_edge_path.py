@@ -31,6 +31,7 @@ parser.add_argument('--flex-measured-force-prior-weight',type=float,default=0.)
 parser.add_argument('--releasable-fixture',action='store_true')
 parser.add_argument('--fixture-release-s',type=float,default=None)
 parser.add_argument('--pinch-closure-mm',type=float,default=0.)
+parser.add_argument('--b-right-palm-weight',type=float,default=1000.)
 args = parser.parse_args()
 if args.fixture_release_s is not None and not args.releasable_fixture:
     parser.error('--fixture-release-s requires --releasable-fixture')
@@ -55,6 +56,10 @@ d.qpos[:] = waypoints[-1 if args.start_at_goal else 0]
 mujoco.mj_forward(m, d)
 tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
              'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
+tip_ids=[m.body(name).id for name in tip_names]
+thumb_tip_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==tip_ids[0]]
+index_tip_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==tip_ids[1]]
+initial_tip_positions=np.array([d.xpos[bid].copy() for bid in tip_ids])
 
 palms = ('g1_a/wuji_left/l_wrist', 'g1_a/wuji_right/r_wrist',
          'g1_b/wuji_left/l_wrist', 'g1_b/wuji_right/r_wrist')
@@ -63,7 +68,8 @@ def relevant_contact(model, c):
         model.body(model.geom_bodyid[g]).name.startswith(('g1_a/', 'g1_b/'))
         for g in c.geom if g >= 0)
 
-wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_contact)
+wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_contact,
+               palm_position_weights=[1000.,1000.,1000.,args.b_right_palm_weight])
 wbc.backend = 'DIRECT'
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
 wbc.flex_measured_force_prior_weight=args.flex_measured_force_prior_weight
@@ -114,10 +120,12 @@ tip_target = np.array(screen['results'][0]['target_m'])
 if args.track_edge:
     wbc.tip_position_weight = 1000.
 material_targets={}
+initial_material_offsets={}
+if args.material_tip_follow and not args.start_at_goal:
+    parser.error('Material-point fingertip following currently requires --start-at-goal')
 if args.material_tip_follow:
-    if not args.start_at_goal:
-        parser.error('Material-point fingertip following currently requires --start-at-goal')
     wbc.tip_position_weight=args.tip_weight
+if args.pinchtab and args.start_at_goal:
     for digit,tip_name in [('thumb',tip_names[0]),('index',tip_names[1])]:
         contacts=[]
         for c in d.contact:
@@ -131,8 +139,9 @@ if args.material_tip_follow:
             raise RuntimeError(f'No initial {digit} flex contact for material target')
         _,verts,weights,point=min(contacts,key=lambda x:x[0])
         offset=d.xpos[m.body(tip_name).id]-point
-        offset*=max(0.,1.-args.tip_closure_mm/1000/max(np.linalg.norm(offset),1e-9))
-        material_targets[tip_name]=(verts,weights,offset)
+        initial_material_offsets[tip_name]=offset.copy()
+        target_offset=offset*max(0.,1.-args.tip_closure_mm/1000/max(np.linalg.norm(offset),1e-9))
+        material_targets[tip_name]=(verts,weights,target_offset)
 max_pen = 0.0
 max_tip_error = 0.0
 feet_count = 0
@@ -223,9 +232,19 @@ try:
             interval_opposed += opposed_here
             edge_drift = max(edge_drift, float(np.linalg.norm(d.flexvert_xpos[64:66].mean(axis=0)-initial_edge)))
         tip_error = float(np.max(np.abs(d.qpos[qa]-wbc.qref[qa])))
+        thumb_index_surface_gap=min(float(mujoco.mj_geomDistance(m,d,a,b,.2,np.zeros(6)))
+                                    for a in thumb_tip_geoms for b in index_tip_geoms)
+        tip_displacements=[float(np.linalg.norm(d.xpos[bid]-initial_tip_positions[i]))
+                           for i,bid in enumerate(tip_ids)]
+        material_relative_shifts={name:float(np.linalg.norm(
+            d.xpos[m.body(name).id]-(weights@d.flexvert_xpos[verts])-initial_material_offsets[name]))
+            for name,(verts,weights,_) in material_targets.items()}
         max_tip_error = max(max_tip_error, tip_error)
         trace.append({'time_s': float(d.time), 'path_progress': float(smooth),
                       'max_joint_tracking_error_rad': tip_error,
+                      'thumb_index_surface_gap_m':thumb_index_surface_gap,
+                      'tip_displacement_m':tip_displacements,
+                      'tip_to_material_relative_shift_m':material_relative_shifts,
                       'worst_joint_name':joint_names[int(np.argmax(np.abs(d.qpos[qa]-wbc.qref[qa])))],
                       'opposed_tip_contact_fraction':interval_opposed/interval,
                       'max_b_nonfloor_penetration_m':interval_max_pen,
@@ -267,6 +286,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'fixture_release_s':args.fixture_release_s,
           'fixture_active_at_end':bool(all(d.eq_active[i] for i in fixture_ids)) if fixture_ids else None,
           'pinch_closure_command_mm':args.pinch_closure_mm,
+          'b_right_palm_position_weight':args.b_right_palm_weight,
           'duration_s': float(d.time), 'planned_duration_s': duration, 'control_solves': solves,
           'error': error, 'two_robot_two_foot_fraction': feet_count/steps,
           'flex_forearm_contact_fraction': flex_contact_count/steps,
@@ -292,6 +312,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_fixture' if args.releasable_fixture else '')+
                (f'_release{args.fixture_release_s:g}s' if args.fixture_release_s is not None else '')+
                (f'_pinchclosure{args.pinch_closure_mm:g}mm' if args.pinch_closure_mm else '')+
+               (f'_palmweight{args.b_right_palm_weight:g}' if args.b_right_palm_weight!=1000. else '')+
                suffix+'.json')
 (OUT/report_name).write_text(json.dumps(report, indent=2)+'\n')
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))
