@@ -26,6 +26,10 @@ parser.add_argument('--gap-servo',action='store_true')
 parser.add_argument('--no-rest',action='store_true')
 parser.add_argument('--right-hand-position-mode',action='store_true')
 parser.add_argument('--contact-audit',action='store_true')
+parser.add_argument('--measured-force-servo',action='store_true')
+parser.add_argument('--measured-force-target-n',type=float,default=.5)
+parser.add_argument('--measured-force-gain',type=float,default=.003)
+parser.add_argument('--normal-gated-force-servo',action='store_true')
 args=parser.parse_args()
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
@@ -128,6 +132,8 @@ for digit,bid in tip_bodies.items():
         f'g1_b/wuji_right/r_{digit}_') and 'abd' not in model.joint(j).name]
     gap_digits[digit]=(gid,joints)
 initial_hand_reference=wbc.qref.copy()
+measured_force_n={'thumb':0.,'index':0.}
+previous_opposing_fraction=1.
 fractions={'thumb':0,'index':0,'opposing':0,'two_feet':0}
 max_tab_drift=0.;max_pen=0.;error=None;direct_error=None;steps=0;failure_contacts=[];bad_acc_bounds=[]
 failure_tail_unforced_acc=None
@@ -135,7 +141,7 @@ control_trace=[]
 duration=.5;interval=round(.02/model.opt.timestep)
 for _ in range(round(duration/.02)):
     try:
-        if args.gap_servo:
+        if args.gap_servo or args.measured_force_servo:
             for digit,(gid,joints) in gap_digits.items():
                 gap_data.qpos[:]=data.qpos
                 mujoco.mj_forward(model,gap_data)
@@ -149,12 +155,17 @@ for _ in range(round(duration/.02)):
                     gradient.append((shifted-distance)/.002)
                     gap_data.qpos[adr]=data.qpos[adr]
                 gradient=np.asarray(gradient)
-                step=-.4*(distance+.0005)*gradient/(gradient@gradient+.001)
+                step=np.zeros_like(gradient)
+                if args.gap_servo:
+                    step+=-.4*(distance+.0005)*gradient/(gradient@gradient+.001)
+                if args.measured_force_servo and (not args.normal_gated_force_servo or previous_opposing_fraction>=.5):
+                    force_error=np.clip(args.measured_force_target_n-measured_force_n['index' if digit=='index_finger' else digit],0.,1.)
+                    step+=-args.measured_force_gain*force_error*gradient/(np.linalg.norm(gradient)+.001)
                 for j,delta in zip(joints,np.clip(step,-.03,.03)):
                     adr=model.jnt_qposadr[j]
                     wbc.qref[adr]=np.clip(wbc.qref[adr]+delta,
-                        max(model.jnt_range[j,0]+.01,initial_hand_reference[adr]-.2),
-                        min(model.jnt_range[j,1]-.01,initial_hand_reference[adr]+.2))
+                        max(model.jnt_range[j,0]+.01,initial_hand_reference[adr]-(.3 if args.measured_force_servo else .2)),
+                        min(model.jnt_range[j,1]-.01,initial_hand_reference[adr]+(.3 if args.measured_force_servo else .2)))
         if args.tip_servo:
             tab_now=data.xpos[tab_id].copy()
             tab_rotation=data.xmat[tab_id].reshape(3,3)
@@ -198,6 +209,7 @@ for _ in range(round(duration/.02)):
                         if args.contact_audit:
                             finger_body=next(n for n in bodies if n.startswith(f'g1_b/wuji_right/r_{digit}_'))
                             contact_bodies[digit][finger_body]=contact_bodies[digit].get(finger_body,0)+1
+                        if args.contact_audit or args.measured_force_servo:
                             contact_force=np.zeros(6)
                             mujoco.mj_contactForce(model,data,contact_id,contact_force)
                             step_force_n[digit]+=max(0.,float(contact_force[0]))
@@ -207,12 +219,15 @@ for _ in range(round(duration/.02)):
             is_opposing=any(float(np.dot(a,b))<-.5 for a in normals['thumb'] for b in normals['index'])
             if args.contact_audit and normals['thumb'] and normals['index']:
                 interval_normal_dot.append(min(float(np.dot(a,b)) for a in normals['thumb'] for b in normals['index']))
-            if args.contact_audit:
+            if args.contact_audit or args.measured_force_servo:
                 for digit in step_force_n:
                     interval_force_n[digit].append(step_force_n[digit])
             fractions['opposing']+=is_opposing
             interval_opposing+=is_opposing
             fractions['two_feet']+=floor=={'left','right'}
+        if args.measured_force_servo:
+            measured_force_n={digit:float(np.mean(values)) for digit,values in interval_force_n.items()}
+        previous_opposing_fraction=interval_opposing/interval
         center=data.xpos[tab_id].copy()
         control_trace.append({'time_s':float(data.time),
                               'tail_center_m':center.tolist(),
@@ -259,6 +274,10 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'gap_servo':args.gap_servo,
         'right_hand_position_mode':args.right_hand_position_mode,
         'contact_audit':args.contact_audit,
+        'measured_force_servo':args.measured_force_servo,
+        'measured_force_target_n':args.measured_force_target_n if args.measured_force_servo else None,
+        'measured_force_gain':args.measured_force_gain if args.measured_force_servo else None,
+        'normal_gated_force_servo':args.normal_gated_force_servo,
         'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_tilt_deg':args.tip_tilt_deg if tip_pinch else None,
@@ -277,5 +296,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
