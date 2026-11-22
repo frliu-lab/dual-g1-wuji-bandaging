@@ -406,6 +406,9 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_stabilizedigits_fixture_release0.1s.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_measuredforce0.05_stabilizedigits_fixture_release0.1s.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_measuredforce0.2_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_friction0.4_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_friction1.2_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_friction2_stabilizedigits_fixture_release0.1s.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',

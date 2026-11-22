@@ -22,6 +22,7 @@ parser.add_argument('--start-at-goal',action='store_true')
 parser.add_argument('--duration-s',type=float,default=1.)
 parser.add_argument('--flex-tip-force-n',type=float,default=None)
 parser.add_argument('--measured-tip-force-n',type=float,default=None)
+parser.add_argument('--flex-friction',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
 parser.add_argument('--stabilize-other-digits',action='store_true')
@@ -41,6 +42,8 @@ if args.fixture_release_s is not None and not args.releasable_fixture:
     parser.error('--fixture-release-s requires --releasable-fixture')
 if args.measured_tip_force_n is not None and (args.measured_tip_force_n<=0 or not args.pinchtab):
     parser.error('--measured-tip-force-n requires a positive force and --pinchtab')
+if args.flex_friction is not None and (not np.isfinite(args.flex_friction) or args.flex_friction<=0):
+    parser.error('--flex-friction must be positive and finite')
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
 SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if args.releasable_fixture else 'joint_dual_g1_pinchtab_extended20mm.xml') if args.extended_tab else
              'joint_dual_g1_pinchtab_releasable_fixture.xml' if args.releasable_fixture else
@@ -50,6 +53,8 @@ SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if ar
 PATH = OUT/('joint_b_pinchtab_rrt_path.npz' if args.pinchtab else
             'joint_b_flex_free_edge_rrt_path.npz')
 m = mujoco.MjModel.from_xml_path(str(SCENE))
+if args.flex_friction is not None:
+    m.flex_friction[:,0]=args.flex_friction
 d = mujoco.MjData(m)
 path_file = np.load(PATH)
 waypoints = path_file['qpos']
@@ -334,6 +339,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'edge_damping':args.edge_damping,
           'flex_tip_force_goal_n':args.flex_tip_force_n,
           'measured_tip_force_goal_n':args.measured_tip_force_n,
+          'flex_sliding_friction':float(m.flex_friction[0,0]),
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
           'stabilize_other_digits':args.stabilize_other_digits,
@@ -370,6 +376,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_track_edge' if args.track_edge else '')+
                (f'_flexforce{args.flex_tip_force_n:g}' if args.flex_tip_force_n is not None else '')+
                (f'_measuredforce{args.measured_tip_force_n:g}' if args.measured_tip_force_n is not None else '')+
+               (f'_friction{args.flex_friction:g}' if args.flex_friction is not None else '')+
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+
                ('_stabilizedigits' if args.stabilize_other_digits else '')+
