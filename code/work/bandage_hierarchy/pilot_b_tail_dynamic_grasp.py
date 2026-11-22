@@ -13,6 +13,7 @@ OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser()
 parser.add_argument('--radius',type=float,default=.009)
 parser.add_argument('--tip-servo',action='store_true')
+parser.add_argument('--direct-tip-solver',action='store_true')
 parser.add_argument('--squeeze-mm',type=float,default=1.)
 parser.add_argument('--tip-weight',type=float,default=1000.)
 parser.add_argument('--normal-goal-n',type=float,default=None)
@@ -67,7 +68,7 @@ line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':
                                         pos-np.array([.38,-.44,.702]))))})
 ET.SubElement(line,'site',{'site':'bandage_spool_anchor'})
 ET.SubElement(line,'site',{'site':'bandage_tail_proxy_anchor'})
-xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_no_rest" if args.no_rest else ""}.xml'
+xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_w"+str(args.tip_weight) if args.tip_servo else ""}{"_no_rest" if args.no_rest else ""}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
 data=mujoco.MjData(model)
@@ -101,7 +102,7 @@ def robot_contact_only(m,c):
     return any(m.body(m.geom_bodyid[int(g)]).name.startswith(('g1_a/','g1_b/'))
                for g in c.geom if g>=0)
 wbc=JointWBC(model,data.qpos.copy(),palm_names=palms,contact_filter=robot_contact_only)
-wbc.backend='CLARABEL' if args.tip_servo else 'DIRECT'
+wbc.backend='DIRECT' if args.direct_tip_solver or not args.tip_servo else 'CLARABEL'
 wbc.tip_position_weight=args.tip_weight
 wbc.tail_proxy_digit_normal_goal_n=args.normal_goal_n
 if args.right_hand_position_mode:
@@ -236,6 +237,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_servo':args.tip_servo,'squeeze_mm':args.squeeze_mm,
+        'direct_tip_solver':args.direct_tip_solver,
         'tip_position_weight':args.tip_weight,
         'pose_servo':args.pose_servo,
         'tail_digit_normal_goal_n':args.normal_goal_n,
@@ -249,5 +251,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))

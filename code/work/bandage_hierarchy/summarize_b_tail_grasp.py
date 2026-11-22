@@ -27,11 +27,14 @@ feedback=[]
 for label,suffix in (('gap_feedback','_gap'),('gap_and_1n_force','_force1n_gap'),
                      ('pose_tip_servo','_tip_servo_1mm_w1000_pose'),
                      ('gap_without_rest','_gap_no_rest'),
-                     ('right_hand_position_with_gap','_gap_right_position')):
+                     ('right_hand_position_with_gap','_gap_right_position'),
+                     ('low_weight_pose_gap_direct','_tip_servo_1mm_w25_direct_pose_gap')):
     name=f'joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0{suffix}.json'
     trial=json.loads((OUT/name).read_text())
     feedback.append({'label':label,'source':name,'duration_s':trial['duration_s'],
                      'error':trial['error'],
+                     'first_zero_opposing_interval_s':next((row['time_s'] for row in trial['control_trace']
+                         if row['opposing_fraction']==0),None),
                      'opposing_contact_fraction':trial['contact_fractions']['opposing'],
                      'tail_center_drift_m':trial['max_tail_center_drift_m'],
                      'strict_proxy_grasp_pass':gate(trial)})
