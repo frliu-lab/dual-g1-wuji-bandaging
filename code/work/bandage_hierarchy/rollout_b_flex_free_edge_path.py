@@ -1,5 +1,6 @@
 """Closed-loop dual-G1 WBC test of the collision-screened free-edge approach."""
 import json
+import argparse
 import sys
 from pathlib import Path
 
@@ -11,6 +12,9 @@ sys.path.insert(0, str(ROOT/'work/wuji_multiagent'))
 from joint_wbc import JointWBC
 
 OUT = ROOT/'outputs/wuji_multiagent/bandage_v0'
+parser = argparse.ArgumentParser()
+parser.add_argument('--track-edge', action='store_true')
+args = parser.parse_args()
 SCENE = OUT/'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5.xml'
 PATH = OUT/'joint_b_flex_free_edge_rrt_path.npz'
 m = mujoco.MjModel.from_xml_path(str(SCENE))
@@ -35,6 +39,13 @@ wbc.backend = 'DIRECT'
 interval = round(.02/m.opt.timestep)
 duration = 1.0
 initial_edge = d.flexvert_xpos[64:66].mean(axis=0).copy()
+initial_row28 = d.flexvert_xpos[56:58].mean(axis=0).copy()
+screen = json.loads((OUT/'joint_b_flex_free_edge_reach_screen_all_digits_staged_tab1.5_indexrow28_offset20p0_cap2p5.json').read_text())
+tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
+             'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
+tip_target = np.array(screen['results'][0]['target_m'])
+if args.track_edge:
+    wbc.tip_position_weight = 1000.
 max_pen = 0.0
 max_tip_error = 0.0
 feet_count = 0
@@ -55,6 +66,11 @@ try:
         progress = (k+1)/round(duration/.02)
         smooth = progress*progress*(3-2*progress)
         wbc.qref[:] = ref_at(smooth)
+        if args.track_edge:
+            wbc.tip_position_targets = {
+                tip_names[0]: tip_target[0] + d.flexvert_xpos[64:66].mean(axis=0)-initial_edge,
+                tip_names[1]: tip_target[1] + d.flexvert_xpos[56:58].mean(axis=0)-initial_row28,
+            }
         ctrl, meta, _ = wbc.solve(d)
         d.ctrl[:] = ctrl
         solves += 1
@@ -92,6 +108,7 @@ except Exception as exc:
 
 steps = max(1, solves*interval)
 report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free tab; no force-closed grasp or completed wrap',
+          'track_edge_tip_targets': args.track_edge,
           'duration_s': float(d.time), 'planned_duration_s': duration, 'control_solves': solves,
           'error': error, 'two_robot_two_foot_fraction': feet_count/steps,
           'flex_forearm_contact_fraction': flex_contact_count/steps,
@@ -100,5 +117,6 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'max_joint_tracking_error_rad': max_tip_error,
           'final_joint_target_error_rad': float(np.max(np.abs(d.qpos[qa]-waypoints[-1, qa]))),
           'trace': trace}
-(OUT/'joint_b_flex_free_edge_dynamic_path_rollout.json').write_text(json.dumps(report, indent=2)+'\n')
+(OUT/('joint_b_flex_free_edge_dynamic_path_rollout_track_edge.json' if args.track_edge else
+      'joint_b_flex_free_edge_dynamic_path_rollout.json')).write_text(json.dumps(report, indent=2)+'\n')
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))

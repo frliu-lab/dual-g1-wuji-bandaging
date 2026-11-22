@@ -344,6 +344,7 @@ SELECTED = [
     'bandage_v0/joint_b_flex_free_edge_rrt_report.json',
     'bandage_v0/joint_b_flex_free_edge_rrt_path.npz',
     'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout.json',
+    'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_track_edge.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
