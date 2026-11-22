@@ -370,6 +370,15 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_flexforce1.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_wristweight100.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_wristweight500.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_localphysics.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_localphysics_stabilizedigits.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_flexforce1_stabilizedigits.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_materialfollow.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_materialfollow_closure1mm.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_localphysics_stabilizedigits_materialfollow_closure1mm.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_materialfollow_closure1mm_tipweight100.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_materialfollow_closure1mm_tipweight300.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
