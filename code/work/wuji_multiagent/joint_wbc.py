@@ -28,6 +28,7 @@ class JointWBC:
   self.spool_contact_normal_goal_n=None
   self.tail_proxy_digit_normal_goal_n=None
   self.flex_tip_normal_goal_n=None
+  self.flex_measured_force_prior_weight=0.
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
   self.b_handle_lift_min_n=None
@@ -113,6 +114,8 @@ class JointWBC:
   return np.concatenate(Js) if Js else np.empty((0,m.nv)),np.concatenate(targets),np.array(mus),identities
  def solve(self,d):
   m=self.m;J,target,mus,ids=self.contacts(d);nc=len(ids)
+  if not np.isfinite(self.flex_measured_force_prior_weight) or self.flex_measured_force_prior_weight<0:
+   raise ValueError('Flex measured-force prior weight must be finite and nonnegative')
   if nc==0:raise RuntimeError('No physical supporting contacts')
   tip_names=tuple(sorted(self.tip_position_targets))
   task_dim=self.task_dim+3*len(tip_names)
@@ -192,6 +195,11 @@ class JointWBC:
   for k,(ga,gb) in enumerate(ids):
    if m.geom(ga).name=='floor' or m.geom(gb).name=='floor':
     measured=np.zeros(6);mujoco.mj_contactForce(m,d,self.contact_indices[k],measured);goals[k*3:k*3+3]=measured[:3];forceweight[k*3:k*3+3]=.3
+   elif self.flex_measured_force_prior_weight>0 and any(flex_id>=0 for flex_id in d.contact[self.contact_indices[k]].flex):
+    measured=np.zeros(6)
+    mujoco.mj_contactForce(m,d,self.contact_indices[k],measured)
+    goals[k*3:k*3+3]=measured[:3]
+    forceweight[k*3:k*3+3]=self.flex_measured_force_prior_weight
   if self.support_palm_force_goal_n is not None:
    if not np.isfinite(self.support_palm_force_goal_n) or self.support_palm_force_goal_n<0:
     raise ValueError('Support palm force goal must be finite and nonnegative')

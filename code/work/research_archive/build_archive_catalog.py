@@ -379,6 +379,18 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_localphysics_stabilizedigits_materialfollow_closure1mm.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_materialfollow_closure1mm_tipweight100.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_materialfollow_closure1mm_tipweight300.json',
+    'bandage_v0/joint_dual_g1_pinchtab_releasable_fixture.xml',
+    'bandage_v0/joint_dual_g1_pinchtab_releasable_fixture_check.json',
+    'bandage_v0/joint_b_pinchtab_fixed_hand_relaxation.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_forceprior0.3.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_forceprior1.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_forceprior3.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_fixture.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizealldigits_fixture.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizealldigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizealldigits_fixture_pinchclosure0.5mm.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_stabilizealldigits_fixture_pinchclosure1mm.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -507,6 +519,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/audit_pinchtab_static.py',
     'work/bandage_hierarchy/search_pinchtab_bulge.py',
     'work/bandage_hierarchy/search_pinchtab_safe_start.py',
+    'work/bandage_hierarchy/build_releasable_pinchtab_fixture.py',
+    'work/bandage_hierarchy/diagnose_pinchtab_fixed_hand.py',
 ]
 
 

@@ -23,12 +23,20 @@ parser.add_argument('--flex-tip-force-n',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
 parser.add_argument('--stabilize-other-digits',action='store_true')
+parser.add_argument('--stabilize-all-digits',action='store_true')
 parser.add_argument('--material-tip-follow',action='store_true')
 parser.add_argument('--tip-closure-mm',type=float,default=0.)
 parser.add_argument('--tip-weight',type=float,default=1000.)
+parser.add_argument('--flex-measured-force-prior-weight',type=float,default=0.)
+parser.add_argument('--releasable-fixture',action='store_true')
+parser.add_argument('--fixture-release-s',type=float,default=None)
+parser.add_argument('--pinch-closure-mm',type=float,default=0.)
 args = parser.parse_args()
+if args.fixture_release_s is not None and not args.releasable_fixture:
+    parser.error('--fixture-release-s requires --releasable-fixture')
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
-SCENE = OUT/(f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab_bulged.xml'
+SCENE = OUT/('joint_dual_g1_pinchtab_releasable_fixture.xml' if args.releasable_fixture else
+             f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab_bulged.xml'
              if args.pinchtab else
              f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5{suffix}.xml')
 PATH = OUT/('joint_b_pinchtab_rrt_path.npz' if args.pinchtab else
@@ -45,6 +53,8 @@ wrist_qadr=int(m.jnt_qposadr[wrist_joint]);wrist_vadr=int(m.jnt_dofadr[wrist_joi
 wrist_actuator=int(np.flatnonzero(m.actuator_trnid[:,0]==wrist_joint)[0])
 d.qpos[:] = waypoints[-1 if args.start_at_goal else 0]
 mujoco.mj_forward(m, d)
+tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
+             'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
 
 palms = ('g1_a/wuji_left/l_wrist', 'g1_a/wuji_right/r_wrist',
          'g1_b/wuji_left/l_wrist', 'g1_b/wuji_right/r_wrist')
@@ -56,22 +66,50 @@ def relevant_contact(model, c):
 wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_contact)
 wbc.backend = 'DIRECT'
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
-if args.stabilize_other_digits:
+wbc.flex_measured_force_prior_weight=args.flex_measured_force_prior_weight
+if args.stabilize_other_digits or args.stabilize_all_digits:
     wbc.hand_position_mode=True
     for i in wbc.hand_indices:
         wbc.hand_commands[i]=d.qpos[wbc.act_qadr[i]]
-    wbc.force_control_indices={int(i) for i in wbc.hand_indices
-                               if m.actuator(int(i)).name.startswith('g1_b/wuji_right/r_') and
-                               any(token in m.actuator(int(i)).name for token in ('THJ','FFJ'))}
+    if args.stabilize_other_digits:
+        wbc.force_control_indices={int(i) for i in wbc.hand_indices
+                                   if m.actuator(int(i)).name.startswith('g1_b/wuji_right/r_') and
+                                   any(token in m.actuator(int(i)).name for token in ('THJ','FFJ'))}
+    if args.pinch_closure_mm:
+        if not args.stabilize_all_digits:
+            parser.error('--pinch-closure-mm requires --stabilize-all-digits')
+        thumb_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==m.body(tip_names[0]).id]
+        index_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==m.body(tip_names[1]).id]
+        pinch_actuators=[int(i) for i in wbc.hand_indices
+                         if m.actuator(int(i)).name.startswith('g1_b/wuji_right/r_') and
+                         any(token in m.actuator(int(i)).name for token in ('THJ','FFJ'))]
+        original_q=d.qpos.copy()
+        def surface_gap():
+            mujoco.mj_forward(m,d)
+            return min(float(mujoco.mj_geomDistance(m,d,a,b,.1,np.zeros(6)))
+                       for a in thumb_geoms for b in index_geoms)
+        gap0=surface_gap()
+        gradient=[]
+        for i in pinch_actuators:
+            adr=wbc.act_qadr[i]
+            d.qpos[adr]+=1e-4
+            gradient.append((surface_gap()-gap0)/1e-4)
+            d.qpos[adr]=original_q[adr]
+        gradient=np.asarray(gradient)
+        delta=-args.pinch_closure_mm/1000*gradient/max(float(gradient@gradient),1e-12)
+        for i,move in zip(pinch_actuators,delta):
+            low,high=m.actuator_ctrlrange[i]
+            wbc.hand_commands[i]=np.clip(wbc.hand_commands[i]+np.clip(move,-.15,.15),low,high)
+        d.qpos[:]=original_q;mujoco.mj_forward(m,d)
 if args.wrist_weight is not None:
     wbc.weights[wrist_vadr]=args.wrist_weight
 interval = round(.02/m.opt.timestep)
+fixture_ids=([mujoco.mj_name2id(m,mujoco.mjtObj.mjOBJ_EQUALITY,f'bandage_tab_fixture_{i}') for i in (64,65)]
+             if args.releasable_fixture else [])
 duration = args.duration_s
 initial_edge = d.flexvert_xpos[64:66].mean(axis=0).copy()
 initial_row28 = d.flexvert_xpos[56:58].mean(axis=0).copy()
 screen = json.loads((OUT/'joint_b_flex_free_edge_reach_screen_all_digits_staged_tab1.5_indexrow28_offset20p0_cap2p5.json').read_text())
-tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
-             'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
 tip_target = np.array(screen['results'][0]['target_m'])
 if args.track_edge:
     wbc.tip_position_weight = 1000.
@@ -148,6 +186,8 @@ try:
         interval_max_pen = 0.
         first_step_actual_wrist_acceleration=None
         for substep in range(interval):
+            if args.fixture_release_s is not None and d.time>=args.fixture_release_s:
+                d.eq_active[fixture_ids]=0
             mujoco.mj_step(m, d)
             if substep==0:
                 first_step_actual_wrist_acceleration=float(d.qacc[wrist_vadr])
@@ -218,9 +258,15 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
           'stabilize_other_digits':args.stabilize_other_digits,
+          'stabilize_all_digits':args.stabilize_all_digits,
           'material_tip_follow':args.material_tip_follow,
           'tip_closure_mm':args.tip_closure_mm,
           'tip_position_weight':args.tip_weight if args.material_tip_follow else None,
+          'flex_measured_force_prior_weight':args.flex_measured_force_prior_weight,
+          'releasable_fixture':args.releasable_fixture,
+          'fixture_release_s':args.fixture_release_s,
+          'fixture_active_at_end':bool(all(d.eq_active[i] for i in fixture_ids)) if fixture_ids else None,
+          'pinch_closure_command_mm':args.pinch_closure_mm,
           'duration_s': float(d.time), 'planned_duration_s': duration, 'control_solves': solves,
           'error': error, 'two_robot_two_foot_fraction': feet_count/steps,
           'flex_forearm_contact_fraction': flex_contact_count/steps,
@@ -238,9 +284,14 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+
                ('_stabilizedigits' if args.stabilize_other_digits else '')+
+               ('_stabilizealldigits' if args.stabilize_all_digits else '')+
                ('_materialfollow' if args.material_tip_follow else '')+
                (f'_closure{args.tip_closure_mm:g}mm' if args.tip_closure_mm else '')+
                (f'_tipweight{args.tip_weight:g}' if args.material_tip_follow and args.tip_weight!=1000. else '')+
+               (f'_forceprior{args.flex_measured_force_prior_weight:g}' if args.flex_measured_force_prior_weight else '')+
+               ('_fixture' if args.releasable_fixture else '')+
+               (f'_release{args.fixture_release_s:g}s' if args.fixture_release_s is not None else '')+
+               (f'_pinchclosure{args.pinch_closure_mm:g}mm' if args.pinch_closure_mm else '')+
                suffix+'.json')
 (OUT/report_name).write_text(json.dumps(report, indent=2)+'\n')
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))
