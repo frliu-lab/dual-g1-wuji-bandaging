@@ -22,6 +22,8 @@ parser.add_argument('--start-at-goal',action='store_true')
 parser.add_argument('--duration-s',type=float,default=1.)
 parser.add_argument('--flex-tip-force-n',type=float,default=None)
 parser.add_argument('--measured-tip-force-n',type=float,default=None)
+parser.add_argument('--pinch-bias-preset',choices=('balanced_a','balanced_b'),default=None)
+parser.add_argument('--pinch-bias-until-s',type=float,default=None)
 parser.add_argument('--flex-friction',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
@@ -44,6 +46,8 @@ if args.measured_tip_force_n is not None and (args.measured_tip_force_n<=0 or no
     parser.error('--measured-tip-force-n requires a positive force and --pinchtab')
 if args.flex_friction is not None and (not np.isfinite(args.flex_friction) or args.flex_friction<=0):
     parser.error('--flex-friction must be positive and finite')
+if args.pinch_bias_until_s is not None and (args.pinch_bias_preset is None or args.pinch_bias_until_s<0):
+    parser.error('--pinch-bias-until-s requires a preset and nonnegative time')
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
 SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if args.releasable_fixture else 'joint_dual_g1_pinchtab_extended20mm.xml') if args.extended_tab else
              'joint_dual_g1_pinchtab_releasable_fixture.xml' if args.releasable_fixture else
@@ -195,6 +199,12 @@ try:
                                       for name,(verts,weights,offset) in material_targets.items()}
         ctrl, meta, _ = wbc.solve(d)
         d.ctrl[:] = ctrl
+        if args.pinch_bias_preset and (args.pinch_bias_until_s is None or d.time<args.pinch_bias_until_s):
+            bias={'balanced_a':{'THJ1':.1,'FFJ1':.1,'FFJ3':.1},
+                  'balanced_b':{'THJ1':.05,'THJ0':.05,'THJ3':-.05,'FFJ3':.05}}[args.pinch_bias_preset]
+            for token,amount in bias.items():
+                actuator=next(i for i in pinch_actuators if m.actuator(i).name.endswith(token))
+                d.ctrl[actuator]=np.clip(d.ctrl[actuator]+amount,*m.actuator_ctrlrange[actuator])
         mujoco.mj_forward(m,d)
         local_tip_force_correction_norm=0.
         if args.measured_tip_force_n is not None:
@@ -339,6 +349,8 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'edge_damping':args.edge_damping,
           'flex_tip_force_goal_n':args.flex_tip_force_n,
           'measured_tip_force_goal_n':args.measured_tip_force_n,
+          'pinch_bias_preset':args.pinch_bias_preset,
+          'pinch_bias_until_s':args.pinch_bias_until_s,
           'flex_sliding_friction':float(m.flex_friction[0,0]),
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
@@ -366,7 +378,11 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'max_joint_tracking_error_rad': max_tip_error,
           'final_joint_target_error_rad': float(np.max(np.abs(d.qpos[qa]-waypoints[-1, qa]))),
           'trace': trace}
-report['material_grasp_gate_pass'] = bool(error is None and d.time >= duration-1e-6 and
+report['external_end_fixture_removed_for_test'] = bool(not fixture_ids or
+    (args.fixture_release_s is not None and args.fixture_release_s <= duration-.2+1e-9 and
+     not any(d.eq_active[i] for i in fixture_ids)))
+report['material_grasp_gate_pass'] = bool(report['external_end_fixture_removed_for_test'] and
+    error is None and d.time >= duration-1e-6 and
     opposed_contact_count/steps >= .95 and edge_drift <= .003 and
     report['max_tip_to_material_slip_m'] <= .003 and max_pen <= .003)
 report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
@@ -376,6 +392,8 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_track_edge' if args.track_edge else '')+
                (f'_flexforce{args.flex_tip_force_n:g}' if args.flex_tip_force_n is not None else '')+
                (f'_measuredforce{args.measured_tip_force_n:g}' if args.measured_tip_force_n is not None else '')+
+               (f'_pinchbias{args.pinch_bias_preset}' if args.pinch_bias_preset else '')+
+               (f'_biasuntil{args.pinch_bias_until_s:g}s' if args.pinch_bias_until_s is not None else '')+
                (f'_friction{args.flex_friction:g}' if args.flex_friction is not None else '')+
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+

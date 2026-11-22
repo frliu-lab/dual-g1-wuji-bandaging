@@ -409,11 +409,18 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_friction0.4_stabilizedigits_fixture_release0.1s.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_friction1.2_stabilizedigits_fixture_release0.1s.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_friction2_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_pinch_control_authority_20ms.json',
+    'bandage_v0/joint_b_pinchtab_pinch_control_authority_100ms.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_pinchbiasbalanced_a_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_pinchbiasbalanced_b_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_pinchbiasbalanced_a_biasuntil0.1s_stabilizedigits_fixture_release0.1s.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_pinchbiasbalanced_b_biasuntil0.1s_stabilizedigits_fixture_release0.1s.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
     'work/bandage_hierarchy/README.md',
     'work/bandage_hierarchy/build_extended_pinchtab.py',
+    'work/bandage_hierarchy/probe_pinch_control_authority.py',
     'work/bandage_hierarchy/controller_router.py',
     'work/bandage_hierarchy/check_router.py',
     'work/bandage_hierarchy/build_scene.py',
