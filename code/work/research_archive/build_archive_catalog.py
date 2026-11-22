@@ -345,6 +345,14 @@ SELECTED = [
     'bandage_v0/joint_b_flex_free_edge_rrt_path.npz',
     'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout.json',
     'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_track_edge.json',
+    'bandage_v0/joint_flex_relaxation_diagnostic.json',
+    'bandage_v0/joint_b_flex_pinch_contact_geometry_audit.json',
+    'bandage_v0/joint_b_flex_index_closure_screen.json',
+    'bandage_v0/joint_b_flex_free_edge_reach_screen_ignore_collision_all_digits_tab1.5_offset15p0.json',
+    'bandage_v0/joint_b_flex_free_edge_reach_screen_all_digits_staged_tab1.5_offset15p0.json',
+    'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_damping2.json',
+    'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_damping20.json',
+    'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_track_edge_damping20.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -465,6 +473,9 @@ SOURCE_CODE = [
     'work/wuji_multiagent/check_flex_contact_jac.py',
     'work/wuji_multiagent/probe_joint_flex_wbc.py',
     'work/wuji_multiagent/rollout_joint_flex_wbc.py',
+    'work/bandage_hierarchy/diagnose_flex_relaxation.py',
+    'work/bandage_hierarchy/audit_flex_pinch_geometry.py',
+    'work/bandage_hierarchy/screen_flex_index_closure.py',
 ]
 
 

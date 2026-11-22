@@ -14,8 +14,10 @@ from joint_wbc import JointWBC
 OUT = ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser = argparse.ArgumentParser()
 parser.add_argument('--track-edge', action='store_true')
+parser.add_argument('--edge-damping', type=float, default=.2)
 args = parser.parse_args()
-SCENE = OUT/'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5.xml'
+suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
+SCENE = OUT/f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5{suffix}.xml'
 PATH = OUT/'joint_b_flex_free_edge_rrt_path.npz'
 m = mujoco.MjModel.from_xml_path(str(SCENE))
 d = mujoco.MjData(m)
@@ -109,6 +111,7 @@ except Exception as exc:
 steps = max(1, solves*interval)
 report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free tab; no force-closed grasp or completed wrap',
           'track_edge_tip_targets': args.track_edge,
+          'edge_damping':args.edge_damping,
           'duration_s': float(d.time), 'planned_duration_s': duration, 'control_solves': solves,
           'error': error, 'two_robot_two_foot_fraction': feet_count/steps,
           'flex_forearm_contact_fraction': flex_contact_count/steps,
@@ -117,6 +120,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'max_joint_tracking_error_rad': max_tip_error,
           'final_joint_target_error_rad': float(np.max(np.abs(d.qpos[qa]-waypoints[-1, qa]))),
           'trace': trace}
-(OUT/('joint_b_flex_free_edge_dynamic_path_rollout_track_edge.json' if args.track_edge else
-      'joint_b_flex_free_edge_dynamic_path_rollout.json')).write_text(json.dumps(report, indent=2)+'\n')
+report_name = ('joint_b_flex_free_edge_dynamic_path_rollout'+
+               ('_track_edge' if args.track_edge else '')+suffix+'.json')
+(OUT/report_name).write_text(json.dumps(report, indent=2)+'\n')
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))

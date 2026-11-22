@@ -94,7 +94,14 @@ for sign in (1.,-1.):
     fit=least_squares(residual,np.clip(fit_start,lo,hi),bounds=(lo,hi),max_nfev=200)
     tips,max_pen,robot_flex_pen=evaluate(fit.x)
     deep=[]
+    fingertip_flex_contacts={'thumb':[],'index':[]}
     for c in data.contact:
+        if any(f>=0 for f in c.flex):
+            contact_bodies=[model.body(model.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
+            for digit,token in (('thumb','r_thumb_tip_sensor_frame'),
+                                ('index','r_index_finger_tip_sensor_frame')):
+                if any(token in name for name in contact_bodies) and c.dist<.003:
+                    fingertip_flex_contacts[digit].append(c.frame[:3].copy())
         if c.dist>=-.003:continue
         geoms=[int(g) for g in c.geom if g>=0]
         bodies=[model.body(model.geom_bodyid[g]).name for g in geoms]
@@ -102,12 +109,18 @@ for sign in (1.,-1.):
             deep.append({'bodies':bodies,'flex':bool(any(f>=0 for f in c.flex)),
                          'penetration_m':-float(c.dist)})
     errors=np.linalg.norm(tips-goals,axis=1)
+    opposed=any(np.dot(a,b)<-.5 for a in fingertip_flex_contacts['thumb']
+                for b in fingertip_flex_contacts['index'])
     rows.append({'side_sign':sign,'optimizer_success':bool(fit.success),
                  'target_m':goals.tolist(),'tip_m':tips.tolist(),
                  'tip_errors_m':errors.tolist(),'max_nonfloor_robot_penetration_m':max_pen,
                  'max_robot_flex_penetration_m':robot_flex_pen,
+                 'thumb_tip_flex_contact_count':len(fingertip_flex_contacts['thumb']),
+                 'index_tip_flex_contact_count':len(fingertip_flex_contacts['index']),
+                 'opposed_tip_flex_normals':bool(opposed),
                  'worst_contacts':sorted(deep,key=lambda c:c['penetration_m'],reverse=True)[:8],
-                 'static_screen_pass':bool(max(errors)<.01 and max(max_pen,robot_flex_pen)<.003),
+                 'static_screen_pass':bool(max(errors)<.01 and max(max_pen,robot_flex_pen)<.003 and opposed),
+                 'reach_only_screen_pass':bool(max(errors)<.01 and max(max_pen,robot_flex_pen)<.003),
                  'joint_targets_rad':fit.x.tolist()})
 report={'scope':'Static B-right reach to flexible free edge; no motion trajectory or grasp force',
         'collision_ignored_in_objective':args.ignore_collision_in_objective,

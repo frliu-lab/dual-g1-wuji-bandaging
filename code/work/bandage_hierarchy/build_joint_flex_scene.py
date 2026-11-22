@@ -15,9 +15,10 @@ parser.add_argument('--radius',type=float,default=.052)
 parser.add_argument('--phase-deg',type=float,default=0.)
 parser.add_argument('--thickness-mm',type=float,default=2.)
 parser.add_argument('--tab-outreach',type=float,default=0.)
+parser.add_argument('--edge-damping',type=float,default=.2)
 args=parser.parse_args()
-if args.thickness_mm<=0 or args.tab_outreach<0:
-    parser.error('Thickness must be positive and tab outreach nonnegative')
+if args.thickness_mm<=0 or args.tab_outreach<0 or args.edge_damping<0:
+    parser.error('Thickness must be positive; tab outreach and damping nonnegative')
 screen=json.loads((OUT/'joint_b_reposition_static_screen.json').read_text())
 path=json.loads((OUT/'joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json').read_text())
 root=ET.parse(OUT/screen['scene']).getroot()
@@ -59,7 +60,7 @@ flex=ET.SubElement(flex_parent,'flexcomp',{'name':'joint_bandage_strip','type':'
     'point':' '.join(f'{x:.7f}' for x in points),
     'element':' '.join(map(str,triangles))})
 ET.SubElement(flex,'pin',{'id':'0 1'})
-ET.SubElement(flex,'edge',{'equality':'true','damping':'.2'})
+ET.SubElement(flex,'edge',{'equality':'true','damping':str(args.edge_damping)})
 ET.SubElement(flex,'contact',{'solref':'.0015 1','friction':'.8 .005 .0001',
                               'selfcollide':'none'})
 variant=(f'_radius{args.radius*1000:g}mm_phase{args.phase_deg:g}deg'
@@ -68,6 +69,8 @@ if args.thickness_mm!=2.:
     variant+=f'_thickness{args.thickness_mm:g}mm'
 if args.tab_outreach:
     variant+=f'_tab{args.tab_outreach:g}'
+if args.edge_damping!=.2:
+    variant+=f'_damping{args.edge_damping:g}'
 xml_path=OUT/f'joint_dual_g1_prewrapped_flex_scene{"_world_anchored" if args.world_anchored else ""}{variant}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
@@ -90,6 +93,7 @@ report={'scope':'Dual G1 plus prewrapped deformable strip static compile only; s
         'strip_radius_m':args.radius,'strip_phase_deg':args.phase_deg,
         'strip_collision_thickness_mm':args.thickness_mm,
         'tab_outreach':args.tab_outreach,
+        'edge_damping':args.edge_damping,
         'scene':xml_path.name,'nflex':model.nflex,'nflexvert':model.nflexvert,
         'robot_seed_qpos_length':len(seed),'compiled_nq':model.nq,
         'initial_flex_contacts':len(contacts),
