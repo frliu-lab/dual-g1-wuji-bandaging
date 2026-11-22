@@ -1,5 +1,6 @@
 """Collision-screened static path to the B-right loose-strip pinch candidate."""
 import json
+import argparse
 from pathlib import Path
 
 import mujoco
@@ -7,7 +8,12 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'outputs/wuji_multiagent/bandage_v0'
-SCENE = OUT / 'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5.xml'
+parser=argparse.ArgumentParser()
+parser.add_argument('--pinchtab',action='store_true')
+args=parser.parse_args()
+SCENE = OUT / ('joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab_bulged.xml'
+               if args.pinchtab else
+               'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5.xml')
 SOURCE = OUT / 'joint_b_flex_free_edge_reach_screen_all_digits_staged_tab1.5_indexrow28_offset20p0_cap2p5.json'
 model = mujoco.MjModel.from_xml_path(str(SCENE))
 data = mujoco.MjData(model)
@@ -19,6 +25,15 @@ names = screen['joint_names']
 qa = np.array([model.joint(name).qposadr[0] for name in names])
 start = base[qa].copy()
 goal = np.array(screen['results'][0]['joint_targets_rad'])
+if args.pinchtab:
+    pregrasp=json.loads((OUT/'joint_b_pinchtab_safe_start_screen.json').read_text())
+    assert pregrasp['joint_names']==names
+    start=np.asarray(pregrasp['results'][0]['joint_targets_rad'])
+    hand=json.loads((OUT/'joint_b_natural_pinch_workspace_screen.json').read_text())
+    candidate=next(row for row in hand['results'] if row['base']=='reach' and row['trial']==4)
+    lookup={name:i for i,name in enumerate(names)}
+    for name,value in zip(hand['joint_names'],candidate['joint_targets_rad']):
+        goal[lookup[name]]=value
 joint_ids = [model.joint(name).id for name in names]
 lo = np.array([model.jnt_range[i, 0] for i in joint_ids])
 hi = np.array([model.jnt_range[i, 1] for i in joint_ids])
@@ -47,7 +62,7 @@ def clear(q):
     worst_checked = max(worst_checked, worst)
     return worst < .003
 
-def edge(a, b, resolution=.035):
+def edge(a, b, resolution=.015):
     n = max(1, int(np.ceil(np.max(np.abs(b-a)) / resolution)))
     return all(clear(a+(b-a)*u) for u in np.linspace(1/n, 1, n))
 
@@ -119,18 +134,21 @@ if found is not None:
     dense_ok = all(edge(a, b, .015) for a, b in zip(found, found[1:]))
     path = np.repeat(base[None, :], len(found), axis=0)
     path[:, qa] = found
-    np.savez_compressed(OUT/'joint_b_flex_free_edge_rrt_path.npz', qpos=path, joint_names=names)
+    np.savez_compressed(OUT/('joint_b_pinchtab_rrt_path.npz' if args.pinchtab else
+                             'joint_b_flex_free_edge_rrt_path.npz'), qpos=path, joint_names=names)
 else:
     dense_ok = False
 
 report = {
     'scope': 'Static B-right 25-joint path with flexible strip frozen; no dynamic grip or wrapping claim',
     'scene': SCENE.name, 'source_screen': SOURCE.name,
+    'pinchtab':args.pinchtab,
     'start_valid': bool(start_ok), 'goal_valid': bool(goal_ok),
     'found_path': found is not None, 'dense_recheck_passed': bool(dense_ok),
     'iterations': iterations, 'collision_checks': checks,
     'raw_waypoints': raw, 'waypoints': len(found) if found is not None else 0,
     'max_penetration_seen_among_all_samples_m': worst_checked,
 }
-(OUT/'joint_b_flex_free_edge_rrt_report.json').write_text(json.dumps(report, indent=2)+'\n')
+(OUT/('joint_b_pinchtab_rrt_report.json' if args.pinchtab else
+      'joint_b_flex_free_edge_rrt_report.json')).write_text(json.dumps(report, indent=2)+'\n')
 print(json.dumps(report))

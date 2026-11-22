@@ -27,6 +27,7 @@ class JointWBC:
   self.tip_position_weight=1000.
   self.spool_contact_normal_goal_n=None
   self.tail_proxy_digit_normal_goal_n=None
+  self.flex_tip_normal_goal_n=None
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
   self.b_handle_lift_min_n=None
@@ -239,6 +240,18 @@ class JointWBC:
    for entries in tail_contacts.values():
     for k in entries:
      goals[k*3]=self.tail_proxy_digit_normal_goal_n/len(entries)
+     forceweight[k*3]=5.
+  if self.flex_tip_normal_goal_n is not None:
+   if not np.isfinite(self.flex_tip_normal_goal_n) or self.flex_tip_normal_goal_n<0:
+    raise ValueError('Flex tip normal force goal must be finite and nonnegative')
+   for digit in ('r_thumb_tip_sensor_frame','r_index_finger_tip_sensor_frame'):
+    entries=[]
+    for k,(ga,gb) in enumerate(ids):
+     if not any(flex_id>=0 for flex_id in d.contact[self.contact_indices[k]].flex):continue
+     names=(m.body(m.geom_bodyid[ga]).name,m.body(m.geom_bodyid[gb]).name)
+     if any(name.endswith(digit) and name.startswith('g1_b/wuji_right/') for name in names):entries.append(k)
+    for k in entries:
+     goals[k*3]=self.flex_tip_normal_goal_n/len(entries)
      forceweight[k*3]=5.
   if self.b_handle_lift_force_goal_n is not None:
    if not np.isfinite(self.b_handle_lift_force_goal_n) or self.b_handle_lift_force_goal_n<0:

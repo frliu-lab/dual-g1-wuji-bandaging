@@ -16,9 +16,13 @@ parser.add_argument('--phase-deg',type=float,default=0.)
 parser.add_argument('--thickness-mm',type=float,default=2.)
 parser.add_argument('--tab-outreach',type=float,default=0.)
 parser.add_argument('--edge-damping',type=float,default=.2)
+parser.add_argument('--tab-pinch-candidate',action='store_true',
+                    help='Route the loose tab through the measured B-right fingertip surface gap')
 args=parser.parse_args()
 if args.thickness_mm<=0 or args.tab_outreach<0 or args.edge_damping<0:
     parser.error('Thickness must be positive; tab outreach and damping nonnegative')
+if args.tab_pinch_candidate and not args.world_anchored:
+    parser.error('Pinch-tab construction requires --world-anchored')
 screen=json.loads((OUT/'joint_b_reposition_static_screen.json').read_text())
 path=json.loads((OUT/'joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json').read_text())
 root=ET.parse(OUT/screen['scene']).getroot()
@@ -54,6 +58,34 @@ for i in range(33):
     if i:
         a=2*(i-1);b=2*i
         triangles.extend((a,a+1,b,a+1,b+1,b))
+if args.tab_pinch_candidate:
+    surface_report=json.loads((OUT/'joint_b_natural_pinch_surface_gap_audit.json').read_text())
+    match=next(row for row in surface_report['candidates']
+               if row['base']=='reach' and row['trial']==4)
+    pair=np.asarray(match['nearest_pair']['nearest_points_m'])
+    target=pair.mean(axis=0)
+    desired_normal=pair[1]-pair[0]
+    desired_normal/=np.linalg.norm(desired_normal)
+    p=np.asarray(points).reshape(33,2,3)
+    old_centers=p.mean(axis=1)
+    p0=old_centers[25].copy()
+    d0=7*(old_centers[26]-old_centers[25])
+    tangent=np.array([0.,1.,0.])
+    tangent-=np.dot(tangent,desired_normal)*desired_normal
+    tangent/=np.linalg.norm(tangent)
+    d1=7*.015*tangent
+    width0=p[25,1]-p[25,0]
+    width1=np.cross(desired_normal,tangent)
+    width1*=np.linalg.norm(width0)/np.linalg.norm(width1)
+    for i in range(26,33):
+        t=(i-25)/7
+        center=((2*t**3-3*t**2+1)*p0+(t**3-2*t**2+t)*d0+
+                (-2*t**3+3*t**2)*target+(t**3-t**2)*d1)
+        width=(1-t)*width0+t*width1
+        width*=np.linalg.norm(width0)/np.linalg.norm(width)
+        p[i,0]=center-.5*width
+        p[i,1]=center+.5*width
+    points=p.reshape(-1).tolist()
 flex_parent=root.find('worldbody') if args.world_anchored else forearm
 flex=ET.SubElement(flex_parent,'flexcomp',{'name':'joint_bandage_strip','type':'direct',
     'dim':'2','mass':'.025','radius':str(args.thickness_mm/1000),'rgba':'.95 .9 .75 1',
@@ -71,6 +103,8 @@ if args.tab_outreach:
     variant+=f'_tab{args.tab_outreach:g}'
 if args.edge_damping!=.2:
     variant+=f'_damping{args.edge_damping:g}'
+if args.tab_pinch_candidate:
+    variant+='_pinchtab'
 xml_path=OUT/f'joint_dual_g1_prewrapped_flex_scene{"_world_anchored" if args.world_anchored else ""}{variant}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
@@ -94,6 +128,7 @@ report={'scope':'Dual G1 plus prewrapped deformable strip static compile only; s
         'strip_collision_thickness_mm':args.thickness_mm,
         'tab_outreach':args.tab_outreach,
         'edge_damping':args.edge_damping,
+        'tab_pinch_candidate':args.tab_pinch_candidate,
         'scene':xml_path.name,'nflex':model.nflex,'nflexvert':model.nflexvert,
         'robot_seed_qpos_length':len(seed),'compiled_nq':model.nq,
         'initial_flex_contacts':len(contacts),

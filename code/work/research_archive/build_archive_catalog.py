@@ -353,6 +353,21 @@ SELECTED = [
     'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_damping2.json',
     'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_damping20.json',
     'bandage_v0/joint_b_flex_free_edge_dynamic_path_rollout_track_edge_damping20.json',
+    'bandage_v0/joint_b_natural_pinch_workspace_screen.json',
+    'bandage_v0/joint_b_natural_pinch_surface_gap_audit.json',
+    'bandage_v0/joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab_bulged.xml',
+    'bandage_v0/joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab.xml',
+    'bandage_v0/joint_dual_g1_prewrapped_flex_scene_check_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab.json',
+    'bandage_v0/joint_b_pinchtab_static_contact_audit.json',
+    'bandage_v0/joint_b_pinchtab_bulge_sweep.json',
+    'bandage_v0/joint_b_pinchtab_bulged_static_contact_audit.json',
+    'bandage_v0/joint_b_pinchtab_safe_start_screen.json',
+    'bandage_v0/joint_b_pinchtab_rrt_report.json',
+    'bandage_v0/joint_b_pinchtab_rrt_path.npz',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_flexforce0.2.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_flexforce1.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
@@ -476,6 +491,11 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/diagnose_flex_relaxation.py',
     'work/bandage_hierarchy/audit_flex_pinch_geometry.py',
     'work/bandage_hierarchy/screen_flex_index_closure.py',
+    'work/bandage_hierarchy/screen_natural_pinch_workspace.py',
+    'work/bandage_hierarchy/audit_pinch_surface_gap.py',
+    'work/bandage_hierarchy/audit_pinchtab_static.py',
+    'work/bandage_hierarchy/search_pinchtab_bulge.py',
+    'work/bandage_hierarchy/search_pinchtab_safe_start.py',
 ]
 
 
