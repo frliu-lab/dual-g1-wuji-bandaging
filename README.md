@@ -151,3 +151,5 @@ B 左手多起点 IK 中，[种子 1](media/bandage_v0/joint_spool_grasp_static_
 [直接 QP 任意任务行数检查](code/work/wuji_multiagent/check_direct_task_weights.py)使用两行任务而非六行整手任务，验证权重 `[1,1]` 和 `[1,10]` 的解析解分别约为 0.3333、0.9804；两者都与求解输出一致。这覆盖了原先把额外指尖任务静默当成一只手的漏洞。
 
 **带端质量与摩擦条件验证：** [12 组统一汇总](media/bandage_v0/joint_b_tail_physical_sweep.json)覆盖代理质量 0.5–20 g、滑动摩擦系数 0.5–2.0，并含撤架反事实，**0/12 通过**短时代理抓持门槛。2 g、摩擦 1.0、有支架时相向接触占比 62.4%、位移 8.4 mm，仍未达到 90% 和 5 mm 门槛；2.2 g 时相向占比骤降到 8%，表明该改善对参数不稳健。[2 g 撤架试验](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_mass2g_mu1_gap_no_rest.json)只有 8.8% 相向接触，带端滑移 0.638 m。没有实测质量和摩擦，也没有柔性绷带模型；这些结果只能界定代理问题，不能外推实机。
+
+**固定世界坐标的再捕获任务：** 条件切换到随带端中心平移、但不随带端旋转的双指尖目标，意在抵抗端部滚动。[13 组权重、质量和撤架对照](media/bandage_v0/joint_b_tail_reacquire_sweep.json)仍 **0/13 通过**。8 g、有支架时权重 10 的相向接触 40.8%、带端位移 7.9 mm，较原间隙反馈有所改善，但远未达到 90% 与 5 mm；2 g 时相同策略降为 30.4%、9.3 mm。[8 g 撤架复测](media/bandage_v0/joint_b_tail_dynamic_proxy_grasp_pilot_7mm_tip_pinch_rank0_gap_reacquire_w10p0_fixed_world_no_rest.json)只有 9.4% 相向接触，位移 0.450 m。该方法仍依赖支架，不能进入真实绷带缠绕。

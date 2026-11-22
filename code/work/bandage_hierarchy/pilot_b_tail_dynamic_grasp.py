@@ -33,6 +33,7 @@ parser.add_argument('--measured-force-target-n',type=float,default=.5)
 parser.add_argument('--measured-force-gain',type=float,default=.003)
 parser.add_argument('--normal-gated-force-servo',action='store_true')
 parser.add_argument('--reacquire-tip-servo',action='store_true')
+parser.add_argument('--reacquire-fixed-world-offset',action='store_true')
 args=parser.parse_args()
 if args.proxy_mass_g<=0 or args.proxy_friction<=0:
     parser.error('Proxy mass and friction must be positive')
@@ -184,7 +185,8 @@ for _ in range(round(duration/.02)):
             if previous_opposing_fraction<.5:
                 tab_now=data.xpos[tab_id].copy()
                 tab_rotation=data.xmat[tab_id].reshape(3,3)
-                wbc.tip_position_targets={model.body(bid).name:tab_now+tab_rotation@tip_local_offsets[digit]
+                wbc.tip_position_targets={model.body(bid).name:tab_now+
+                    (tip_offsets[digit] if args.reacquire_fixed_world_offset else tab_rotation@tip_local_offsets[digit])
                     for digit,bid in tip_bodies.items()}
             else:
                 wbc.tip_position_targets={}
@@ -296,6 +298,7 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'measured_force_gain':args.measured_force_gain if args.measured_force_servo else None,
         'normal_gated_force_servo':args.normal_gated_force_servo,
         'reacquire_tip_servo':args.reacquire_tip_servo,
+        'reacquire_fixed_world_offset':args.reacquire_fixed_world_offset,
         'has_tail_rest':not args.no_rest,
         'tip_pinch_rank':args.tip_pinch_rank if tip_pinch else None,
         'tip_tilt_deg':args.tip_tilt_deg if tip_pinch else None,
@@ -314,5 +317,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{physical_suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_reacquire_w"+str(args.tip_weight).replace(".","p") if args.reacquire_tip_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{physical_suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_reacquire_w"+str(args.tip_weight).replace(".","p") if args.reacquire_tip_servo else ""}{"_fixed_world" if args.reacquire_fixed_world_offset else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
