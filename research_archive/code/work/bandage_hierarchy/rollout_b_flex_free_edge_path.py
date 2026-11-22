@@ -21,6 +21,7 @@ parser.add_argument('--extended-tab',action='store_true')
 parser.add_argument('--start-at-goal',action='store_true')
 parser.add_argument('--duration-s',type=float,default=1.)
 parser.add_argument('--flex-tip-force-n',type=float,default=None)
+parser.add_argument('--measured-tip-force-n',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
 parser.add_argument('--stabilize-other-digits',action='store_true')
@@ -38,6 +39,8 @@ if args.extended_tab and (not args.pinchtab or not args.start_at_goal):
     parser.error('--extended-tab requires --pinchtab --start-at-goal; the existing path has a different flex state')
 if args.fixture_release_s is not None and not args.releasable_fixture:
     parser.error('--fixture-release-s requires --releasable-fixture')
+if args.measured_tip_force_n is not None and (args.measured_tip_force_n<=0 or not args.pinchtab):
+    parser.error('--measured-tip-force-n requires a positive force and --pinchtab')
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
 SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if args.releasable_fixture else 'joint_dual_g1_pinchtab_extended20mm.xml') if args.extended_tab else
              'joint_dual_g1_pinchtab_releasable_fixture.xml' if args.releasable_fixture else
@@ -64,6 +67,8 @@ mujoco.mj_forward(m, d)
 tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
              'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
 tip_ids=[m.body(name).id for name in tip_names]
+pinch_actuators=[i for i in range(m.nu) if m.actuator(i).name.startswith('g1_b/wuji_right/r_') and
+                 any(token in m.actuator(i).name for token in ('THJ','FFJ'))]
 thumb_tip_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==tip_ids[0]]
 index_tip_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==tip_ids[1]]
 initial_tip_positions=np.array([d.xpos[bid].copy() for bid in tip_ids])
@@ -155,6 +160,9 @@ max_tip_error = 0.0
 feet_count = 0
 flex_contact_count = 0
 opposed_contact_count = 0
+tip_normal_impulse_ns={'thumb':0.,'index':0.}
+tip_peak_single_contact_normal_force_n={'thumb':0.,'index':0.}
+tip_shear_impulse_ns={'thumb':0.,'index':0.}
 edge_drift = 0.0
 solves = 0
 error = None
@@ -183,6 +191,36 @@ try:
         ctrl, meta, _ = wbc.solve(d)
         d.ctrl[:] = ctrl
         mujoco.mj_forward(m,d)
+        local_tip_force_correction_norm=0.
+        if args.measured_tip_force_n is not None:
+            def measured_tip_forces():
+                forces=np.zeros(2)
+                for ci,c in enumerate(d.contact):
+                    if not any(f>=0 for f in c.flex):continue
+                    bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
+                    for digit,body in enumerate(tip_names):
+                        if body in bodies:
+                            wrench=np.zeros(6);mujoco.mj_contactForce(m,d,ci,wrench)
+                            forces[digit]+=max(0.,float(wrench[0]))
+                return forces
+            base=measured_tip_forces()
+            columns=[]
+            for actuator in pinch_actuators:
+                old=float(d.ctrl[actuator])
+                d.ctrl[actuator]=np.clip(old+.01,*m.actuator_ctrlrange[actuator])
+                mujoco.mj_forward(m,d)
+                columns.append((measured_tip_forces()-base)/max(float(d.ctrl[actuator]-old),1e-9))
+                d.ctrl[actuator]=old
+            mujoco.mj_forward(m,d)
+            jac=np.asarray(columns).T
+            if np.all(np.isfinite(jac)):
+                delta=jac.T@np.linalg.solve(jac@jac.T+.01*np.eye(2),
+                    np.maximum(0.,args.measured_tip_force_n-base))
+                delta=np.clip(delta,-.05,.05)
+                for actuator,adjustment in zip(pinch_actuators,delta):
+                    d.ctrl[actuator]=np.clip(d.ctrl[actuator]+adjustment,*m.actuator_ctrlrange[actuator])
+                local_tip_force_correction_norm=float(np.linalg.norm(delta))
+                mujoco.mj_forward(m,d)
         pre_step_wrist_actual_acceleration=float(d.qacc[wrist_vadr])
         pre_step_wrist_actual_constraint_force=float(d.qfrc_constraint[wrist_vadr])
         wrist_control_correction=0.
@@ -214,7 +252,7 @@ try:
             feet = {'a': set(), 'b': set()}
             has_forearm_flex = False
             tip_normals={'thumb':[],'index':[]}
-            for c in d.contact:
+            for ci,c in enumerate(d.contact):
                 geoms = [int(g) for g in c.geom if g >= 0]
                 names = [m.geom(g).name for g in geoms]
                 bodies = [m.body(m.geom_bodyid[g]).name for g in geoms]
@@ -222,10 +260,15 @@ try:
                 if flex and 'training_forearm_dynamic' in bodies:
                     has_forearm_flex = True
                 if flex and c.dist<.003:
-                    if any('g1_b/wuji_right/r_thumb_tip_sensor_frame'==n for n in bodies):
-                        tip_normals['thumb'].append(c.frame[:3].copy())
-                    if any('g1_b/wuji_right/r_index_finger_tip_sensor_frame'==n for n in bodies):
-                        tip_normals['index'].append(c.frame[:3].copy())
+                    for digit,body_name in (('thumb',tip_names[0]),('index',tip_names[1])):
+                        if body_name in bodies:
+                            tip_normals[digit].append(c.frame[:3].copy())
+                            wrench=np.zeros(6)
+                            mujoco.mj_contactForce(m,d,ci,wrench)
+                            normal=max(0.,float(wrench[0]))
+                            tip_normal_impulse_ns[digit]+=normal*m.opt.timestep
+                            tip_shear_impulse_ns[digit]+=float(np.linalg.norm(wrench[1:3]))*m.opt.timestep
+                            tip_peak_single_contact_normal_force_n[digit]=max(tip_peak_single_contact_normal_force_n[digit],normal)
                 if c.dist < 0 and 'floor' not in names and any(n.startswith('g1_b/') for n in bodies):
                     max_pen = max(max_pen, -float(c.dist))
                     interval_max_pen=max(interval_max_pen,-float(c.dist))
@@ -253,6 +296,8 @@ try:
             for name,(verts,weights,_) in material_targets.items()}
         max_tip_error = max(max_tip_error, tip_error)
         trace.append({'time_s': float(d.time), 'path_progress': float(smooth),
+                      'predicted_tip_contact_force_n':{name:float(wbc.last_flex_tip_predicted_force_n.get(tip_names[i],0.)) for i,name in enumerate(('thumb','index'))},
+                      'local_tip_force_correction_norm':local_tip_force_correction_norm,
                       'max_joint_tracking_error_rad': tip_error,
                       'thumb_index_surface_gap_m':thumb_index_surface_gap,
                       'tip_displacement_m':tip_displacements,
@@ -288,6 +333,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'start_at_goal':args.start_at_goal,
           'edge_damping':args.edge_damping,
           'flex_tip_force_goal_n':args.flex_tip_force_n,
+          'measured_tip_force_goal_n':args.measured_tip_force_n,
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
           'stabilize_other_digits':args.stabilize_other_digits,
@@ -307,6 +353,9 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'opposed_b_tip_flex_contact_fraction':opposed_contact_count/steps,
           'max_b_nonfloor_penetration_m': max_pen,
           'max_free_edge_drift_m': edge_drift,
+          'mean_tip_normal_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in tip_normal_impulse_ns.items()},
+          'peak_single_contact_normal_force_n':tip_peak_single_contact_normal_force_n,
+          'mean_tip_shear_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in tip_shear_impulse_ns.items()},
           'max_tip_to_material_slip_m': max((max(item.get('tip_to_material_relative_shift_m',{}).values(),default=0.) for item in trace),default=0.),
           'max_joint_tracking_error_rad': max_tip_error,
           'final_joint_target_error_rad': float(np.max(np.abs(d.qpos[qa]-waypoints[-1, qa]))),
@@ -320,6 +369,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_extended20mm' if args.extended_tab else '')+
                ('_track_edge' if args.track_edge else '')+
                (f'_flexforce{args.flex_tip_force_n:g}' if args.flex_tip_force_n is not None else '')+
+               (f'_measuredforce{args.measured_tip_force_n:g}' if args.measured_tip_force_n is not None else '')+
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+
                ('_stabilizedigits' if args.stabilize_other_digits else '')+
