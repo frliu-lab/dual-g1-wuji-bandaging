@@ -171,6 +171,7 @@ for _ in range(round(duration/.02)):
         interval_opposing=0
         contact_bodies={'thumb':{},'index':{}}
         interval_normal_dot=[]
+        interval_force_n={'thumb':[],'index':[]}
         for _ in range(interval):
             mujoco.mj_step(model,data)
             if not np.all(np.isfinite(data.qpos)):
@@ -178,7 +179,8 @@ for _ in range(round(duration/.02)):
             max_tab_drift=max(max_tab_drift,float(np.linalg.norm(
                 data.xpos[model.body('bandage_tail_dynamic_proxy').id]-initial_tab)))
             normals={'thumb':[],'index':[]};floor=set()
-            for c in data.contact:
+            step_force_n={'thumb':0.,'index':0.}
+            for contact_id,c in enumerate(data.contact):
                 names=[model.geom(g).name for g in c.geom]
                 bodies=[model.body(model.geom_bodyid[g]).name for g in c.geom]
                 if 'floor' in names:
@@ -196,12 +198,18 @@ for _ in range(round(duration/.02)):
                         if args.contact_audit:
                             finger_body=next(n for n in bodies if n.startswith(f'g1_b/wuji_right/r_{digit}_'))
                             contact_bodies[digit][finger_body]=contact_bodies[digit].get(finger_body,0)+1
+                            contact_force=np.zeros(6)
+                            mujoco.mj_contactForce(model,data,contact_id,contact_force)
+                            step_force_n[digit]+=max(0.,float(contact_force[0]))
             for digit in normals:
                 fractions[digit]+=bool(normals[digit])
                 interval_contacts[digit]+=bool(normals[digit])
             is_opposing=any(float(np.dot(a,b))<-.5 for a in normals['thumb'] for b in normals['index'])
             if args.contact_audit and normals['thumb'] and normals['index']:
                 interval_normal_dot.append(min(float(np.dot(a,b)) for a in normals['thumb'] for b in normals['index']))
+            if args.contact_audit:
+                for digit in step_force_n:
+                    interval_force_n[digit].append(step_force_n[digit])
             fractions['opposing']+=is_opposing
             interval_opposing+=is_opposing
             fractions['two_feet']+=floor=={'left','right'}
@@ -216,7 +224,9 @@ for _ in range(round(duration/.02)):
                               'opposing_fraction':interval_opposing/interval,
                               **({'contact_body_counts':contact_bodies,
                                   'min_contact_normal_dot':min(interval_normal_dot) if interval_normal_dot else None,
-                                  'mean_min_contact_normal_dot':float(np.mean(interval_normal_dot)) if interval_normal_dot else None}
+                                  'mean_min_contact_normal_dot':float(np.mean(interval_normal_dot)) if interval_normal_dot else None,
+                                  'mean_contact_normal_force_n':{k:float(np.mean(v)) for k,v in interval_force_n.items()},
+                                  'peak_contact_normal_force_n':{k:float(np.max(v)) for k,v in interval_force_n.items()}}
                                  if args.contact_audit else {})})
     except Exception as exc:
         error=f'{type(exc).__name__}: {exc}'
