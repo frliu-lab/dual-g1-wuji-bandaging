@@ -12,6 +12,8 @@ ROOT=Path(__file__).resolve().parents[2]
 OUT=ROOT/'outputs/wuji_multiagent/bandage_v0'
 parser=argparse.ArgumentParser()
 parser.add_argument('--radius',type=float,default=.009)
+parser.add_argument('--proxy-mass-g',type=float,default=8.)
+parser.add_argument('--proxy-friction',type=float,default=1.)
 parser.add_argument('--tip-servo',action='store_true')
 parser.add_argument('--direct-tip-solver',action='store_true')
 parser.add_argument('--squeeze-mm',type=float,default=1.)
@@ -32,6 +34,8 @@ parser.add_argument('--measured-force-gain',type=float,default=.003)
 parser.add_argument('--normal-gated-force-servo',action='store_true')
 parser.add_argument('--reacquire-tip-servo',action='store_true')
 args=parser.parse_args()
+if args.proxy_mass_g<=0 or args.proxy_friction<=0:
+    parser.error('Proxy mass and friction must be positive')
 if args.optimized_tip_seed and args.tip_pinch_seed:
     parser.error('Choose one alternate seed')
 sys.path.insert(0,str(ROOT/'work/wuji_multiagent'))
@@ -40,6 +44,8 @@ from joint_wbc import JointWBC
 screen=json.loads((OUT/'joint_b_reposition_static_screen.json').read_text())
 path=json.loads((OUT/'joint_b_planted_transition_synchronous_refined_lowered10mm_kinematic_audit.json').read_text())
 suffix=f'_{round(args.radius*1000):g}mm' if args.radius!=.009 else ''
+physical_suffix=(f'_mass{args.proxy_mass_g:g}g_mu{args.proxy_friction:g}'
+                 if args.proxy_mass_g!=8. or args.proxy_friction!=1. else '')
 seed=json.loads((OUT/f'joint_b_tail_static_proxy_contact_fine_screen{suffix}.json').read_text())['best_candidates'][0]
 tip_ik=None
 tip_pinch=None
@@ -61,13 +67,14 @@ if not args.no_rest:
     ET.SubElement(world,'geom',{'name':'bandage_tail_rest','type':'cylinder',
                                 'pos':f'{pos[0]} {pos[1]} {pos[2]-(.029 if tip_pinch else .028 if tip_ik else .024)}',
                                 'size':f'.005 {(.014 if tip_ik or tip_pinch else .017)}','rgba':'.45 .47 .50 1',
-                                'friction':'1 .005 .0001'})
+                                'friction':f'{args.proxy_friction} .005 .0001'})
 tab=ET.SubElement(world,'body',{'name':'bandage_tail_dynamic_proxy',
                                 'pos':' '.join(map(str,pos))})
 ET.SubElement(tab,'freejoint',{'name':'bandage_tail_proxy_free'})
 ET.SubElement(tab,'geom',{'name':'bandage_tail_proxy_contact','type':'cylinder',
                           'quat':' '.join(map(str,geom_quat)),'size':f'{args.radius} .025',
-                          'mass':'.008','rgba':'.95 .89 .70 1','friction':'1 .005 .0001'})
+                          'mass':str(args.proxy_mass_g/1000),'rgba':'.95 .89 .70 1',
+                          'friction':f'{args.proxy_friction} .005 .0001'})
 ET.SubElement(tab,'site',{'name':'bandage_tail_proxy_anchor','size':'.002'})
 tendon=root.find('tendon')
 line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':'.007',
@@ -76,7 +83,7 @@ line=ET.SubElement(tendon,'spatial',{'name':'bandage_tail_proxy_tether','width':
                                         pos-np.array([.38,-.44,.702]))))})
 ET.SubElement(line,'site',{'site':'bandage_spool_anchor'})
 ET.SubElement(line,'site',{'site':'bandage_tail_proxy_anchor'})
-xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_w"+str(args.tip_weight) if args.tip_servo else ""}{"_no_rest" if args.no_rest else ""}.xml'
+xml_path=OUT/f'joint_b_tail_dynamic_proxy_variant{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{physical_suffix}{"_tip_w"+str(args.tip_weight) if args.tip_servo else ""}{"_no_rest" if args.no_rest else ""}.xml'
 ET.ElementTree(root).write(xml_path,encoding='utf8',xml_declaration=True)
 model=mujoco.MjModel.from_xml_path(str(xml_path))
 data=mujoco.MjData(model)
@@ -277,6 +284,7 @@ for _ in range(round(duration/.02)):
         break
 den=max(1,steps*interval)
 report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flexible cloth or wrapping',
+        'proxy_mass_g':args.proxy_mass_g,'proxy_friction':args.proxy_friction,
         'seed':seed,'initial_tail_contacts':initial_tail_contacts,
         'optimized_tip_seed':args.optimized_tip_seed,
         'tip_pinch_seed':args.tip_pinch_seed,
@@ -306,5 +314,5 @@ report={'scope':'Dynamic rigid tail proxy with massless tendon to spool; no flex
         'max_tail_center_drift_m':max_tab_drift,
         'max_b_nonfloor_penetration_m':max_pen,
         'finite_state':bool(np.all(np.isfinite(data.qpos)) and np.all(np.isfinite(data.qvel)))}
-(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_reacquire_w"+str(args.tip_weight).replace(".","p") if args.reacquire_tip_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/f'joint_b_tail_dynamic_proxy_grasp_pilot{suffix}{"_optimized_tip" if tip_ik else f"_tip_pinch_rank{args.tip_pinch_rank}" if tip_pinch else ""}{tilt_suffix if tip_pinch else ""}{physical_suffix}{"_tip_servo" if args.tip_servo else ""}{f"_{args.squeeze_mm:g}mm_w{args.tip_weight:g}" if args.tip_servo else ""}{"_direct" if args.direct_tip_solver else ""}{f"_force{args.normal_goal_n:g}n" if args.normal_goal_n is not None else ""}{"_pose" if args.pose_servo else ""}{"_gap" if args.gap_servo else ""}{"_measured_force"+str(args.measured_force_target_n).replace(".","p")+"_gain"+str(args.measured_force_gain).replace(".","p") if args.measured_force_servo else ""}{"_normal_gate" if args.normal_gated_force_servo else ""}{"_reacquire_w"+str(args.tip_weight).replace(".","p") if args.reacquire_tip_servo else ""}{"_right_position" if args.right_hand_position_mode else ""}{"_no_rest" if args.no_rest else ""}{"_contact_audit" if args.contact_audit else ""}.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
