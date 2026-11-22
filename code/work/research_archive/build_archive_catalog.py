@@ -368,6 +368,8 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_flexforce0.2.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_flexforce1.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_wristweight100.json',
+    'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_wristweight500.json',
 ]
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',

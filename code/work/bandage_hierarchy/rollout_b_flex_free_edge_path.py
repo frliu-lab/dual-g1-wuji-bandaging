@@ -19,6 +19,7 @@ parser.add_argument('--pinchtab',action='store_true')
 parser.add_argument('--start-at-goal',action='store_true')
 parser.add_argument('--duration-s',type=float,default=1.)
 parser.add_argument('--flex-tip-force-n',type=float,default=None)
+parser.add_argument('--wrist-weight',type=float,default=None)
 args = parser.parse_args()
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
 SCENE = OUT/(f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab_bulged.xml'
@@ -33,6 +34,9 @@ waypoints = path_file['qpos']
 joint_names = [str(s) for s in path_file['joint_names']]
 qa = np.array([m.joint(s).qposadr[0] for s in joint_names])
 va = np.array([m.joint(s).dofadr[0] for s in joint_names])
+wrist_joint=m.joint('g1_b/right_wrist_roll_joint').id
+wrist_qadr=int(m.jnt_qposadr[wrist_joint]);wrist_vadr=int(m.jnt_dofadr[wrist_joint])
+wrist_actuator=int(np.flatnonzero(m.actuator_trnid[:,0]==wrist_joint)[0])
 d.qpos[:] = waypoints[-1 if args.start_at_goal else 0]
 mujoco.mj_forward(m, d)
 
@@ -46,6 +50,8 @@ def relevant_contact(model, c):
 wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_contact)
 wbc.backend = 'DIRECT'
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
+if args.wrist_weight is not None:
+    wbc.weights[wrist_vadr]=args.wrist_weight
 interval = round(.02/m.opt.timestep)
 duration = args.duration_s
 initial_edge = d.flexvert_xpos[64:66].mean(axis=0).copy()
@@ -85,6 +91,8 @@ try:
         ctrl, meta, _ = wbc.solve(d)
         d.ctrl[:] = ctrl
         solves += 1
+        interval_opposed = 0
+        interval_max_pen = 0.
         for _ in range(interval):
             mujoco.mj_step(m, d)
             if not np.all(np.isfinite(d.qpos)):
@@ -106,6 +114,7 @@ try:
                         tip_normals['index'].append(c.frame[:3].copy())
                 if c.dist < 0 and 'floor' not in names and any(n.startswith('g1_b/') for n in bodies):
                     max_pen = max(max_pen, -float(c.dist))
+                    interval_max_pen=max(interval_max_pen,-float(c.dist))
                 if 'floor' in names:
                     for agent in ('a', 'b'):
                         for side in ('left', 'right'):
@@ -113,12 +122,25 @@ try:
                                 feet[agent].add(side)
             feet_count += all(feet[a] == {'left', 'right'} for a in ('a', 'b'))
             flex_contact_count += has_forearm_flex
-            opposed_contact_count += any(np.dot(a,b)<-.5 for a in tip_normals['thumb'] for b in tip_normals['index'])
+            opposed_here=any(np.dot(a,b)<-.5 for a in tip_normals['thumb'] for b in tip_normals['index'])
+            opposed_contact_count += opposed_here
+            interval_opposed += opposed_here
             edge_drift = max(edge_drift, float(np.linalg.norm(d.flexvert_xpos[64:66].mean(axis=0)-initial_edge)))
         tip_error = float(np.max(np.abs(d.qpos[qa]-wbc.qref[qa])))
         max_tip_error = max(max_tip_error, tip_error)
         trace.append({'time_s': float(d.time), 'path_progress': float(smooth),
                       'max_joint_tracking_error_rad': tip_error,
+                      'worst_joint_name':joint_names[int(np.argmax(np.abs(d.qpos[qa]-wbc.qref[qa])))],
+                      'opposed_tip_contact_fraction':interval_opposed/interval,
+                      'max_b_nonfloor_penetration_m':interval_max_pen,
+                      'b_right_wrist_roll_rad':float(d.qpos[wrist_qadr]),
+                      'b_right_wrist_roll_ref_rad':float(wbc.qref[wrist_qadr]),
+                      'b_right_wrist_roll_velocity_rad_s':float(d.qvel[wrist_vadr]),
+                      'b_right_wrist_roll_requested_torque_Nm':float(wbc.last_tau[wrist_actuator]),
+                      'b_right_wrist_roll_actual_actuator_force_Nm':float(d.actuator_force[wrist_actuator]),
+                      'b_right_wrist_roll_constraint_force_Nm':float(d.qfrc_constraint[wrist_vadr]),
+                      'b_right_wrist_roll_bias_force_Nm':float(d.qfrc_bias[wrist_vadr]),
+                      'b_right_wrist_roll_passive_force_Nm':float(d.qfrc_passive[wrist_vadr]),
                       'free_edge_drift_m': float(np.linalg.norm(d.flexvert_xpos[64:66].mean(axis=0)-initial_edge)),
                       'contact_task_residual_m_s2': meta['contact_acceleration_task_residual_m_s2']})
 except Exception as exc:
@@ -131,6 +153,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'start_at_goal':args.start_at_goal,
           'edge_damping':args.edge_damping,
           'flex_tip_force_goal_n':args.flex_tip_force_n,
+          'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'duration_s': float(d.time), 'planned_duration_s': duration, 'control_solves': solves,
           'error': error, 'two_robot_two_foot_fraction': feet_count/steps,
           'flex_forearm_contact_fraction': flex_contact_count/steps,
@@ -145,6 +168,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_goal_hold' if args.start_at_goal else '')+
                ('_track_edge' if args.track_edge else '')+
                (f'_flexforce{args.flex_tip_force_n:g}' if args.flex_tip_force_n is not None else '')+
+               (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                suffix+'.json')
 (OUT/report_name).write_text(json.dumps(report, indent=2)+'\n')
 print(json.dumps({k:v for k,v in report.items() if k!='trace'}))
