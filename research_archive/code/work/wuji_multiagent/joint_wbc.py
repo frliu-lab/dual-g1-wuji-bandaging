@@ -29,6 +29,7 @@ class JointWBC:
   self.tail_proxy_digit_normal_goal_n=None
   self.flex_tip_normal_goal_n=None
   self.flex_measured_force_prior_weight=0.
+  self.hand_acceleration_cap_rad_s2=200.
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
   self.b_handle_lift_min_n=None
@@ -160,6 +161,11 @@ class JointWBC:
     if actuator in self.hard_hand_indices:continue
     requested=requested_hand_tau[int(np.flatnonzero(self.hand_indices==actuator)[0])];lo[actuator]=max(lo[actuator],requested-.03);hi[actuator]=min(hi[actuator],requested+.03)
   acc_lo=np.full(m.nv,-200.);acc_hi=np.full(m.nv,200.)
+  if not np.isfinite(self.hand_acceleration_cap_rad_s2) or self.hand_acceleration_cap_rad_s2<200.:
+   raise ValueError('Hand acceleration cap must be finite and at least 200 rad/s²')
+  hand_dofs=self.act_vadr[self.hand_indices]
+  acc_lo[hand_dofs]=-self.hand_acceleration_cap_rad_s2
+  acc_hi[hand_dofs]=self.hand_acceleration_cap_rad_s2
   actuated_joints=set(map(int,m.actuator_trnid[:,0]))
   for joint in range(m.njnt):
    name=m.joint(joint).name
@@ -170,7 +176,7 @@ class JointWBC:
    if not m.jnt_limited[joint] or m.jnt_type[joint]!=mujoco.mjtJoint.mjJNT_HINGE:continue
    if joint not in m.actuator_trnid[:,0]:continue
    adr=int(m.jnt_dofadr[joint]);q=float(d.qpos[m.jnt_qposadr[joint]]);v=float(d.qvel[adr]);low,high=m.jnt_range[joint];low+=.02;high-=.02
-   acc_lo[adr]=max(-200.,-20*v-100*(q-low));acc_hi[adr]=min(200.,-20*v+100*(high-q))
+   acc_lo[adr]=max(acc_lo[adr],-20*v-100*(q-low));acc_hi[adr]=min(acc_hi[adr],-20*v+100*(high-q))
   goals=np.zeros(3*nc);forceweight=np.zeros(3*nc)
   spool_up_coeff=np.zeros(3*nc)
   dressing_up_coeff=np.zeros(3*nc)
