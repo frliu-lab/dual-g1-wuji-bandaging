@@ -1,5 +1,6 @@
 """Static A-left arm search in the full dual-G1 scene; no executed entry path."""
 import json
+import argparse
 from pathlib import Path
 
 import mujoco
@@ -8,6 +9,10 @@ from scipy.optimize import differential_evolution
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'outputs/wuji_multiagent/bandage_v0'
+parser = argparse.ArgumentParser()
+parser.add_argument('--palm-only', action='store_true')
+args = parser.parse_args()
+stem = 'joint_a_left_near_elbow_support_palm_only' if args.palm_only else 'joint_a_left_near_elbow_support'
 m = mujoco.MjModel.from_xml_path(str(OUT / 'joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml'))
 d = mujoco.MjData(m)
 waypoints = np.load(OUT / 'joint_b_pinchtab_rrt_path.npz')['qpos']
@@ -17,6 +22,9 @@ elbow = m.joint('training_elbow_hinge').qposadr[0]
 forearm = m.geom('manikin_forearm').id
 wrist = m.body('g1_a/wuji_left/l_wrist').id
 palms = [g for g in range(m.ngeom) if m.geom_bodyid[g] == wrist and m.geom_contype[g]]
+fingers = [g for g in range(m.ngeom) if m.geom_contype[g] and
+           m.body(m.geom_bodyid[g]).name.startswith('g1_a/wuji_left/') and
+           any(token in m.body(m.geom_bodyid[g]).name for token in ('finger', 'thumb', 'pinky'))]
 names = [m.joint(i).name for i in range(m.njnt) if m.joint(i).name.startswith('g1_a/left_')
          and any(s in m.joint(i).name for s in ('shoulder', 'elbow', 'wrist'))
          and m.joint(i).type == mujoco.mjtJoint.mjJNT_HINGE]
@@ -40,6 +48,8 @@ def evaluate(x, detail=False):
         local = d.xmat[m.geom_bodyid[forearm]].reshape(3, 3).T @ (points[3:] - d.xpos[m.geom_bodyid[forearm]])
         candidates.append((abs(dist + .0005) + abs(local[0] - .05), dist, local, palm))
     _, dist, local, palm = min(candidates)
+    finger_distance = min((float(mujoco.mj_geomDistance(m, d, g, forearm, 1., np.zeros(6)))
+                           for g in fingers), default=1.)
     deep = []
     for c in d.contact:
         if c.dist >= -.003 or any(g < 0 for g in c.geom):
@@ -52,8 +62,11 @@ def evaluate(x, detail=False):
             deep.append(-float(c.dist) - .003)
     score = 300*abs(dist + .0005) + 30*abs(float(local[0]) - .05)
     score += 500*sum(deep) + .05*float(np.linalg.norm(x - base[qadr]))
+    if args.palm_only:
+        score += 350*max(0., .001-finger_distance)
     if detail:
-        return {'score': score, 'palm_distance_m': dist, 'forearm_local_contact_m': local.tolist(),
+        return {'score': score, 'palm_distance_m': dist, 'min_finger_forearm_distance_m': finger_distance,
+                'forearm_local_contact_m': local.tolist(),
                 'deep_penetration_excess_m': deep, 'joint_names': names, 'joint_positions_rad': x.tolist()}
     return score
 
@@ -62,13 +75,14 @@ opt = differential_evolution(evaluate, bounds, seed=20261126, maxiter=60, popsiz
 result = evaluate(opt.x, True)
 eligible = (abs(result['palm_distance_m']) <= .003 and
             .025 <= result['forearm_local_contact_m'][0] <= .08 and
-            not result['deep_penetration_excess_m'])
+            not result['deep_penetration_excess_m'] and
+            (not args.palm_only or result['min_finger_forearm_distance_m'] >= -.001))
 report = {'scope': 'Static full-scene near-elbow support pose search; no path or force claim',
           'baseline': evaluate(base[qadr], True), 'candidate': result,
           'optimizer_success': bool(opt.success), 'eligible_static': bool(eligible)}
-(OUT / 'joint_a_left_near_elbow_support_search.json').write_text(json.dumps(report, indent=2), encoding='utf8')
+(OUT / f'{stem}_search.json').write_text(json.dumps(report, indent=2), encoding='utf8')
 if eligible:
     d.qpos[:] = base
     d.qpos[qadr] = opt.x
-    np.savez_compressed(OUT / 'joint_a_left_near_elbow_support_candidate.npz', qpos=d.qpos, joint_names=names)
+    np.savez_compressed(OUT / f'{stem}_candidate.npz', qpos=d.qpos, joint_names=names)
 print(json.dumps({'eligible_static': eligible, 'candidate': result, 'baseline': report['baseline']}))
