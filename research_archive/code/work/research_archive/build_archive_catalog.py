@@ -438,6 +438,8 @@ SELECTED += [
     'bandage_v0/joint_b_flex_b_left_handle_pose_transfer_static_audit.json',
     'bandage_v0/joint_b_left_middle_handle_clearance_probe.json',
     'bandage_v0/joint_b_pinchtab_worst_b_penetration_state.npz',
+    'bandage_v0/joint_a_left_near_elbow_support_search.json',
+    'bandage_v0/joint_a_left_near_elbow_support_candidate.npz',
 ]
 SELECTED=list(dict.fromkeys(SELECTED))
 SOURCE_CODE = [
@@ -449,6 +451,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/search_a_thumb_side_contact.py',
     'work/bandage_hierarchy/audit_b_left_handle_pose_transfer.py',
     'work/bandage_hierarchy/probe_b_left_middle_clearance.py',
+    'work/bandage_hierarchy/probe_support_sweep.py',
+    'work/bandage_hierarchy/search_joint_support_near_elbow.py',
     'work/bandage_hierarchy/controller_router.py',
     'work/bandage_hierarchy/check_router.py',
     'work/bandage_hierarchy/build_scene.py',

@@ -42,6 +42,7 @@ parser.add_argument('--b-spool-normal-goal-n',type=float,default=None)
 parser.add_argument('--b-spool-force-control',action='store_true')
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
 parser.add_argument('--a-left-follow-forearm',action='store_true')
+parser.add_argument('--a-left-near-elbow-seed',action='store_true')
 parser.add_argument('--a-left-follow-max-offset-mm',type=float,default=2.)
 parser.add_argument('--a-left-follow-max-step-mm',type=float,default=.2)
 parser.add_argument('--training-elbow-stiffness',type=float,default=None)
@@ -147,6 +148,10 @@ if args.a_pad_side_grasp_seed:
     for j in range(m.njnt):
         if m.joint(j).name.startswith(('g1_a/wuji_right/r_thumb_','g1_a/wuji_right/r_index_finger_')):
             adr=int(m.jnt_qposadr[j]);d.qpos[adr]=seed[adr]
+if args.a_left_near_elbow_seed:
+    seed=np.load(OUT/'joint_a_left_near_elbow_support_candidate.npz')
+    for name in seed['joint_names']:
+        adr=int(m.joint(str(name)).qposadr[0]);d.qpos[adr]=seed['qpos'][adr]
 mujoco.mj_forward(m, d)
 tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
              'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
@@ -647,6 +652,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_spool_force_control':args.b_spool_force_control,
           'a_left_support_goal_n':args.a_left_support_goal_n,
           'a_left_follow_forearm':args.a_left_follow_forearm,
+          'a_left_near_elbow_seed_static_only':args.a_left_near_elbow_seed,
           'a_left_follow_max_offset_mm':args.a_left_follow_max_offset_mm if args.a_left_follow_forearm else None,
           'a_left_follow_max_step_mm':args.a_left_follow_max_step_mm if args.a_left_follow_forearm else None,
           'training_elbow_stiffness_nm_rad':float(m.jnt_stiffness[elbow_jid]),
@@ -738,6 +744,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_nopadcontact' if args.disable_dressing_pad_contact else '')+
                (f'_padsolref{args.dressing_pad_solref:g}' if args.dressing_pad_solref is not None else '')+
                ('_apadsidegraspseed' if args.a_pad_side_grasp_seed else '')+
+               ('_aleftnearelbowseed' if args.a_left_near_elbow_seed else '')+
                (f'_stagerelease{args.stage_release_s:g}s' if args.stage_release_s is not None else '')+
                (f'_apadforce{args.a_pad_normal_goal_n:g}' if args.a_pad_normal_goal_n is not None else '')+
                ('_apadforcecontrol' if args.a_pad_force_control else '')+

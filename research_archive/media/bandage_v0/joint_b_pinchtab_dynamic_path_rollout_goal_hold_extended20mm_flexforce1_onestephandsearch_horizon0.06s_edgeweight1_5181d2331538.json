@@ -1,0 +1,416 @@
+{
+  "scope": "Dynamic WBC tracking of a static path toward a flexible free tab; no force-closed grasp or completed wrap",
+  "track_edge_tip_targets": false,
+  "pinchtab": true,
+  "extended_tab": true,
+  "start_at_goal": true,
+  "edge_damping": 0.2,
+  "flex_tip_force_goal_n": 1.0,
+  "measured_tip_force_goal_n": null,
+  "pinch_bias_preset": null,
+  "pinch_bias_until_s": null,
+  "one_step_hand_search": true,
+  "hand_search_horizon_s": 0.06,
+  "hand_search_edge_weight": 1.0,
+  "hand_search_penetration_weight": 10.0,
+  "hand_acceleration_cap_rad_s2": 200.0,
+  "dressing_pad_contact_disabled_counterfactual": false,
+  "dressing_pad_solref_time_s": null,
+  "a_pad_side_grasp_seed_static_only": true,
+  "stage_release_s": 0.2,
+  "a_pad_normal_goal_n": 0.5,
+  "a_pad_force_control": true,
+  "release_equipment_tray_with_stage_counterfactual": true,
+  "b_middle_retract_mode": "abd",
+  "b_spool_normal_goal_n": 1.0,
+  "b_spool_force_control": true,
+  "a_left_support_goal_n": null,
+  "a_left_follow_forearm": false,
+  "a_left_near_elbow_seed_static_only": true,
+  "a_left_follow_max_offset_mm": null,
+  "a_left_follow_max_step_mm": null,
+  "training_elbow_stiffness_nm_rad": 1.0,
+  "training_elbow_damping_nms_rad": 0.6,
+  "flex_sliding_friction": 0.8,
+  "b_right_wrist_roll_acceleration_weight": null,
+  "local_physics_correction": false,
+  "stabilize_other_digits": true,
+  "stabilize_all_digits": false,
+  "material_tip_follow": false,
+  "tip_closure_mm": 0.0,
+  "tip_position_weight": null,
+  "flex_measured_force_prior_weight": 0.0,
+  "releasable_fixture": true,
+  "fixture_release_s": 0.1,
+  "fixture_active_at_end": true,
+  "pinch_closure_command_mm": 0.0,
+  "b_right_palm_position_weight": 1000.0,
+  "duration_s": 0.10000000000000007,
+  "planned_duration_s": 0.5,
+  "control_solves": 5,
+  "error": "RuntimeError: WBC invalid optimal_inaccurate residual 5.1443598058924976e-05 constraint violation 6.399265795842145e-05",
+  "two_robot_two_foot_fraction": 1.0,
+  "failure_diagnostic": {
+    "acceleration_bound_inversion_count": 0,
+    "max_acceleration_bound_inversion_rad_s2": 0.0,
+    "actuator_bound_inversion_count": 0,
+    "contact_count": 142,
+    "fixed_hand_actuator_count": 56,
+    "inverted_dofs": []
+  },
+  "flex_forearm_contact_fraction": 1.0,
+  "opposed_b_tip_flex_contact_fraction": 1.0,
+  "a_pad_thumb_index_contact_fraction": 0.0,
+  "a_pad_thumb_index_segment_contact_fraction": 1.0,
+  "a_pad_opposed_segment_contact_fraction": 1.0,
+  "a_left_forearm_support_contact_fraction": 1.0,
+  "a_left_forearm_mean_normal_force_n": 14.132434278977124,
+  "a_left_forearm_peak_single_contact_force_n": 17.199635754512702,
+  "final_training_elbow_angle_rad": 0.3246065905889718,
+  "b_left_spool_thumb_index_contact_fraction": 1.0,
+  "b_left_spool_opposed_contact_fraction": 1.0,
+  "max_dressing_pad_displacement_m": 0.0007960036406185798,
+  "max_post_stage_release_pad_displacement_m": null,
+  "pad_stage_contact_events": 184,
+  "pad_world_contact_after_release_events": 0,
+  "pad_world_contact_geoms_after_release": [],
+  "max_b_nonfloor_penetration_m": 0.0025004611581689955,
+  "max_a_nonfloor_penetration_m": 0.002697904515320518,
+  "max_either_robot_nonfloor_penetration_m": 0.002697904515320518,
+  "worst_b_contact": {
+    "time_s": 0.001,
+    "distance_m": -0.0025004611581689955,
+    "bodies": [
+      "g1_b/wuji_right/r_middle_finger_middle"
+    ],
+    "geoms": [
+      ""
+    ],
+    "flex": [
+      -1,
+      0
+    ]
+  },
+  "worst_a_contact": {
+    "time_s": 0.001,
+    "distance_m": -0.002697904515320518,
+    "bodies": [
+      "training_forearm_dynamic",
+      "g1_a/wuji_left/l_middle_finger_proximal"
+    ],
+    "geoms": [
+      "manikin_forearm",
+      ""
+    ],
+    "flex": [
+      -1,
+      -1
+    ]
+  },
+  "max_free_edge_drift_m": 0.0003069577748435818,
+  "max_hand_joint_speed_rad_s": 2.6800284694046996,
+  "max_post_release_material_slip_m": null,
+  "max_post_release_edge_drift_m": null,
+  "mean_tip_normal_force_n": {
+    "thumb": 0.06927452244316229,
+    "index": 0.2510892941280402
+  },
+  "peak_single_contact_normal_force_n": {
+    "thumb": 0.07011254167907242,
+    "index": 0.11396152517284915
+  },
+  "mean_tip_shear_force_n": {
+    "thumb": 0.01804882542541449,
+    "index": 0.06894147965699259
+  },
+  "max_tip_to_material_slip_m": 0.004683097853433598,
+  "max_joint_tracking_error_rad": 0.08747323746604985,
+  "final_joint_target_error_rad": 0.08214883513557036,
+  "trace": [
+    {
+      "time_s": 0.02000000000000001,
+      "path_progress": 1.0,
+      "predicted_tip_contact_force_n": {
+        "thumb": 1.0006292059321233,
+        "index": 0.24763477839367906
+      },
+      "local_tip_force_correction_norm": 0.0,
+      "one_step_hand_candidate": "g1_b/wuji_right/r_THJ1_+0.05",
+      "one_step_hand_predicted_score_m": 0.005079609365347437,
+      "max_joint_tracking_error_rad": 0.03200019351811334,
+      "thumb_index_surface_gap_m": 0.0011967633953714279,
+      "tip_displacement_m": [
+        0.0006507924240592913,
+        0.0009119180781562888
+      ],
+      "tip_to_material_relative_shift_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": 0.0008338477095649263,
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.0017166803575848757
+      },
+      "tip_to_material_relative_shift_vector_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": [
+          -0.00046377763211784273,
+          0.00012723153756968864,
+          0.0006811933987800334
+        ],
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": [
+          -0.00022512311989379002,
+          0.00010673369679195521,
+          -0.0016985049157939303
+        ]
+      },
+      "worst_joint_name": "g1_b/wuji_right/r_index_finger_pip",
+      "opposed_tip_contact_fraction": 1.0,
+      "a_left_forearm_support_contact_fraction": 1.0,
+      "training_elbow_angle_rad": 0.266005102110719,
+      "max_b_nonfloor_penetration_m": 0.0025004611581689955,
+      "max_a_nonfloor_penetration_m": 0.002697904515320518,
+      "max_a_right_hand_joint_speed_rad_s": 0.4479821338418152,
+      "b_right_wrist_roll_rad": -0.019336497954123726,
+      "b_right_wrist_roll_ref_rad": -0.023982004917404456,
+      "b_right_wrist_roll_velocity_rad_s": 0.4699176498252954,
+      "b_right_wrist_roll_requested_torque_Nm": 0.6041176438959355,
+      "b_right_wrist_roll_predicted_acceleration_rad_s2": -0.18981093188363612,
+      "b_right_wrist_roll_pre_step_actual_acceleration_rad_s2": 25.542814929593714,
+      "b_right_wrist_roll_pre_step_actual_constraint_force_Nm": -0.10024175420139639,
+      "b_right_wrist_roll_predicted_contact_generalized_force_Nm": -0.10505233246338352,
+      "b_right_wrist_roll_first_step_actual_acceleration_rad_s2": 21.99551869260784,
+      "b_right_wrist_roll_actual_actuator_force_Nm": 0.6041176438959355,
+      "b_right_wrist_roll_local_control_correction": 0.0,
+      "b_right_wrist_roll_constraint_force_Nm": -0.10496524034734621,
+      "b_right_wrist_roll_bias_force_Nm": 0.539084887123316,
+      "b_right_wrist_roll_passive_force_Nm": 0.0,
+      "free_edge_drift_m": 0.00018855946123902973,
+      "contact_task_residual_m_s2": 5.046334279629962
+    },
+    {
+      "time_s": 0.04000000000000003,
+      "path_progress": 1.0,
+      "predicted_tip_contact_force_n": {
+        "thumb": 0.7832990659426674,
+        "index": 0.47513281292814746
+      },
+      "local_tip_force_correction_norm": 0.0,
+      "one_step_hand_candidate": "g1_b/wuji_right/r_FFJ2_+0.05",
+      "one_step_hand_predicted_score_m": 0.004813064150286747,
+      "max_joint_tracking_error_rad": 0.0719895827391206,
+      "thumb_index_surface_gap_m": 0.001250106085079904,
+      "tip_displacement_m": [
+        0.00172811119393806,
+        0.002243051763338255
+      ],
+      "tip_to_material_relative_shift_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": 0.00161119555827651,
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.0039821974845117665
+      },
+      "tip_to_material_relative_shift_vector_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": [
+          -0.0011743940046405749,
+          -6.127209720224736e-05,
+          0.0011013607851102503
+        ],
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": [
+          -0.0009189253486383692,
+          -8.679196734767691e-05,
+          -0.0038737501421343135
+        ]
+      },
+      "worst_joint_name": "g1_b/wuji_right/r_index_finger_pip",
+      "opposed_tip_contact_fraction": 1.0,
+      "a_left_forearm_support_contact_fraction": 1.0,
+      "training_elbow_angle_rad": 0.2778867520482563,
+      "max_b_nonfloor_penetration_m": 0.0020238336621893937,
+      "max_a_nonfloor_penetration_m": 0.0021551296740888776,
+      "max_a_right_hand_joint_speed_rad_s": 0.45490047924587623,
+      "b_right_wrist_roll_rad": -0.00837555542175026,
+      "b_right_wrist_roll_ref_rad": -0.023982004917404456,
+      "b_right_wrist_roll_velocity_rad_s": 0.7473891572335034,
+      "b_right_wrist_roll_requested_torque_Nm": 0.6316971330887874,
+      "b_right_wrist_roll_predicted_acceleration_rad_s2": -7.174312131660498,
+      "b_right_wrist_roll_pre_step_actual_acceleration_rad_s2": -3.584593782720289,
+      "b_right_wrist_roll_pre_step_actual_constraint_force_Nm": -0.09756941849240973,
+      "b_right_wrist_roll_predicted_contact_generalized_force_Nm": -0.12458447441174314,
+      "b_right_wrist_roll_first_step_actual_acceleration_rad_s2": -4.034119875867782,
+      "b_right_wrist_roll_actual_actuator_force_Nm": 0.6316971330887874,
+      "b_right_wrist_roll_local_control_correction": 0.0,
+      "b_right_wrist_roll_constraint_force_Nm": -0.04447717065101437,
+      "b_right_wrist_roll_bias_force_Nm": 0.5148801974830852,
+      "b_right_wrist_roll_passive_force_Nm": 0.0,
+      "free_edge_drift_m": 0.0003007343085696951,
+      "contact_task_residual_m_s2": 4.04975297095117
+    },
+    {
+      "time_s": 0.060000000000000046,
+      "path_progress": 1.0,
+      "predicted_tip_contact_force_n": {
+        "thumb": 0.6396046253727264,
+        "index": 2.5724620263708666
+      },
+      "local_tip_force_correction_norm": 0.0,
+      "one_step_hand_candidate": "g1_b/wuji_right/r_THJ3_+0.05",
+      "one_step_hand_predicted_score_m": 0.005383859297919245,
+      "max_joint_tracking_error_rad": 0.08747323746604985,
+      "thumb_index_surface_gap_m": 0.001147046203474588,
+      "tip_displacement_m": [
+        0.0027388693351729143,
+        0.0036762618538699757
+      ],
+      "tip_to_material_relative_shift_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": 0.0016732435821488522,
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.0044737088740541345
+      },
+      "tip_to_material_relative_shift_vector_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": [
+          -0.0012379279001103125,
+          -0.00029413044408369005,
+          0.001086630517330489
+        ],
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": [
+          -0.001234851590597441,
+          -0.00020295517843199606,
+          -0.004295116044362168
+        ]
+      },
+      "worst_joint_name": "g1_b/wuji_right/r_index_finger_pip",
+      "opposed_tip_contact_fraction": 1.0,
+      "a_left_forearm_support_contact_fraction": 1.0,
+      "training_elbow_angle_rad": 0.291039185464127,
+      "max_b_nonfloor_penetration_m": 0.0020923780426043213,
+      "max_a_nonfloor_penetration_m": 0.0016044731216401547,
+      "max_a_right_hand_joint_speed_rad_s": 0.40054133695712696,
+      "b_right_wrist_roll_rad": 0.006446112679989534,
+      "b_right_wrist_roll_ref_rad": -0.023982004917404456,
+      "b_right_wrist_roll_velocity_rad_s": 0.8190721759093041,
+      "b_right_wrist_roll_requested_torque_Nm": 0.4298858055730365,
+      "b_right_wrist_roll_predicted_acceleration_rad_s2": -11.838805481199108,
+      "b_right_wrist_roll_pre_step_actual_acceleration_rad_s2": -10.412847339381013,
+      "b_right_wrist_roll_pre_step_actual_constraint_force_Nm": -0.017525019781562148,
+      "b_right_wrist_roll_predicted_contact_generalized_force_Nm": -0.006947977061550663,
+      "b_right_wrist_roll_first_step_actual_acceleration_rad_s2": -10.445070687126469,
+      "b_right_wrist_roll_actual_actuator_force_Nm": 0.4298858055730365,
+      "b_right_wrist_roll_local_control_correction": 0.0,
+      "b_right_wrist_roll_constraint_force_Nm": -0.001769077133550281,
+      "b_right_wrist_roll_bias_force_Nm": 0.4970639498977989,
+      "b_right_wrist_roll_passive_force_Nm": 0.0,
+      "free_edge_drift_m": 0.0002731609406290122,
+      "contact_task_residual_m_s2": 6.192932376217108
+    },
+    {
+      "time_s": 0.08000000000000006,
+      "path_progress": 1.0,
+      "predicted_tip_contact_force_n": {
+        "thumb": 0.6060227651154202,
+        "index": 0.41387465179673366
+      },
+      "local_tip_force_correction_norm": 0.0,
+      "one_step_hand_candidate": "balanced_a",
+      "one_step_hand_predicted_score_m": 0.0057798452693754955,
+      "max_joint_tracking_error_rad": 0.08671402596225497,
+      "thumb_index_surface_gap_m": 0.0010392260104077251,
+      "tip_displacement_m": [
+        0.003907922573447925,
+        0.004794029440303179
+      ],
+      "tip_to_material_relative_shift_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": 0.0018457381582413143,
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.004561692908494931
+      },
+      "tip_to_material_relative_shift_vector_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": [
+          -0.001143143222294446,
+          -0.0005689422794402932,
+          0.0013327706497276992
+        ],
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": [
+          -0.0014654896583283852,
+          -0.0004065836877958917,
+          -0.0043007059836221995
+        ]
+      },
+      "worst_joint_name": "g1_b/wuji_right/r_index_finger_pip",
+      "opposed_tip_contact_fraction": 1.0,
+      "a_left_forearm_support_contact_fraction": 1.0,
+      "training_elbow_angle_rad": 0.30574774007163114,
+      "max_b_nonfloor_penetration_m": 0.002135578203975655,
+      "max_a_nonfloor_penetration_m": 0.0011024294321734338,
+      "max_a_right_hand_joint_speed_rad_s": 0.253640887825028,
+      "b_right_wrist_roll_rad": 0.023790578970155515,
+      "b_right_wrist_roll_ref_rad": -0.023982004917404456,
+      "b_right_wrist_roll_velocity_rad_s": 1.0181750406111496,
+      "b_right_wrist_roll_requested_torque_Nm": 0.618516057047433,
+      "b_right_wrist_roll_predicted_acceleration_rad_s2": -13.46597963184102,
+      "b_right_wrist_roll_pre_step_actual_acceleration_rad_s2": -3.3314228574078353,
+      "b_right_wrist_roll_pre_step_actual_constraint_force_Nm": -0.007740795127037841,
+      "b_right_wrist_roll_predicted_contact_generalized_force_Nm": -0.07035145741344619,
+      "b_right_wrist_roll_first_step_actual_acceleration_rad_s2": -5.906532869477287,
+      "b_right_wrist_roll_actual_actuator_force_Nm": 0.618516057047433,
+      "b_right_wrist_roll_local_control_correction": 0.0,
+      "b_right_wrist_roll_constraint_force_Nm": -0.016588051281272487,
+      "b_right_wrist_roll_bias_force_Nm": 0.4764825365050558,
+      "b_right_wrist_roll_passive_force_Nm": 0.0,
+      "free_edge_drift_m": 0.00018986039012265453,
+      "contact_task_residual_m_s2": 4.523481183061462
+    },
+    {
+      "time_s": 0.10000000000000007,
+      "path_progress": 1.0,
+      "predicted_tip_contact_force_n": {
+        "thumb": 0.6233332036292508,
+        "index": 0.9256255741046884
+      },
+      "local_tip_force_correction_norm": 0.0,
+      "one_step_hand_candidate": "balanced_a",
+      "one_step_hand_predicted_score_m": 0.006412016859359859,
+      "max_joint_tracking_error_rad": 0.08214883513557036,
+      "thumb_index_surface_gap_m": 0.0009749560133956903,
+      "tip_displacement_m": [
+        0.004644120228117803,
+        0.005077426481535028
+      ],
+      "tip_to_material_relative_shift_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": 0.002116043413755965,
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": 0.004683097853433598
+      },
+      "tip_to_material_relative_shift_vector_m": {
+        "g1_b/wuji_right/r_thumb_tip_sensor_frame": [
+          -0.00102443803272749,
+          -0.0008249422848094767,
+          0.0016575996720362696
+        ],
+        "g1_b/wuji_right/r_index_finger_tip_sensor_frame": [
+          -0.001935398319640902,
+          -0.0006466903372828181,
+          -0.004215142993639787
+        ]
+      },
+      "worst_joint_name": "g1_b/wuji_right/r_index_finger_pip",
+      "opposed_tip_contact_fraction": 1.0,
+      "a_left_forearm_support_contact_fraction": 1.0,
+      "training_elbow_angle_rad": 0.3246065905889718,
+      "max_b_nonfloor_penetration_m": 0.0023382855749760965,
+      "max_a_nonfloor_penetration_m": 0.0006418910783662481,
+      "max_a_right_hand_joint_speed_rad_s": 0.16599396666056818,
+      "b_right_wrist_roll_rad": 0.04330880161470879,
+      "b_right_wrist_roll_ref_rad": -0.023982004917404456,
+      "b_right_wrist_roll_velocity_rad_s": 1.046178155783392,
+      "b_right_wrist_roll_requested_torque_Nm": 0.5428851021750527,
+      "b_right_wrist_roll_predicted_acceleration_rad_s2": -17.30031131306084,
+      "b_right_wrist_roll_pre_step_actual_acceleration_rad_s2": -12.271275921437663,
+      "b_right_wrist_roll_pre_step_actual_constraint_force_Nm": -0.015788793664791214,
+      "b_right_wrist_roll_predicted_contact_generalized_force_Nm": -0.04072487141788231,
+      "b_right_wrist_roll_first_step_actual_acceleration_rad_s2": -15.466923068119833,
+      "b_right_wrist_roll_actual_actuator_force_Nm": 0.5428851021750527,
+      "b_right_wrist_roll_local_control_correction": 0.0,
+      "b_right_wrist_roll_constraint_force_Nm": -0.014846563885216093,
+      "b_right_wrist_roll_bias_force_Nm": 0.45856250058564374,
+      "b_right_wrist_roll_passive_force_Nm": 0.0,
+      "free_edge_drift_m": 0.00017776632395878004,
+      "contact_task_residual_m_s2": 4.628643954896812
+    }
+  ],
+  "external_end_fixture_removed_for_test": false,
+  "a_pad_independent_hold_gate_pass": false,
+  "material_grasp_gate_pass": false,
+  "four_hand_sim_contact_gate_pass": false,
+  "run_label": "joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_onestephandsearch_horizon0.06s_edgeweight1_apadsidegraspseed_aleftnearelbowseed_stagerelease0.2s_apadforce0.5_apadforcecontrol_releaseequipmenttray_bmiddleretractabd_bspoolforce1_bspoolforcecontrol_stabilizedigits_fixture_release0.1s.json"
+}
