@@ -22,6 +22,7 @@ parser.add_argument('--extended-tab',action='store_true')
 parser.add_argument('--start-at-goal',action='store_true')
 parser.add_argument('--duration-s',type=float,default=1.)
 parser.add_argument('--flex-tip-force-n',type=float,default=None)
+parser.add_argument('--b-right-force-digits',choices=('both','thumb','index'),default='both')
 parser.add_argument('--measured-tip-force-n',type=float,default=None)
 parser.add_argument('--pinch-bias-preset',choices=('balanced_a','balanced_b'),default=None)
 parser.add_argument('--pinch-bias-until-s',type=float,default=None)
@@ -41,6 +42,7 @@ parser.add_argument('--b-middle-retract-mode',choices=('flex','abd'),default=Non
 parser.add_argument('--b-spool-normal-goal-n',type=float,default=None)
 parser.add_argument('--b-spool-force-control',action='store_true')
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
+parser.add_argument('--a-left-palm-weight',type=float,default=1000.)
 parser.add_argument('--a-left-follow-forearm',action='store_true')
 parser.add_argument('--a-left-near-elbow-seed',action='store_true')
 parser.add_argument('--a-left-follow-max-offset-mm',type=float,default=2.)
@@ -101,6 +103,8 @@ if args.b_spool_force_control and (not args.stabilize_other_digits or args.b_spo
     parser.error('--b-spool-force-control requires --stabilize-other-digits and a spool force goal')
 if args.a_left_support_goal_n is not None and (args.a_left_support_goal_n<0 or not np.isfinite(args.a_left_support_goal_n)):
     parser.error('--a-left-support-goal-n must be finite and nonnegative')
+if args.a_left_palm_weight<=0 or not np.isfinite(args.a_left_palm_weight):
+    parser.error('--a-left-palm-weight must be positive and finite')
 if args.a_left_follow_max_offset_mm<0 or not np.isfinite(args.a_left_follow_max_offset_mm):
     parser.error('--a-left-follow-max-offset-mm must be finite and nonnegative')
 if args.a_left_follow_max_step_mm<0 or not np.isfinite(args.a_left_follow_max_step_mm):
@@ -174,7 +178,7 @@ def relevant_contact(model, c):
         for g in c.geom if g >= 0)
 
 wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_contact,
-               palm_position_weights=[1000.,1000.,1000.,args.b_right_palm_weight])
+               palm_position_weights=[args.a_left_palm_weight,1000.,1000.,args.b_right_palm_weight])
 wbc.backend = 'DIRECT'
 wbc.hand_acceleration_cap_rad_s2=args.hand_accel_cap
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
@@ -201,7 +205,9 @@ if args.stabilize_other_digits or args.stabilize_all_digits:
     if args.stabilize_other_digits:
         wbc.force_control_indices={int(i) for i in wbc.hand_indices
                                    if m.actuator(int(i)).name.startswith('g1_b/wuji_right/r_') and
-                                   any(token in m.actuator(int(i)).name for token in ('THJ','FFJ'))}
+                                   any(token in m.actuator(int(i)).name for token in (
+                                       ('THJ','FFJ') if args.b_right_force_digits=='both' else
+                                       ('THJ',) if args.b_right_force_digits=='thumb' else ('FFJ',)))}
         if args.a_pad_force_control:
             wbc.force_control_indices.update(int(i) for i in wbc.hand_indices
                 if m.actuator(int(i)).name.startswith('g1_a/wuji_right/r_') and
@@ -632,6 +638,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'start_at_goal':args.start_at_goal,
           'edge_damping':args.edge_damping,
           'flex_tip_force_goal_n':args.flex_tip_force_n,
+          'b_right_force_digits':args.b_right_force_digits,
           'measured_tip_force_goal_n':args.measured_tip_force_n,
           'pinch_bias_preset':args.pinch_bias_preset,
           'pinch_bias_until_s':args.pinch_bias_until_s,
@@ -651,6 +658,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_spool_normal_goal_n':args.b_spool_normal_goal_n,
           'b_spool_force_control':args.b_spool_force_control,
           'a_left_support_goal_n':args.a_left_support_goal_n,
+          'a_left_palm_position_weight':args.a_left_palm_weight,
           'a_left_follow_forearm':args.a_left_follow_forearm,
           'a_left_near_elbow_seed_static_only':args.a_left_near_elbow_seed,
           'a_left_follow_max_offset_mm':args.a_left_follow_max_offset_mm if args.a_left_follow_forearm else None,
@@ -733,6 +741,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_extended20mm' if args.extended_tab else '')+
                ('_track_edge' if args.track_edge else '')+
                (f'_flexforce{args.flex_tip_force_n:g}' if args.flex_tip_force_n is not None else '')+
+               (f'_brightforcedigits{args.b_right_force_digits}' if args.b_right_force_digits!='both' else '')+
                (f'_measuredforce{args.measured_tip_force_n:g}' if args.measured_tip_force_n is not None else '')+
                (f'_pinchbias{args.pinch_bias_preset}' if args.pinch_bias_preset else '')+
                (f'_biasuntil{args.pinch_bias_until_s:g}s' if args.pinch_bias_until_s is not None else '')+
@@ -753,6 +762,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_bspoolforce{args.b_spool_normal_goal_n:g}' if args.b_spool_normal_goal_n is not None else '')+
                ('_bspoolforcecontrol' if args.b_spool_force_control else '')+
                (f'_aleftsupport{args.a_left_support_goal_n:g}' if args.a_left_support_goal_n is not None else '')+
+               (f'_aleftpalmweight{args.a_left_palm_weight:g}' if args.a_left_palm_weight!=1000. else '')+
                (f'_aleftfollowforearm{args.a_left_follow_max_offset_mm:g}mmstep{args.a_left_follow_max_step_mm:g}mm' if args.a_left_follow_forearm else '')+
                (f'_elbowk{args.training_elbow_stiffness:g}' if args.training_elbow_stiffness is not None else '')+
                (f'_elbowd{args.training_elbow_damping:g}' if args.training_elbow_damping is not None else '')+
