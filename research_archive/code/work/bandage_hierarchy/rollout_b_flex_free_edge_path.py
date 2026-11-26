@@ -42,6 +42,10 @@ parser.add_argument('--b-middle-retract-mode',choices=('flex','abd'),default=Non
 parser.add_argument('--b-spool-normal-goal-n',type=float,default=None)
 parser.add_argument('--b-spool-force-control',action='store_true')
 parser.add_argument('--b-left-lift-mm',type=float,default=0.)
+parser.add_argument('--b-spool-one-step-search',action='store_true')
+parser.add_argument('--b-spool-search-horizon-s',type=float,default=.04)
+parser.add_argument('--b-spool-search-bias-rad',type=float,default=.05)
+parser.add_argument('--b-spool-search-support-weight',type=float,default=0.)
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
 parser.add_argument('--a-left-palm-weight',type=float,default=1000.)
 parser.add_argument('--a-left-follow-forearm',action='store_true')
@@ -107,6 +111,12 @@ if args.b_spool_force_control and (not args.stabilize_other_digits or args.b_spo
     parser.error('--b-spool-force-control requires --stabilize-other-digits and a spool force goal')
 if args.b_left_lift_mm<0 or args.b_left_lift_mm>30 or not np.isfinite(args.b_left_lift_mm):
     parser.error('--b-left-lift-mm must be finite and between 0 and 30')
+if not .02<=args.b_spool_search_horizon_s<=.1 or not np.isfinite(args.b_spool_search_horizon_s):
+    parser.error('--b-spool-search-horizon-s must be finite and between 0.02 and 0.1')
+if not 0<args.b_spool_search_bias_rad<=.2 or not np.isfinite(args.b_spool_search_bias_rad):
+    parser.error('--b-spool-search-bias-rad must be finite and between 0 and 0.2')
+if args.b_spool_search_support_weight<0 or not np.isfinite(args.b_spool_search_support_weight):
+    parser.error('--b-spool-search-support-weight must be finite and nonnegative')
 if args.a_left_support_goal_n is not None and (args.a_left_support_goal_n<0 or not np.isfinite(args.a_left_support_goal_n)):
     parser.error('--a-left-support-goal-n must be finite and nonnegative')
 if args.a_left_palm_weight<=0 or not np.isfinite(args.a_left_palm_weight):
@@ -178,6 +188,7 @@ initial_pad_position=d.xpos[pad_body_id].copy()
 spool_body_id=m.body('bandage_spool').id
 b_left_wrist_body_id=m.body('g1_b/wuji_left/l_wrist').id
 initial_spool_position=d.xpos[spool_body_id].copy()
+initial_spool_wrist_relative=(d.xpos[spool_body_id]-d.xpos[b_left_wrist_body_id]).copy()
 stage_geom_id=m.geom('dressing_stage').id
 tray_geom_id=m.geom('equipment_tray').id
 
@@ -195,6 +206,8 @@ wbc.hand_acceleration_cap_rad_s2=args.hand_accel_cap
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
 wbc.dressing_contact_normal_goal_n=args.a_pad_normal_goal_n
 wbc.spool_contact_normal_goal_n=args.b_spool_normal_goal_n
+spool_pinch_actuators=[i for i in range(m.nu) if m.actuator(i).name.startswith('g1_b/wuji_left/l_') and
+                       any(token in m.actuator(i).name for token in ('THJ','FFJ'))]
 wbc.support_palm_force_goal_n=args.a_left_support_goal_n
 initial_b_left_wrist_world=d.xpos[m.body('g1_b/wuji_left/l_wrist').id].copy()
 if args.a_left_follow_forearm:
@@ -340,7 +353,7 @@ max_post_release_edge_drift=0.
 solves = 0
 error = None
 trace = []
-scratch=mujoco.MjData(m) if args.one_step_hand_search else None
+scratch=mujoco.MjData(m) if (args.one_step_hand_search or args.b_spool_one_step_search) else None
 
 def ref_at(u):
     scaled = np.clip(u, 0, 1)*(len(waypoints)-1)
@@ -474,6 +487,60 @@ try:
                 m.geom_contype[stage_geom_id],m.geom_conaffinity[stage_geom_id]=stage_contact_backup
                 m.geom_contype[tray_geom_id],m.geom_conaffinity[tray_geom_id]=tray_contact_backup
             predicted_hand_score,selected_hand_candidate,chosen_bias=min(scores,key=lambda x:x[0])
+            d.ctrl[:]=base_ctrl
+            for i,amount in chosen_bias.items():
+                d.ctrl[i]=np.clip(d.ctrl[i]+amount,*m.actuator_ctrlrange[i])
+            mujoco.mj_forward(m,d)
+        selected_spool_candidate='baseline'
+        predicted_spool_score=None
+        if args.b_spool_one_step_search:
+            candidate_biases=[('baseline',{})]
+            candidate_biases += [(f'{m.actuator(i).name}_{sign:+g}',{i:sign})
+                                 for i in spool_pinch_actuators for sign in (-args.b_spool_search_bias_rad,args.b_spool_search_bias_rad)]
+            scores=[]
+            base_ctrl=d.ctrl.copy()
+            for label,bias in candidate_biases:
+                mujoco.mj_copyData(scratch,m,d)
+                stage_contact_backup=(int(m.geom_contype[stage_geom_id]),int(m.geom_conaffinity[stage_geom_id]))
+                tray_contact_backup=(int(m.geom_contype[tray_geom_id]),int(m.geom_conaffinity[tray_geom_id]))
+                for i,amount in bias.items():
+                    scratch.ctrl[i]=np.clip(scratch.ctrl[i]+amount,*m.actuator_ctrlrange[i])
+                for _ in range(round(args.b_spool_search_horizon_s/m.opt.timestep)):
+                    if args.stage_release_s is not None and scratch.time>=args.stage_release_s:
+                        m.geom_contype[stage_geom_id]=0;m.geom_conaffinity[stage_geom_id]=0
+                        if args.release_equipment_tray_with_stage:
+                            m.geom_contype[tray_geom_id]=0;m.geom_conaffinity[tray_geom_id]=0
+                    if args.fixture_release_s is not None and scratch.time>=args.fixture_release_s:
+                        scratch.eq_active[fixture_ids]=0
+                    mujoco.mj_step(m,scratch)
+                relative=(scratch.xpos[spool_body_id]-scratch.xpos[b_left_wrist_body_id])
+                target_relative=(stage_release_spool_wrist_relative if stage_release_spool_wrist_relative is not None
+                                 else initial_spool_wrist_relative)
+                slip=float(np.linalg.norm(relative-target_relative))
+                forces={'thumb':0.,'index':0.}
+                support_palm_force=0.
+                candidate_max_pen=0.
+                for ci,c in enumerate(scratch.contact):
+                    bodies=[m.body(m.geom_bodyid[g]).name for g in c.geom if g>=0]
+                    names=[m.geom(g).name for g in c.geom if g>=0]
+                    if c.dist<0 and 'floor' not in names and any(b.startswith(('g1_a/','g1_b/')) for b in bodies):
+                        candidate_max_pen=max(candidate_max_pen,-float(c.dist))
+                    if ('training_forearm_dynamic' in bodies and 'g1_a/wuji_left/l_wrist' in bodies
+                            and c.dist<.003):
+                        wrench=np.zeros(6);mujoco.mj_contactForce(m,scratch,ci,wrench)
+                        support_palm_force+=max(0.,float(wrench[0]))
+                    if 'bandage_spool' not in bodies or c.dist>=.003:continue
+                    for digit in forces:
+                        if any(b.startswith(f'g1_b/wuji_left/l_{digit}_') for b in bodies):
+                            wrench=np.zeros(6);mujoco.mj_contactForce(m,scratch,ci,wrench)
+                            forces[digit]+=max(0.,float(wrench[0]))
+                score=(slip+.002*sum(max(0.,.5-force) for force in forces.values())+
+                       args.b_spool_search_support_weight*max(0.,.5-support_palm_force)+
+                       10.*max(0.,candidate_max_pen-.003))
+                scores.append((score,label,bias))
+                m.geom_contype[stage_geom_id],m.geom_conaffinity[stage_geom_id]=stage_contact_backup
+                m.geom_contype[tray_geom_id],m.geom_conaffinity[tray_geom_id]=tray_contact_backup
+            predicted_spool_score,selected_spool_candidate,chosen_bias=min(scores,key=lambda x:x[0])
             d.ctrl[:]=base_ctrl
             for i,amount in chosen_bias.items():
                 d.ctrl[i]=np.clip(d.ctrl[i]+amount,*m.actuator_ctrlrange[i])
@@ -653,6 +720,8 @@ try:
                       'local_tip_force_correction_norm':local_tip_force_correction_norm,
                       'one_step_hand_candidate':selected_hand_candidate,
                       'one_step_hand_predicted_score_m':predicted_hand_score,
+                      'one_step_spool_candidate':selected_spool_candidate,
+                      'one_step_spool_predicted_score_m':predicted_spool_score,
                       'max_joint_tracking_error_rad': tip_error,
                       'thumb_index_surface_gap_m':thumb_index_surface_gap,
                       'tip_displacement_m':tip_displacements,
@@ -731,6 +800,10 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_spool_normal_goal_n':args.b_spool_normal_goal_n,
           'b_spool_force_control':args.b_spool_force_control,
           'b_left_lift_mm':args.b_left_lift_mm,
+          'b_spool_one_step_search':args.b_spool_one_step_search,
+          'b_spool_search_horizon_s':args.b_spool_search_horizon_s if args.b_spool_one_step_search else None,
+          'b_spool_search_bias_rad':args.b_spool_search_bias_rad if args.b_spool_one_step_search else None,
+          'b_spool_search_support_weight':args.b_spool_search_support_weight if args.b_spool_one_step_search else None,
           'a_left_support_goal_n':args.a_left_support_goal_n,
           'a_left_palm_position_weight':args.a_left_palm_weight,
           'a_left_follow_forearm':args.a_left_follow_forearm,
@@ -859,6 +932,10 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_bspoolforce{args.b_spool_normal_goal_n:g}' if args.b_spool_normal_goal_n is not None else '')+
                ('_bspoolforcecontrol' if args.b_spool_force_control else '')+
                (f'_bleftlift{args.b_left_lift_mm:g}mm' if args.b_left_lift_mm else '')+
+               ('_bspoolonestepsearch' if args.b_spool_one_step_search else '')+
+               (f'_bspoolhorizon{args.b_spool_search_horizon_s:g}s' if args.b_spool_one_step_search and args.b_spool_search_horizon_s!=.04 else '')+
+               (f'_bspoolbias{args.b_spool_search_bias_rad:g}' if args.b_spool_one_step_search and args.b_spool_search_bias_rad!=.05 else '')+
+               (f'_bspoolsupportweight{args.b_spool_search_support_weight:g}' if args.b_spool_one_step_search and args.b_spool_search_support_weight else '')+
                (f'_aleftsupport{args.a_left_support_goal_n:g}' if args.a_left_support_goal_n is not None else '')+
                (f'_aleftpalmweight{args.a_left_palm_weight:g}' if args.a_left_palm_weight!=1000. else '')+
                (f'_aleftfollowforearm{args.a_left_follow_max_offset_mm:g}mmstep{args.a_left_follow_max_step_mm:g}mm' if args.a_left_follow_forearm else '')+
