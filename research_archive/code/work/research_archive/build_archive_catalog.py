@@ -430,11 +430,25 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_onestephandsearch_horizon0.06s_edgeweight1_padsolref0.1_stabilizedigits_fixture_release0.1s.json',
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_onestephandsearch_horizon0.06s_edgeweight1_padsolref0.1_stabilizedigits_fixture_release0.2s.json',
 ]
+SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm*.json'))]
+SELECTED += [
+    'bandage_v0/joint_b_flex_a_right_pose_transfer_static_audit.json',
+    'bandage_v0/joint_b_flex_a_thumb_side_contact_search.json',
+    'bandage_v0/joint_b_flex_a_thumb_side_contact_candidates.npz',
+    'bandage_v0/joint_b_flex_b_left_handle_pose_transfer_static_audit.json',
+    'bandage_v0/joint_b_left_middle_handle_clearance_probe.json',
+    'bandage_v0/joint_b_pinchtab_worst_b_penetration_state.npz',
+]
+SELECTED=list(dict.fromkeys(SELECTED))
 SOURCE_CODE = [
     'work/research_archive/build_archive_catalog.py',
     'work/bandage_hierarchy/README.md',
     'work/bandage_hierarchy/build_extended_pinchtab.py',
     'work/bandage_hierarchy/probe_pinch_control_authority.py',
+    'work/bandage_hierarchy/audit_a_right_pose_transfer.py',
+    'work/bandage_hierarchy/search_a_thumb_side_contact.py',
+    'work/bandage_hierarchy/audit_b_left_handle_pose_transfer.py',
+    'work/bandage_hierarchy/probe_b_left_middle_clearance.py',
     'work/bandage_hierarchy/controller_router.py',
     'work/bandage_hierarchy/check_router.py',
     'work/bandage_hierarchy/build_scene.py',
@@ -604,4 +618,3 @@ def main() -> None:
 
 if __name__ == '__main__':
     main()
-
