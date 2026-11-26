@@ -41,6 +41,7 @@ parser.add_argument('--release-equipment-tray-with-stage',action='store_true')
 parser.add_argument('--b-middle-retract-mode',choices=('flex','abd'),default=None)
 parser.add_argument('--b-spool-normal-goal-n',type=float,default=None)
 parser.add_argument('--b-spool-force-control',action='store_true')
+parser.add_argument('--b-left-lift-mm',type=float,default=0.)
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
 parser.add_argument('--a-left-palm-weight',type=float,default=1000.)
 parser.add_argument('--a-left-follow-forearm',action='store_true')
@@ -104,6 +105,8 @@ if args.b_spool_normal_goal_n is not None and (args.b_spool_normal_goal_n<0 or n
     parser.error('--b-spool-normal-goal-n must be finite and nonnegative')
 if args.b_spool_force_control and (not args.stabilize_other_digits or args.b_spool_normal_goal_n is None):
     parser.error('--b-spool-force-control requires --stabilize-other-digits and a spool force goal')
+if args.b_left_lift_mm<0 or args.b_left_lift_mm>30 or not np.isfinite(args.b_left_lift_mm):
+    parser.error('--b-left-lift-mm must be finite and between 0 and 30')
 if args.a_left_support_goal_n is not None and (args.a_left_support_goal_n<0 or not np.isfinite(args.a_left_support_goal_n)):
     parser.error('--a-left-support-goal-n must be finite and nonnegative')
 if args.a_left_palm_weight<=0 or not np.isfinite(args.a_left_palm_weight):
@@ -172,6 +175,9 @@ index_tip_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==tip_ids[1]]
 initial_tip_positions=np.array([d.xpos[bid].copy() for bid in tip_ids])
 pad_body_id=m.body('dressing_pad').id
 initial_pad_position=d.xpos[pad_body_id].copy()
+spool_body_id=m.body('bandage_spool').id
+b_left_wrist_body_id=m.body('g1_b/wuji_left/l_wrist').id
+initial_spool_position=d.xpos[spool_body_id].copy()
 stage_geom_id=m.geom('dressing_stage').id
 tray_geom_id=m.geom('equipment_tray').id
 
@@ -190,6 +196,7 @@ wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
 wbc.dressing_contact_normal_goal_n=args.a_pad_normal_goal_n
 wbc.spool_contact_normal_goal_n=args.b_spool_normal_goal_n
 wbc.support_palm_force_goal_n=args.a_left_support_goal_n
+initial_b_left_wrist_world=d.xpos[m.body('g1_b/wuji_left/l_wrist').id].copy()
 if args.a_left_follow_forearm:
     forearm_bid=m.body('training_forearm_dynamic').id
     support_wrist_bid=m.body('g1_a/wuji_left/l_wrist').id
@@ -306,6 +313,15 @@ a_left_forearm_normal_impulse_ns=0.
 a_left_forearm_peak_single_contact_n=0.
 b_left_spool_pair_count=0
 b_left_spool_opposed_count=0
+b_left_spool_opposed_loaded_count=0
+b_left_spool_normal_impulse_ns={'thumb':0.,'index':0.}
+spool_world_contact_after_release_count=0
+max_spool_displacement=0.
+max_post_stage_release_spool_displacement=0.
+max_post_stage_release_spool_drop=0.
+max_post_stage_release_spool_wrist_relative_drift=0.
+stage_release_spool_position=None
+stage_release_spool_wrist_relative=None
 max_pad_displacement=0.
 stage_release_pad_position=None
 max_post_stage_release_pad_displacement=0.
@@ -338,6 +354,11 @@ try:
         smooth = 1. if args.start_at_goal else progress*progress*(3-2*progress)
         if not args.extended_tab:
             wbc.qref[:] = ref_at(smooth)
+        if args.b_left_lift_mm:
+            lift_progress=np.clip((d.time-.1)/.2,0.,1.)
+            lift_progress=lift_progress*lift_progress*(3.-2.*lift_progress)
+            wbc.palm_world_position_targets['g1_b/wuji_left/l_wrist']=(
+                initial_b_left_wrist_world+np.array([0.,0.,args.b_left_lift_mm/1000*lift_progress]))
         if args.a_left_follow_forearm:
             desired=d.xpos[forearm_bid]+d.xmat[forearm_bid].reshape(3,3)@initial_support_local
             delta=desired-initial_support_world
@@ -468,6 +489,8 @@ try:
         for substep in range(interval):
             if args.stage_release_s is not None and d.time>=args.stage_release_s and stage_release_pad_position is None:
                 stage_release_pad_position=d.xpos[pad_body_id].copy()
+                stage_release_spool_position=d.xpos[spool_body_id].copy()
+                stage_release_spool_wrist_relative=(d.xpos[spool_body_id]-d.xpos[b_left_wrist_body_id]).copy()
                 m.geom_contype[stage_geom_id]=0;m.geom_conaffinity[stage_geom_id]=0
                 if args.release_equipment_tray_with_stage:
                     m.geom_contype[tray_geom_id]=0;m.geom_conaffinity[tray_geom_id]=0
@@ -481,6 +504,15 @@ try:
             if stage_release_pad_position is not None:
                 max_post_stage_release_pad_displacement=max(max_post_stage_release_pad_displacement,
                     float(np.linalg.norm(d.xpos[pad_body_id]-stage_release_pad_position)))
+                if stage_release_spool_position is not None:
+                    max_post_stage_release_spool_displacement=max(max_post_stage_release_spool_displacement,
+                        float(np.linalg.norm(d.xpos[spool_body_id]-stage_release_spool_position)))
+                    max_post_stage_release_spool_drop=max(max_post_stage_release_spool_drop,
+                        float(stage_release_spool_position[2]-d.xpos[spool_body_id,2]))
+                    max_post_stage_release_spool_wrist_relative_drift=max(
+                        max_post_stage_release_spool_wrist_relative_drift,
+                        float(np.linalg.norm(d.xpos[spool_body_id]-d.xpos[b_left_wrist_body_id]-
+                                             stage_release_spool_wrist_relative)))
             max_hand_joint_speed=max(max_hand_joint_speed,float(np.max(np.abs(d.qvel[wbc.act_vadr[wbc.hand_indices]]))))
             interval_max_a_right_hand_speed=max(interval_max_a_right_hand_speed,
                 max((abs(float(d.qvel[wbc.act_vadr[i]])) for i in wbc.hand_indices
@@ -504,6 +536,7 @@ try:
             a_left_palm_here=False
             a_left_palm_force_here=0.
             b_left_spool_normals={'thumb':[],'index':[]}
+            b_left_spool_forces={'thumb':0.,'index':0.}
             for ci,c in enumerate(d.contact):
                 geoms = [int(g) for g in c.geom if g >= 0]
                 names = [m.geom(g).name for g in geoms]
@@ -529,6 +562,12 @@ try:
                         if any(name.startswith(f'g1_b/wuji_left/l_{digit}_') for name in bodies):
                             sign=1. if c.geom1>=0 and m.geom(c.geom1).name=='bandage_handle_prototype' else -1.
                             b_left_spool_normals[digit].append(sign*c.frame[:3].copy())
+                            wrench=np.zeros(6);mujoco.mj_contactForce(m,d,ci,wrench)
+                            normal=max(0.,float(wrench[0]))
+                            b_left_spool_forces[digit]+=normal
+                            b_left_spool_normal_impulse_ns[digit]+=normal*m.opt.timestep
+                    if stage_release_spool_position is not None and 'world' in bodies:
+                        spool_world_contact_after_release_count+=1
                 if 'dressing_pad' in bodies and c.dist<.003:
                     a_pad_tips['thumb'] |= 'g1_a/wuji_right/r_thumb_tip_sensor_frame' in bodies
                     a_pad_tips['index'] |= 'g1_a/wuji_right/r_index_finger_tip_sensor_frame' in bodies
@@ -589,7 +628,12 @@ try:
             b_left_spool_pair_count += all(b_left_spool_normals.values())
             b_left_spool_opposed_count += any(float(a@b)<-.5 for a in b_left_spool_normals['thumb']
                                                for b in b_left_spool_normals['index'])
+            b_left_spool_opposed_loaded_count += (b_left_spool_forces['thumb']>=.5 and
+                                                  b_left_spool_forces['index']>=.5 and
+                                                  any(float(a@b)<-.5 for a in b_left_spool_normals['thumb']
+                                                      for b in b_left_spool_normals['index']))
             max_pad_displacement=max(max_pad_displacement,float(np.linalg.norm(d.xpos[pad_body_id]-initial_pad_position)))
+            max_spool_displacement=max(max_spool_displacement,float(np.linalg.norm(d.xpos[spool_body_id]-initial_spool_position)))
             interval_opposed += opposed_here
             edge_drift = max(edge_drift, float(np.linalg.norm(d.flexvert_xpos[list(fixture_vertices)].mean(axis=0)-initial_edge)))
         tip_error = float(np.max(np.abs(d.qpos[qa]-wbc.qref[qa])))
@@ -686,6 +730,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_middle_retract_mode':args.b_middle_retract_mode,
           'b_spool_normal_goal_n':args.b_spool_normal_goal_n,
           'b_spool_force_control':args.b_spool_force_control,
+          'b_left_lift_mm':args.b_left_lift_mm,
           'a_left_support_goal_n':args.a_left_support_goal_n,
           'a_left_palm_position_weight':args.a_left_palm_weight,
           'a_left_follow_forearm':args.a_left_follow_forearm,
@@ -728,6 +773,13 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'final_training_elbow_angle_rad':float(d.qpos[m.joint('training_elbow_hinge').qposadr[0]]),
           'b_left_spool_thumb_index_contact_fraction':b_left_spool_pair_count/steps,
           'b_left_spool_opposed_contact_fraction':b_left_spool_opposed_count/steps,
+          'b_left_spool_opposed_loaded_ge0p5n_fraction':b_left_spool_opposed_loaded_count/steps,
+          'b_left_spool_mean_digit_normal_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in b_left_spool_normal_impulse_ns.items()},
+          'spool_world_contact_after_stage_release_events':spool_world_contact_after_release_count,
+          'max_spool_displacement_m':max_spool_displacement,
+          'max_post_stage_release_spool_displacement_m':max_post_stage_release_spool_displacement if stage_release_spool_position is not None else None,
+          'max_post_stage_release_spool_drop_m':max_post_stage_release_spool_drop if stage_release_spool_position is not None else None,
+          'max_post_stage_release_spool_wrist_relative_drift_m':max_post_stage_release_spool_wrist_relative_drift if stage_release_spool_position is not None else None,
           'max_dressing_pad_displacement_m':max_pad_displacement,
           'max_post_stage_release_pad_displacement_m':max_post_stage_release_pad_displacement if stage_release_pad_position is not None else None,
           'pad_stage_contact_events':pad_stage_contact_count,
@@ -757,6 +809,14 @@ report['a_pad_independent_hold_gate_pass']=bool(args.stage_release_s is not None
     a_pad_opposed_segment_count/steps>=.95 and max_post_stage_release_pad_displacement<=.003 and
     pad_world_contact_after_release_count==0 and max_a_pen<=.003 and
     error is None and d.time>=duration-1e-6)
+report['b_spool_independent_hold_gate_pass']=bool(
+    args.stage_release_s is not None and args.release_equipment_tray_with_stage and
+    args.stage_release_s<=duration-.2+1e-9 and stage_release_spool_position is not None and
+    b_left_spool_opposed_loaded_count/steps>=.95 and
+    spool_world_contact_after_release_count==0 and
+    max_post_stage_release_spool_drop<=.003 and
+    max_post_stage_release_spool_wrist_relative_drift<=.003 and
+    max(max_pen,max_a_pen)<=.003 and error is None and d.time>=duration-1e-6)
 report['material_grasp_gate_pass'] = bool(not args.disable_dressing_pad_contact and
     report['external_end_fixture_removed_for_test'] and
     error is None and d.time >= duration-1e-6 and
@@ -767,7 +827,7 @@ report['four_hand_sim_contact_gate_pass'] = bool(
     report['a_pad_independent_hold_gate_pass'] and report['material_grasp_gate_pass'] and
     a_left_forearm_palm_contact_count/steps >= .95 and
     a_left_forearm_palm_loaded_count/steps >= .95 and
-    b_left_spool_opposed_count/steps >= .95 and feet_count/steps >= .95)
+    report['b_spool_independent_hold_gate_pass'] and feet_count/steps >= .95)
 if worst_b_qpos is not None and args.a_pad_side_grasp_seed:
     np.savez_compressed(OUT/'joint_b_pinchtab_worst_b_penetration_state.npz',
                         qpos=worst_b_qpos,time_s=worst_b_contact['time_s'])
@@ -798,6 +858,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_bmiddleretract{args.b_middle_retract_mode}' if args.b_middle_retract_mode else '')+
                (f'_bspoolforce{args.b_spool_normal_goal_n:g}' if args.b_spool_normal_goal_n is not None else '')+
                ('_bspoolforcecontrol' if args.b_spool_force_control else '')+
+               (f'_bleftlift{args.b_left_lift_mm:g}mm' if args.b_left_lift_mm else '')+
                (f'_aleftsupport{args.a_left_support_goal_n:g}' if args.a_left_support_goal_n is not None else '')+
                (f'_aleftpalmweight{args.a_left_palm_weight:g}' if args.a_left_palm_weight!=1000. else '')+
                (f'_aleftfollowforearm{args.a_left_follow_max_offset_mm:g}mmstep{args.a_left_follow_max_step_mm:g}mm' if args.a_left_follow_forearm else '')+
