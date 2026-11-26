@@ -41,6 +41,11 @@ parser.add_argument('--b-middle-retract-mode',choices=('flex','abd'),default=Non
 parser.add_argument('--b-spool-normal-goal-n',type=float,default=None)
 parser.add_argument('--b-spool-force-control',action='store_true')
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
+parser.add_argument('--a-left-follow-forearm',action='store_true')
+parser.add_argument('--a-left-follow-max-offset-mm',type=float,default=2.)
+parser.add_argument('--a-left-follow-max-step-mm',type=float,default=.2)
+parser.add_argument('--training-elbow-stiffness',type=float,default=None)
+parser.add_argument('--training-elbow-damping',type=float,default=None)
 parser.add_argument('--flex-friction',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
@@ -95,6 +100,14 @@ if args.b_spool_force_control and (not args.stabilize_other_digits or args.b_spo
     parser.error('--b-spool-force-control requires --stabilize-other-digits and a spool force goal')
 if args.a_left_support_goal_n is not None and (args.a_left_support_goal_n<0 or not np.isfinite(args.a_left_support_goal_n)):
     parser.error('--a-left-support-goal-n must be finite and nonnegative')
+if args.a_left_follow_max_offset_mm<0 or not np.isfinite(args.a_left_follow_max_offset_mm):
+    parser.error('--a-left-follow-max-offset-mm must be finite and nonnegative')
+if args.a_left_follow_max_step_mm<0 or not np.isfinite(args.a_left_follow_max_step_mm):
+    parser.error('--a-left-follow-max-step-mm must be finite and nonnegative')
+for value,name in ((args.training_elbow_stiffness,'--training-elbow-stiffness'),
+                   (args.training_elbow_damping,'--training-elbow-damping')):
+    if value is not None and (value<0 or not np.isfinite(value)):
+        parser.error(f'{name} must be finite and nonnegative')
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
 SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if args.releasable_fixture else 'joint_dual_g1_pinchtab_extended20mm.xml') if args.extended_tab else
              'joint_dual_g1_pinchtab_releasable_fixture.xml' if args.releasable_fixture else
@@ -104,6 +117,11 @@ SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if ar
 PATH = OUT/('joint_b_pinchtab_rrt_path.npz' if args.pinchtab else
             'joint_b_flex_free_edge_rrt_path.npz')
 m = mujoco.MjModel.from_xml_path(str(SCENE))
+elbow_jid=m.joint('training_elbow_hinge').id
+if args.training_elbow_stiffness is not None:
+    m.jnt_stiffness[elbow_jid]=args.training_elbow_stiffness
+if args.training_elbow_damping is not None:
+    m.dof_damping[m.jnt_dofadr[elbow_jid]]=args.training_elbow_damping
 if args.disable_dressing_pad_contact:
     pad_geom=m.geom('dressing_pad_contact').id
     m.geom_contype[pad_geom]=0;m.geom_conaffinity[pad_geom]=0
@@ -158,6 +176,13 @@ wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
 wbc.dressing_contact_normal_goal_n=args.a_pad_normal_goal_n
 wbc.spool_contact_normal_goal_n=args.b_spool_normal_goal_n
 wbc.support_palm_force_goal_n=args.a_left_support_goal_n
+if args.a_left_follow_forearm:
+    forearm_bid=m.body('training_forearm_dynamic').id
+    support_wrist_bid=m.body('g1_a/wuji_left/l_wrist').id
+    initial_support_local=d.xmat[forearm_bid].reshape(3,3).T @ (
+        d.xpos[support_wrist_bid]-d.xpos[forearm_bid])
+    initial_support_world=d.xpos[support_wrist_bid].copy()
+    support_target_world=initial_support_world.copy()
 wbc.flex_measured_force_prior_weight=args.flex_measured_force_prior_weight
 if args.stabilize_other_digits or args.stabilize_all_digits:
     wbc.hand_position_mode=True
@@ -291,6 +316,18 @@ try:
         smooth = 1. if args.start_at_goal else progress*progress*(3-2*progress)
         if not args.extended_tab:
             wbc.qref[:] = ref_at(smooth)
+        if args.a_left_follow_forearm:
+            desired=d.xpos[forearm_bid]+d.xmat[forearm_bid].reshape(3,3)@initial_support_local
+            delta=desired-initial_support_world
+            distance=float(np.linalg.norm(delta))
+            if distance>args.a_left_follow_max_offset_mm/1000:
+                delta*=args.a_left_follow_max_offset_mm/1000/distance
+            next_delta=initial_support_world+delta-support_target_world
+            next_distance=float(np.linalg.norm(next_delta))
+            if next_distance>args.a_left_follow_max_step_mm/1000:
+                next_delta*=args.a_left_follow_max_step_mm/1000/next_distance
+            support_target_world+=next_delta
+            wbc.palm_world_position_targets['g1_a/wuji_left/l_wrist']=support_target_world.copy()
         if args.track_edge:
             wbc.tip_position_targets = {
                 tip_names[0]: tip_target[0] + d.flexvert_xpos[64:66].mean(axis=0)-initial_edge,
@@ -400,6 +437,7 @@ try:
             mujoco.mj_forward(m,d)
         solves += 1
         interval_opposed = 0
+        interval_a_left_support = 0
         interval_max_pen = 0.
         interval_max_a_pen=0.
         interval_max_a_right_hand_speed=0.
@@ -508,6 +546,7 @@ try:
             a_pad_opposed_segment_count += any(float(a@b)<-.5 for a in a_pad_segment_normals['thumb']
                                                 for b in a_pad_segment_normals['index'])
             a_left_forearm_support_count += a_left_support_here
+            interval_a_left_support += a_left_support_here
             b_left_spool_pair_count += all(b_left_spool_normals.values())
             b_left_spool_opposed_count += any(float(a@b)<-.5 for a in b_left_spool_normals['thumb']
                                                for b in b_left_spool_normals['index'])
@@ -538,6 +577,8 @@ try:
                       'tip_to_material_relative_shift_vector_m':material_relative_shift_vectors,
                       'worst_joint_name':joint_names[int(np.argmax(np.abs(d.qpos[qa]-wbc.qref[qa])))],
                       'opposed_tip_contact_fraction':interval_opposed/interval,
+                      'a_left_forearm_support_contact_fraction':interval_a_left_support/interval,
+                      'training_elbow_angle_rad':float(d.qpos[m.joint('training_elbow_hinge').qposadr[0]]),
                       'max_b_nonfloor_penetration_m':interval_max_pen,
                       'max_a_nonfloor_penetration_m':interval_max_a_pen,
                       'max_a_right_hand_joint_speed_rad_s':interval_max_a_right_hand_speed,
@@ -605,6 +646,11 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_spool_normal_goal_n':args.b_spool_normal_goal_n,
           'b_spool_force_control':args.b_spool_force_control,
           'a_left_support_goal_n':args.a_left_support_goal_n,
+          'a_left_follow_forearm':args.a_left_follow_forearm,
+          'a_left_follow_max_offset_mm':args.a_left_follow_max_offset_mm if args.a_left_follow_forearm else None,
+          'a_left_follow_max_step_mm':args.a_left_follow_max_step_mm if args.a_left_follow_forearm else None,
+          'training_elbow_stiffness_nm_rad':float(m.jnt_stiffness[elbow_jid]),
+          'training_elbow_damping_nms_rad':float(m.dof_damping[m.jnt_dofadr[elbow_jid]]),
           'flex_sliding_friction':float(m.flex_friction[0,0]),
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
@@ -700,6 +746,9 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_bspoolforce{args.b_spool_normal_goal_n:g}' if args.b_spool_normal_goal_n is not None else '')+
                ('_bspoolforcecontrol' if args.b_spool_force_control else '')+
                (f'_aleftsupport{args.a_left_support_goal_n:g}' if args.a_left_support_goal_n is not None else '')+
+               (f'_aleftfollowforearm{args.a_left_follow_max_offset_mm:g}mmstep{args.a_left_follow_max_step_mm:g}mm' if args.a_left_follow_forearm else '')+
+               (f'_elbowk{args.training_elbow_stiffness:g}' if args.training_elbow_stiffness is not None else '')+
+               (f'_elbowd{args.training_elbow_damping:g}' if args.training_elbow_damping is not None else '')+
                (f'_friction{args.flex_friction:g}' if args.flex_friction is not None else '')+
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+

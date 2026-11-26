@@ -24,6 +24,7 @@ class JointWBC:
   self.dressing_up_force_goal_n=None
   self.dressing_lateral_force_target_n=None
   self.tip_position_targets={}
+  self.palm_world_position_targets={}
   self.tip_position_weight=1000.
   self.spool_contact_normal_goal_n=None
   self.tail_proxy_digit_normal_goal_n=None
@@ -314,7 +315,9 @@ class JointWBC:
   for bid in self.palm_ids:
    jp=np.zeros((3,m.nv));jr=np.zeros_like(jp);jdp=np.zeros_like(jp);jdr=np.zeros_like(jp);mujoco.mj_jacBody(m,d,jp,jr,bid);mujoco.mj_jacDot(m,d,jdp,jdr,d.xpos[bid],bid)
    rp=np.zeros_like(jp);rr=np.zeros_like(jp);rdp=np.zeros_like(jp);rdr=np.zeros_like(jp);mujoco.mj_jacBody(m,ref,rp,rr,bid);mujoco.mj_jacDot(m,ref,rdp,rdr,ref.xpos[bid],bid)
-   Jtask=np.vstack((jp,jr));Jref=np.vstack((rp,rr));Jdot=np.vstack((jdp,jdr));Jrefdot=np.vstack((rdp,rdr));R=d.xmat[bid].reshape(3,3);Rref=ref.xmat[bid].reshape(3,3);orientation=.5*sum((np.cross(R[:,k],Rref[:,k]) for k in range(3)),start=np.zeros(3));error_task=np.r_[ref.xpos[bid]-d.xpos[bid],orientation]
+   Jtask=np.vstack((jp,jr));Jref=np.vstack((rp,rr));Jdot=np.vstack((jdp,jdr));Jrefdot=np.vstack((rdp,rdr));R=d.xmat[bid].reshape(3,3);Rref=ref.xmat[bid].reshape(3,3);orientation=.5*sum((np.cross(R[:,k],Rref[:,k]) for k in range(3)),start=np.zeros(3));target_position=np.asarray(self.palm_world_position_targets.get(m.body(bid).name,ref.xpos[bid]),dtype=float)
+   if target_position.shape!=(3,) or not np.all(np.isfinite(target_position)):raise ValueError('Palm target must be a finite 3D point')
+   error_task=np.r_[target_position-d.xpos[bid],orientation]
    taskJs.append(Jtask);taskTargets.append(80*error_task+18*(Jref@self.vref-Jtask@d.qvel)+Jref@self.aref+Jrefdot@self.vref-Jdot@d.qvel)
   for name in tip_names:
    bid=m.body(name).id
@@ -390,4 +393,3 @@ def main():
  ctrl,report,tau=JointWBC(m,d.qpos.copy()).solve(d);report.update(scope='single inverse-dynamics QP at initial stance, not closed-loop validation',qpos_teleport_in_simulation=False,object_external_actuation=False)
  (OUT/'joint_wbc_initial_qp.json').write_text(json.dumps(report,indent=2),encoding='utf-8');np.savez_compressed(OUT/'joint_wbc_initial_qp.npz',qpos=d.qpos,ctrl=ctrl,tau=tau);print(json.dumps(report))
 if __name__=='__main__':main()
-
