@@ -411,6 +411,7 @@ pad_stage_contact_count=0
 pad_world_contact_after_release_count=0
 pad_world_contact_geoms_after_release=set()
 tip_normal_impulse_ns={'thumb':0.,'index':0.}
+tip_loaded_ge0p5n_steps=0
 tip_peak_single_contact_normal_force_n={'thumb':0.,'index':0.}
 tip_shear_impulse_ns={'thumb':0.,'index':0.}
 edge_drift = 0.0
@@ -699,6 +700,7 @@ try:
             if not np.all(np.isfinite(d.qpos)):
                 raise RuntimeError('Nonfinite state')
             feet = {'a': set(), 'b': set()}
+            tip_step_normal_force_n={'thumb':0.,'index':0.}
             has_forearm_flex = False
             tip_normals={'thumb':[],'index':[]}
             a_pad_tips={'thumb':False,'index':False}
@@ -758,6 +760,7 @@ try:
                             wrench=np.zeros(6)
                             mujoco.mj_contactForce(m,d,ci,wrench)
                             normal=max(0.,float(wrench[0]))
+                            tip_step_normal_force_n[digit]+=normal
                             tip_normal_impulse_ns[digit]+=normal*m.opt.timestep
                             tip_shear_impulse_ns[digit]+=float(np.linalg.norm(wrench[1:3]))*m.opt.timestep
                             tip_peak_single_contact_normal_force_n[digit]=max(tip_peak_single_contact_normal_force_n[digit],normal)
@@ -783,6 +786,8 @@ try:
             flex_contact_count += has_forearm_flex
             opposed_here=any(np.dot(a,b)<-.5 for a in tip_normals['thumb'] for b in tip_normals['index'])
             opposed_contact_count += opposed_here
+            tip_loaded_ge0p5n_steps += (opposed_here and all(
+                force>=.5 for force in tip_step_normal_force_n.values()))
             a_pad_tip_pair_count += all(a_pad_tips.values())
             a_pad_segment_pair_count += all(a_pad_segment_normals.values())
             a_pad_opposed_segment_count += any(float(a@b)<-.5 for a in a_pad_segment_normals['thumb']
@@ -988,6 +993,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'max_post_release_material_slip_m':max_post_release_material_slip if post_release_offsets is not None else None,
           'max_post_release_edge_drift_m':max_post_release_edge_drift if post_release_edge is not None else None,
           'mean_tip_normal_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in tip_normal_impulse_ns.items()},
+          'b_right_opposed_loaded_ge0p5n_fraction':tip_loaded_ge0p5n_steps/max(steps,1),
           'peak_single_contact_normal_force_n':tip_peak_single_contact_normal_force_n,
           'mean_tip_shear_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in tip_shear_impulse_ns.items()},
           'max_tip_to_material_slip_m': max((max(item.get('tip_to_material_relative_shift_m',{}).values(),default=0.) for item in trace),default=0.),
@@ -1013,7 +1019,8 @@ report['b_spool_independent_hold_gate_pass']=bool(
 report['material_grasp_gate_pass'] = bool(not args.disable_dressing_pad_contact and
     report['external_end_fixture_removed_for_test'] and
     error is None and d.time >= duration-1e-6 and
-    opposed_contact_count/steps >= .95 and edge_drift <= .003 and
+    opposed_contact_count/steps >= .95 and
+    report['b_right_opposed_loaded_ge0p5n_fraction'] >= .95 and edge_drift <= .003 and
     report['max_tip_to_material_slip_m'] <= .003 and max(max_pen,max_a_pen) <= .003)
 # This is only a simultaneous contact check, not a full wrapping or hardware gate.
 report['four_hand_sim_contact_gate_pass'] = bool(
