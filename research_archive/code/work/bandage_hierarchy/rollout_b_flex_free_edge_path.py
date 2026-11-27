@@ -52,6 +52,12 @@ parser.add_argument('--b-spool-search-support-weight',type=float,default=0.)
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
 parser.add_argument('--a-left-palm-weight',type=float,default=1000.)
 parser.add_argument('--a-left-follow-forearm',action='store_true')
+parser.add_argument('--a-left-palm-contact-servo',action='store_true')
+parser.add_argument('--a-left-servo-max-step-mm',type=float,default=.5)
+parser.add_argument('--a-left-servo-max-offset-mm',type=float,default=20.)
+parser.add_argument('--a-left-servo-gain',type=float,default=.5)
+parser.add_argument('--a-left-servo-lookahead-s',type=float,default=0.)
+parser.add_argument('--a-left-palm-preload-mm',type=float,default=0.)
 parser.add_argument('--a-left-near-elbow-seed',action='store_true')
 parser.add_argument('--a-left-palm-only-seed',action='store_true')
 parser.add_argument('--a-left-follow-max-offset-mm',type=float,default=2.)
@@ -100,6 +106,10 @@ if args.a_pad_side_grasp_seed and not args.extended_tab:
     parser.error('--a-pad-side-grasp-seed requires --extended-tab')
 if args.a_left_near_elbow_seed and args.a_left_palm_only_seed:
     parser.error('Choose one A-left support seed')
+if args.a_left_follow_forearm and args.a_left_palm_contact_servo:
+    parser.error('Choose one A-left palm target controller')
+if args.a_left_palm_preload_mm and (args.a_left_follow_forearm or args.a_left_palm_contact_servo):
+    parser.error('Palm preload is a standalone target controller in this experiment')
 if args.stage_release_s is not None and args.stage_release_s<0:
     parser.error('--stage-release-s must be nonnegative')
 if args.a_pad_normal_goal_n is not None and (args.a_pad_normal_goal_n<0 or not np.isfinite(args.a_pad_normal_goal_n)):
@@ -139,6 +149,15 @@ if args.a_left_follow_max_offset_mm<0 or not np.isfinite(args.a_left_follow_max_
     parser.error('--a-left-follow-max-offset-mm must be finite and nonnegative')
 if args.a_left_follow_max_step_mm<0 or not np.isfinite(args.a_left_follow_max_step_mm):
     parser.error('--a-left-follow-max-step-mm must be finite and nonnegative')
+if (not 0<args.a_left_servo_max_step_mm<=5 or not np.isfinite(args.a_left_servo_max_step_mm) or
+        not 0<args.a_left_servo_max_offset_mm<=50 or not np.isfinite(args.a_left_servo_max_offset_mm)):
+    parser.error('A-left palm servo step/offset must be finite and within (0,5]/(0,50] mm')
+if not 0<args.a_left_servo_gain<=5 or not np.isfinite(args.a_left_servo_gain):
+    parser.error('--a-left-servo-gain must be finite and in (0,5]')
+if not 0<=args.a_left_servo_lookahead_s<=.1 or not np.isfinite(args.a_left_servo_lookahead_s):
+    parser.error('--a-left-servo-lookahead-s must be finite and in [0,0.1]')
+if not 0<=args.a_left_palm_preload_mm<=10 or not np.isfinite(args.a_left_palm_preload_mm):
+    parser.error('--a-left-palm-preload-mm must be finite and in [0,10]')
 for value,name in ((args.training_elbow_stiffness,'--training-elbow-stiffness'),
                    (args.training_elbow_damping,'--training-elbow-damping')):
     if value is not None and (value<0 or not np.isfinite(value)):
@@ -225,13 +244,26 @@ spool_pinch_actuators=[i for i in range(m.nu) if m.actuator(i).name.startswith('
                        any(token in m.actuator(i).name for token in ('THJ','FFJ'))]
 wbc.support_palm_force_goal_n=args.a_left_support_goal_n
 initial_b_left_wrist_world=d.xpos[m.body('g1_b/wuji_left/l_wrist').id].copy()
-if args.a_left_follow_forearm:
+if args.a_left_follow_forearm or args.a_left_palm_contact_servo or args.a_left_palm_preload_mm:
     forearm_bid=m.body('training_forearm_dynamic').id
     support_wrist_bid=m.body('g1_a/wuji_left/l_wrist').id
     initial_support_local=d.xmat[forearm_bid].reshape(3,3).T @ (
         d.xpos[support_wrist_bid]-d.xpos[forearm_bid])
     initial_support_world=d.xpos[support_wrist_bid].copy()
     support_target_world=initial_support_world.copy()
+if args.a_left_palm_contact_servo or args.a_left_palm_preload_mm:
+    support_forearm_geom=m.geom('manikin_forearm').id
+    support_palm_geoms=[g for g in range(m.ngeom) if m.geom_bodyid[g]==support_wrist_bid and m.geom_contype[g]]
+    if not support_palm_geoms:raise RuntimeError('No collidable A-left palm geometry')
+if args.a_left_palm_preload_mm:
+    preload_candidates=[]
+    for geom in support_palm_geoms:
+        points=np.zeros(6)
+        gap=float(mujoco.mj_geomDistance(m,d,geom,support_forearm_geom,1.,points))
+        preload_candidates.append((gap,points))
+    preload_gap,preload_points=min(preload_candidates,key=lambda item:item[0])
+    preload_direction=(preload_points[3:]-preload_points[:3])*(1. if preload_gap>=0 else -1.)
+    preload_direction/=max(float(np.linalg.norm(preload_direction)),1e-9)
 wbc.flex_measured_force_prior_weight=args.flex_measured_force_prior_weight
 if args.stabilize_other_digits or args.stabilize_all_digits:
     wbc.hand_position_mode=True
@@ -368,6 +400,8 @@ max_post_release_edge_drift=0.
 solves = 0
 error = None
 trace = []
+last_palm_gap=None
+previous_palm_gap=None
 scratch=mujoco.MjData(m) if (args.one_step_hand_search or args.b_spool_one_step_search) else None
 
 def ref_at(u):
@@ -387,6 +421,11 @@ try:
             lift_progress=lift_progress*lift_progress*(3.-2.*lift_progress)
             wbc.palm_world_position_targets['g1_b/wuji_left/l_wrist']=(
                 initial_b_left_wrist_world+np.array([0.,0.,args.b_left_lift_mm/1000*lift_progress]))
+        if args.a_left_palm_preload_mm:
+            preload_progress=np.clip((d.time-.1)/.08,0.,1.)
+            preload_progress=preload_progress*preload_progress*(3.-2.*preload_progress)
+            wbc.palm_world_position_targets['g1_a/wuji_left/l_wrist']=(
+                initial_support_world+preload_direction*args.a_left_palm_preload_mm/1000*preload_progress)
         if args.a_left_follow_forearm:
             desired=d.xpos[forearm_bid]+d.xmat[forearm_bid].reshape(3,3)@initial_support_local
             delta=desired-initial_support_world
@@ -398,6 +437,30 @@ try:
             if next_distance>args.a_left_follow_max_step_mm/1000:
                 next_delta*=args.a_left_follow_max_step_mm/1000/next_distance
             support_target_world+=next_delta
+            wbc.palm_world_position_targets['g1_a/wuji_left/l_wrist']=support_target_world.copy()
+        if args.a_left_palm_contact_servo:
+            candidate_gaps=[]
+            for geom in support_palm_geoms:
+                points=np.zeros(6)
+                gap=float(mujoco.mj_geomDistance(m,d,geom,support_forearm_geom,1.,points))
+                candidate_gaps.append((gap,points))
+            palm_gap,points=min(candidate_gaps,key=lambda item:item[0])
+            last_palm_gap=palm_gap
+            projected_gap=(palm_gap if previous_palm_gap is None else
+                           palm_gap+max(0.,palm_gap-previous_palm_gap)*
+                           args.a_left_servo_lookahead_s/.02)
+            previous_palm_gap=palm_gap
+            if projected_gap>.0002:
+                direction=(points[3:]-points[:3])*(1. if palm_gap>=0 else -1.)
+                length=float(np.linalg.norm(direction))
+                if length>1e-9:
+                    step=min(args.a_left_servo_gain*projected_gap,args.a_left_servo_max_step_mm/1000)
+                    proposed=support_target_world+step*direction/length
+                    offset=proposed-initial_support_world
+                    norm=float(np.linalg.norm(offset))
+                    if norm>args.a_left_servo_max_offset_mm/1000:
+                        offset*=args.a_left_servo_max_offset_mm/1000/norm
+                    support_target_world=initial_support_world+offset
             wbc.palm_world_position_targets['g1_a/wuji_left/l_wrist']=support_target_world.copy()
         if args.track_edge:
             wbc.tip_position_targets = {
@@ -750,6 +813,9 @@ try:
                       'opposed_tip_contact_fraction':interval_opposed/interval,
                       'a_left_forearm_support_contact_fraction':interval_a_left_support/interval,
                       'a_left_forearm_palm_contact_fraction':interval_a_left_palm/interval,
+                      'a_left_servo_measured_palm_gap_m':last_palm_gap if args.a_left_palm_contact_servo else None,
+                      'a_left_servo_projected_palm_gap_m':projected_gap if args.a_left_palm_contact_servo else None,
+                      'a_left_servo_target_offset_m':float(np.linalg.norm(support_target_world-initial_support_world)) if args.a_left_palm_contact_servo else None,
                       'training_elbow_angle_rad':float(d.qpos[m.joint('training_elbow_hinge').qposadr[0]]),
                       'max_b_nonfloor_penetration_m':interval_max_pen,
                       'max_a_nonfloor_penetration_m':interval_max_a_pen,
@@ -829,6 +895,12 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'a_left_support_goal_n':args.a_left_support_goal_n,
           'a_left_palm_position_weight':args.a_left_palm_weight,
           'a_left_follow_forearm':args.a_left_follow_forearm,
+          'a_left_palm_contact_servo':args.a_left_palm_contact_servo,
+          'a_left_servo_max_step_mm':args.a_left_servo_max_step_mm if args.a_left_palm_contact_servo else None,
+          'a_left_servo_max_offset_mm':args.a_left_servo_max_offset_mm if args.a_left_palm_contact_servo else None,
+          'a_left_servo_gain':args.a_left_servo_gain if args.a_left_palm_contact_servo else None,
+          'a_left_servo_lookahead_s':args.a_left_servo_lookahead_s if args.a_left_palm_contact_servo else None,
+          'a_left_palm_preload_mm':args.a_left_palm_preload_mm,
           'a_left_near_elbow_seed_static_only':args.a_left_near_elbow_seed,
           'a_left_palm_only_seed_static_only':args.a_left_palm_only_seed,
           'a_left_follow_max_offset_mm':args.a_left_follow_max_offset_mm if args.a_left_follow_forearm else None,
@@ -964,6 +1036,9 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_aleftsupport{args.a_left_support_goal_n:g}' if args.a_left_support_goal_n is not None else '')+
                (f'_aleftpalmweight{args.a_left_palm_weight:g}' if args.a_left_palm_weight!=1000. else '')+
                (f'_aleftfollowforearm{args.a_left_follow_max_offset_mm:g}mmstep{args.a_left_follow_max_step_mm:g}mm' if args.a_left_follow_forearm else '')+
+               (f'_aleftpalmservo{args.a_left_servo_max_step_mm:g}step{args.a_left_servo_max_offset_mm:g}maxgain{args.a_left_servo_gain:g}' if args.a_left_palm_contact_servo else '')+
+               (f'_aleftlookahead{args.a_left_servo_lookahead_s:g}s' if args.a_left_palm_contact_servo and args.a_left_servo_lookahead_s else '')+
+               (f'_aleftpreload{args.a_left_palm_preload_mm:g}mm' if args.a_left_palm_preload_mm else '')+
                (f'_elbowk{args.training_elbow_stiffness:g}' if args.training_elbow_stiffness is not None else '')+
                (f'_elbowd{args.training_elbow_damping:g}' if args.training_elbow_damping is not None else '')+
                (f'_friction{args.flex_friction:g}' if args.flex_friction is not None else '')+
