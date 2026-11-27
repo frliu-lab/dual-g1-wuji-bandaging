@@ -64,6 +64,8 @@ parser.add_argument('--a-left-follow-max-offset-mm',type=float,default=2.)
 parser.add_argument('--a-left-follow-max-step-mm',type=float,default=.2)
 parser.add_argument('--training-elbow-stiffness',type=float,default=None)
 parser.add_argument('--training-elbow-damping',type=float,default=None)
+parser.add_argument('--training-elbow-wbc-weight',type=float,default=None)
+parser.add_argument('--training-elbow-wbc-kp',type=float,default=None)
 parser.add_argument('--flex-friction',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
@@ -162,6 +164,10 @@ for value,name in ((args.training_elbow_stiffness,'--training-elbow-stiffness'),
                    (args.training_elbow_damping,'--training-elbow-damping')):
     if value is not None and (value<0 or not np.isfinite(value)):
         parser.error(f'{name} must be finite and nonnegative')
+for value,name in ((args.training_elbow_wbc_weight,'--training-elbow-wbc-weight'),
+                   (args.training_elbow_wbc_kp,'--training-elbow-wbc-kp')):
+    if value is not None and (value<=0 or not np.isfinite(value)):
+        parser.error(f'{name} must be positive and finite')
 suffix = f'_damping{args.edge_damping:g}' if args.edge_damping != .2 else ''
 SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if args.releasable_fixture else 'joint_dual_g1_pinchtab_extended20mm.xml') if args.extended_tab else
              'joint_dual_g1_pinchtab_releasable_fixture.xml' if args.releasable_fixture else
@@ -237,6 +243,10 @@ wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_conta
 wbc.backend = 'DIRECT'
 wbc.hand_acceleration_cap_rad_s2=args.hand_accel_cap
 wbc.max_qp_constraint_violation=args.wbc_constraint_tolerance
+if args.training_elbow_wbc_weight is not None:
+    wbc.weights[m.jnt_dofadr[elbow_jid]]=args.training_elbow_wbc_weight
+if args.training_elbow_wbc_kp is not None:
+    wbc.kp[m.jnt_dofadr[elbow_jid]]=args.training_elbow_wbc_kp
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
 wbc.dressing_contact_normal_goal_n=args.a_pad_normal_goal_n
 wbc.spool_contact_normal_goal_n=args.b_spool_normal_goal_n
@@ -907,6 +917,8 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'a_left_follow_max_step_mm':args.a_left_follow_max_step_mm if args.a_left_follow_forearm else None,
           'training_elbow_stiffness_nm_rad':float(m.jnt_stiffness[elbow_jid]),
           'training_elbow_damping_nms_rad':float(m.dof_damping[m.jnt_dofadr[elbow_jid]]),
+          'training_elbow_wbc_weight':args.training_elbow_wbc_weight,
+          'training_elbow_wbc_kp':args.training_elbow_wbc_kp,
           'flex_sliding_friction':float(m.flex_friction[0,0]),
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
@@ -1041,6 +1053,8 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_aleftpreload{args.a_left_palm_preload_mm:g}mm' if args.a_left_palm_preload_mm else '')+
                (f'_elbowk{args.training_elbow_stiffness:g}' if args.training_elbow_stiffness is not None else '')+
                (f'_elbowd{args.training_elbow_damping:g}' if args.training_elbow_damping is not None else '')+
+               (f'_elbowwbcweight{args.training_elbow_wbc_weight:g}' if args.training_elbow_wbc_weight is not None else '')+
+               (f'_elbowwbckp{args.training_elbow_wbc_kp:g}' if args.training_elbow_wbc_kp is not None else '')+
                (f'_friction{args.flex_friction:g}' if args.flex_friction is not None else '')+
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+
