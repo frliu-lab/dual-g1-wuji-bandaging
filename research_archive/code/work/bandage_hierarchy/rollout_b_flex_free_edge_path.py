@@ -23,6 +23,7 @@ parser.add_argument('--start-at-goal',action='store_true')
 parser.add_argument('--duration-s',type=float,default=1.)
 parser.add_argument('--flex-tip-force-n',type=float,default=None)
 parser.add_argument('--b-right-force-digits',choices=('both','thumb','index'),default='both')
+parser.add_argument('--b-right-initial-index-pip-offset-rad',type=float,default=0.)
 parser.add_argument('--measured-tip-force-n',type=float,default=None)
 parser.add_argument('--pinch-bias-preset',choices=('balanced_a','balanced_b'),default=None)
 parser.add_argument('--pinch-bias-until-s',type=float,default=None)
@@ -87,6 +88,8 @@ if args.fixture_release_s is not None and not args.releasable_fixture:
     parser.error('--fixture-release-s requires --releasable-fixture')
 if args.measured_tip_force_n is not None and (args.measured_tip_force_n<=0 or not args.pinchtab):
     parser.error('--measured-tip-force-n requires a positive force and --pinchtab')
+if not np.isfinite(args.b_right_initial_index_pip_offset_rad) or abs(args.b_right_initial_index_pip_offset_rad)>.15:
+    parser.error('--b-right-initial-index-pip-offset-rad must be finite and within ±0.15')
 if args.flex_friction is not None and (not np.isfinite(args.flex_friction) or args.flex_friction<=0):
     parser.error('--flex-friction must be positive and finite')
 if args.pinch_bias_until_s is not None and (args.pinch_bias_preset is None or args.pinch_bias_until_s<0):
@@ -218,6 +221,10 @@ if args.a_left_near_elbow_seed or args.a_left_palm_only_seed:
     seed=np.load(OUT/seed_name)
     for name in seed['joint_names']:
         adr=int(m.joint(str(name)).qposadr[0]);d.qpos[adr]=seed['qpos'][adr]
+if args.b_right_initial_index_pip_offset_rad:
+    joint=m.joint('g1_b/wuji_right/r_index_finger_pip')
+    adr=int(joint.qposadr[0]);lo,hi=m.jnt_range[joint.id]
+    d.qpos[adr]=np.clip(d.qpos[adr]+args.b_right_initial_index_pip_offset_rad,lo+.01,hi-.01)
 mujoco.mj_forward(m, d)
 tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
              'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
@@ -881,6 +888,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'edge_damping':args.edge_damping,
           'flex_tip_force_goal_n':args.flex_tip_force_n,
           'b_right_force_digits':args.b_right_force_digits,
+          'b_right_initial_index_pip_offset_rad':args.b_right_initial_index_pip_offset_rad,
           'measured_tip_force_goal_n':args.measured_tip_force_n,
           'pinch_bias_preset':args.pinch_bias_preset,
           'pinch_bias_until_s':args.pinch_bias_until_s,
@@ -1023,6 +1031,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_track_edge' if args.track_edge else '')+
                (f'_flexforce{args.flex_tip_force_n:g}' if args.flex_tip_force_n is not None else '')+
                (f'_brightforcedigits{args.b_right_force_digits}' if args.b_right_force_digits!='both' else '')+
+               (f'_brightinitialpip{args.b_right_initial_index_pip_offset_rad:g}' if args.b_right_initial_index_pip_offset_rad else '')+
                (f'_measuredforce{args.measured_tip_force_n:g}' if args.measured_tip_force_n is not None else '')+
                (f'_pinchbias{args.pinch_bias_preset}' if args.pinch_bias_preset else '')+
                (f'_biasuntil{args.pinch_bias_until_s:g}s' if args.pinch_bias_until_s is not None else '')+
