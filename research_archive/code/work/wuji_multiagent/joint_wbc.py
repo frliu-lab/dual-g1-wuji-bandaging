@@ -31,6 +31,7 @@ class JointWBC:
   self.flex_tip_normal_goal_n=None
   self.flex_measured_force_prior_weight=0.
   self.hand_acceleration_cap_rad_s2=200.
+  self.max_qp_constraint_violation=2e-5
   self.b_spool_contact_force_cap_n=None
   self.b_handle_lift_force_goal_n=None
   self.b_handle_lift_min_n=None
@@ -363,7 +364,7 @@ class JointWBC:
    if self.dressing_lift_min_n is not None:viol=max(viol,float(P['dressing_up_min'].value-dressing_up_coeff@f.value))
    if self.b_handle_lateral_force_target_n is not None:viol=max(viol,float(np.max(np.abs(spool_lateral_coeff@f.value-P['b_spool_lateral_target'].value))-.1))
    self.last_qp_constraint_violation=viol
-   return residual<=1e-4 and viol<=2e-5,residual
+   return residual<=1e-4 and viol<=self.max_qp_constraint_violation,residual
   valid,residual=valid_solution()
   if not valid and self.backend in ('OSQP','DIRECT'):fallback=True;direct_success=False;clarabel_solve();valid,residual=valid_solution()
   if not valid:raise RuntimeError('WBC invalid '+str(problem.status)+' residual '+str(residual)+' constraint violation '+str(self.last_qp_constraint_violation))

@@ -31,6 +31,7 @@ parser.add_argument('--hand-search-horizon-s',type=float,default=.02)
 parser.add_argument('--hand-search-edge-weight',type=float,default=.3)
 parser.add_argument('--hand-search-penetration-weight',type=float,default=10.)
 parser.add_argument('--hand-accel-cap',type=float,default=200.)
+parser.add_argument('--wbc-constraint-tolerance',type=float,default=2e-5)
 parser.add_argument('--disable-dressing-pad-contact',action='store_true')
 parser.add_argument('--dressing-pad-solref',type=float,default=None)
 parser.add_argument('--a-pad-side-grasp-seed',action='store_true')
@@ -45,6 +46,8 @@ parser.add_argument('--b-left-lift-mm',type=float,default=0.)
 parser.add_argument('--b-spool-one-step-search',action='store_true')
 parser.add_argument('--b-spool-search-horizon-s',type=float,default=.04)
 parser.add_argument('--b-spool-search-bias-rad',type=float,default=.05)
+parser.add_argument('--b-spool-search-post-release-bias-rad',type=float,default=None)
+parser.add_argument('--b-spool-search-switch-s',type=float,default=None)
 parser.add_argument('--b-spool-search-support-weight',type=float,default=0.)
 parser.add_argument('--a-left-support-goal-n',type=float,default=None)
 parser.add_argument('--a-left-palm-weight',type=float,default=1000.)
@@ -89,6 +92,8 @@ if args.hand_search_penetration_weight<0 or not np.isfinite(args.hand_search_pen
     parser.error('--hand-search-penetration-weight must be finite and nonnegative')
 if args.hand_accel_cap<200 or args.hand_accel_cap>1000 or not np.isfinite(args.hand_accel_cap):
     parser.error('--hand-accel-cap must be finite and between 200 and 1000')
+if not 0<args.wbc_constraint_tolerance<=1e-4 or not np.isfinite(args.wbc_constraint_tolerance):
+    parser.error('--wbc-constraint-tolerance must be finite and in (0, 1e-4]')
 if args.dressing_pad_solref is not None and (args.dressing_pad_solref<.02 or args.dressing_pad_solref>.2):
     parser.error('--dressing-pad-solref must be between 0.02 and 0.2 s')
 if args.a_pad_side_grasp_seed and not args.extended_tab:
@@ -115,6 +120,15 @@ if not .02<=args.b_spool_search_horizon_s<=.1 or not np.isfinite(args.b_spool_se
     parser.error('--b-spool-search-horizon-s must be finite and between 0.02 and 0.1')
 if not 0<args.b_spool_search_bias_rad<=.2 or not np.isfinite(args.b_spool_search_bias_rad):
     parser.error('--b-spool-search-bias-rad must be finite and between 0 and 0.2')
+if args.b_spool_search_post_release_bias_rad is not None and (
+        not 0<args.b_spool_search_post_release_bias_rad<=.2 or
+        not np.isfinite(args.b_spool_search_post_release_bias_rad) or args.stage_release_s is None or
+        not args.b_spool_one_step_search):
+    parser.error('--b-spool-search-post-release-bias-rad requires spool search and stage release, and must be in (0, 0.2]')
+if args.b_spool_search_switch_s is not None and (
+        args.b_spool_search_post_release_bias_rad is None or args.b_spool_search_switch_s<0 or
+        not np.isfinite(args.b_spool_search_switch_s)):
+    parser.error('--b-spool-search-switch-s requires post-release bias and must be nonnegative')
 if args.b_spool_search_support_weight<0 or not np.isfinite(args.b_spool_search_support_weight):
     parser.error('--b-spool-search-support-weight must be finite and nonnegative')
 if args.a_left_support_goal_n is not None and (args.a_left_support_goal_n<0 or not np.isfinite(args.a_left_support_goal_n)):
@@ -203,6 +217,7 @@ wbc = JointWBC(m, d.qpos.copy(), palm_names=palms, contact_filter=relevant_conta
                palm_position_weights=[args.a_left_palm_weight,1000.,1000.,args.b_right_palm_weight])
 wbc.backend = 'DIRECT'
 wbc.hand_acceleration_cap_rad_s2=args.hand_accel_cap
+wbc.max_qp_constraint_violation=args.wbc_constraint_tolerance
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
 wbc.dressing_contact_normal_goal_n=args.a_pad_normal_goal_n
 wbc.spool_contact_normal_goal_n=args.b_spool_normal_goal_n
@@ -494,9 +509,13 @@ try:
         selected_spool_candidate='baseline'
         predicted_spool_score=None
         if args.b_spool_one_step_search:
+            spool_bias_magnitude=(args.b_spool_search_post_release_bias_rad
+                                  if args.b_spool_search_post_release_bias_rad is not None and
+                                     d.time>=(args.b_spool_search_switch_s if args.b_spool_search_switch_s is not None
+                                              else args.stage_release_s) else args.b_spool_search_bias_rad)
             candidate_biases=[('baseline',{})]
             candidate_biases += [(f'{m.actuator(i).name}_{sign:+g}',{i:sign})
-                                 for i in spool_pinch_actuators for sign in (-args.b_spool_search_bias_rad,args.b_spool_search_bias_rad)]
+                                 for i in spool_pinch_actuators for sign in (-spool_bias_magnitude,spool_bias_magnitude)]
             scores=[]
             base_ctrl=d.ctrl.copy()
             for label,bias in candidate_biases:
@@ -789,6 +808,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'hand_search_edge_weight':args.hand_search_edge_weight if args.one_step_hand_search else None,
           'hand_search_penetration_weight':args.hand_search_penetration_weight if args.one_step_hand_search else None,
           'hand_acceleration_cap_rad_s2':args.hand_accel_cap,
+          'wbc_constraint_tolerance':args.wbc_constraint_tolerance,
           'dressing_pad_contact_disabled_counterfactual':args.disable_dressing_pad_contact,
           'dressing_pad_solref_time_s':args.dressing_pad_solref,
           'a_pad_side_grasp_seed_static_only':args.a_pad_side_grasp_seed,
@@ -803,6 +823,8 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_spool_one_step_search':args.b_spool_one_step_search,
           'b_spool_search_horizon_s':args.b_spool_search_horizon_s if args.b_spool_one_step_search else None,
           'b_spool_search_bias_rad':args.b_spool_search_bias_rad if args.b_spool_one_step_search else None,
+          'b_spool_search_post_release_bias_rad':args.b_spool_search_post_release_bias_rad,
+          'b_spool_search_switch_s':args.b_spool_search_switch_s,
           'b_spool_search_support_weight':args.b_spool_search_support_weight if args.b_spool_one_step_search else None,
           'a_left_support_goal_n':args.a_left_support_goal_n,
           'a_left_palm_position_weight':args.a_left_palm_weight,
@@ -919,6 +941,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_edgeweight{args.hand_search_edge_weight:g}' if args.one_step_hand_search and args.hand_search_edge_weight!=.3 else '')+
                (f'_penweight{args.hand_search_penetration_weight:g}' if args.one_step_hand_search and args.hand_search_penetration_weight!=10. else '')+
                (f'_handaccelcap{args.hand_accel_cap:g}' if args.hand_accel_cap!=200. else '')+
+               (f'_wbctol{args.wbc_constraint_tolerance:g}' if args.wbc_constraint_tolerance!=2e-5 else '')+
                ('_nopadcontact' if args.disable_dressing_pad_contact else '')+
                (f'_padsolref{args.dressing_pad_solref:g}' if args.dressing_pad_solref is not None else '')+
                ('_apadsidegraspseed' if args.a_pad_side_grasp_seed else '')+
@@ -935,6 +958,8 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_bspoolonestepsearch' if args.b_spool_one_step_search else '')+
                (f'_bspoolhorizon{args.b_spool_search_horizon_s:g}s' if args.b_spool_one_step_search and args.b_spool_search_horizon_s!=.04 else '')+
                (f'_bspoolbias{args.b_spool_search_bias_rad:g}' if args.b_spool_one_step_search and args.b_spool_search_bias_rad!=.05 else '')+
+               (f'_bspoolpostbias{args.b_spool_search_post_release_bias_rad:g}' if args.b_spool_search_post_release_bias_rad is not None else '')+
+               (f'_bspoolswitch{args.b_spool_search_switch_s:g}s' if args.b_spool_search_switch_s is not None else '')+
                (f'_bspoolsupportweight{args.b_spool_search_support_weight:g}' if args.b_spool_one_step_search and args.b_spool_search_support_weight else '')+
                (f'_aleftsupport{args.a_left_support_goal_n:g}' if args.a_left_support_goal_n is not None else '')+
                (f'_aleftpalmweight{args.a_left_palm_weight:g}' if args.a_left_palm_weight!=1000. else '')+
