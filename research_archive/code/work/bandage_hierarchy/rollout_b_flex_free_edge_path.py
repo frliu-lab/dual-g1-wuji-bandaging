@@ -79,6 +79,7 @@ parser.add_argument('--tip-closure-mm',type=float,default=0.)
 parser.add_argument('--tip-weight',type=float,default=1000.)
 parser.add_argument('--flex-measured-force-prior-weight',type=float,default=0.)
 parser.add_argument('--releasable-fixture',action='store_true')
+parser.add_argument('--gate-fixture-release-on-loaded-pinch',action='store_true')
 parser.add_argument('--fixture-release-s',type=float,default=None)
 parser.add_argument('--pinch-closure-mm',type=float,default=0.)
 parser.add_argument('--b-right-palm-weight',type=float,default=1000.)
@@ -87,6 +88,8 @@ if args.extended_tab and (not args.pinchtab or not args.start_at_goal):
     parser.error('--extended-tab requires --pinchtab --start-at-goal; the existing path has a different flex state')
 if args.fixture_release_s is not None and not args.releasable_fixture:
     parser.error('--fixture-release-s requires --releasable-fixture')
+if args.gate_fixture_release_on_loaded_pinch and args.fixture_release_s is None:
+    parser.error('--gate-fixture-release-on-loaded-pinch requires --fixture-release-s')
 if args.measured_tip_force_n is not None and (args.measured_tip_force_n<=0 or not args.pinchtab):
     parser.error('--measured-tip-force-n requires a positive force and --pinchtab')
 if not np.isfinite(args.b_right_initial_index_pip_offset_rad) or abs(args.b_right_initial_index_pip_offset_rad)>.15:
@@ -97,6 +100,8 @@ if args.pinch_bias_until_s is not None and (args.pinch_bias_preset is None or ar
     parser.error('--pinch-bias-until-s requires a preset and nonnegative time')
 if args.one_step_hand_search and (not args.extended_tab or args.pinch_bias_preset or args.measured_tip_force_n):
     parser.error('--one-step-hand-search requires --extended-tab and excludes other hand corrections')
+if args.gate_fixture_release_on_loaded_pinch and args.one_step_hand_search:
+    parser.error('Loaded-pinch release gate is not yet modeled inside B-right hand search')
 if args.one_step_hand_search_until_s is not None and (
         not args.one_step_hand_search or args.one_step_hand_search_until_s<=0 or
         not np.isfinite(args.one_step_hand_search_until_s)):
@@ -418,6 +423,8 @@ tip_shear_impulse_ns={'thumb':0.,'index':0.}
 edge_drift = 0.0
 max_hand_joint_speed=0.
 post_release_offsets=None
+loaded_pinch_continuous_s=0.
+actual_fixture_release_s=None
 post_release_edge=None
 max_post_release_material_slip=0.
 max_post_release_edge_drift=0.
@@ -680,8 +687,27 @@ try:
                 m.geom_contype[stage_geom_id]=0;m.geom_conaffinity[stage_geom_id]=0
                 if args.release_equipment_tray_with_stage:
                     m.geom_contype[tray_geom_id]=0;m.geom_conaffinity[tray_geom_id]=0
-            if args.fixture_release_s is not None and d.time>=args.fixture_release_s:
+            if args.gate_fixture_release_on_loaded_pinch and post_release_offsets is None:
+                release_forces={'thumb':0.,'index':0.}
+                for ci,c in enumerate(d.contact):
+                    if not any(f>=0 for f in c.flex):continue
+                    bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
+                    for digit,tip in zip(('thumb','index'),tip_names):
+                        if tip in bodies:
+                            wrench=np.zeros(6);mujoco.mj_contactForce(m,d,ci,wrench)
+                            release_forces[digit]+=max(0.,float(wrench[0]))
+                loaded_pinch_continuous_s=(loaded_pinch_continuous_s+m.opt.timestep
+                    if min(release_forces.values())>=.5 else 0.)
+            release_ready=(not args.gate_fixture_release_on_loaded_pinch or
+                           loaded_pinch_continuous_s>=.05-1e-9)
+            if (args.gate_fixture_release_on_loaded_pinch and
+                    d.time>=args.fixture_release_s and not release_ready):
+                raise RuntimeError('Loaded-pinch release interlock: scheduled fixture release blocked; '
+                    f'thumb={release_forces["thumb"]:.3f} N index={release_forces["index"]:.3f} N, '
+                    f'continuous={loaded_pinch_continuous_s:.3f} s')
+            if args.fixture_release_s is not None and d.time>=args.fixture_release_s and release_ready:
                 if post_release_offsets is None:
+                    actual_fixture_release_s=float(d.time)
                     post_release_offsets={name:d.xpos[m.body(name).id]-weights@d.flexvert_xpos[verts]
                                           for name,(verts,weights,_) in material_targets.items()}
                     post_release_edge=d.flexvert_xpos[list(fixture_vertices)].mean(axis=0).copy()
@@ -1009,6 +1035,8 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'max_post_release_edge_drift_m':max_post_release_edge_drift if post_release_edge is not None else None,
           'mean_tip_normal_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in tip_normal_impulse_ns.items()},
           'b_right_opposed_loaded_ge0p5n_fraction':tip_loaded_ge0p5n_steps/max(steps,1),
+          'fixture_release_gated_on_loaded_pinch':args.gate_fixture_release_on_loaded_pinch,
+          'actual_fixture_release_s':actual_fixture_release_s,
           'peak_single_contact_normal_force_n':tip_peak_single_contact_normal_force_n,
           'mean_tip_shear_force_n':{name:impulse/max(float(d.time),1e-9) for name,impulse in tip_shear_impulse_ns.items()},
           'max_tip_to_material_slip_m': max((max(item.get('tip_to_material_relative_shift_m',{}).values(),default=0.) for item in trace),default=0.),
@@ -1104,6 +1132,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_tipweight{args.tip_weight:g}' if args.material_tip_follow and args.tip_weight!=1000. else '')+
                (f'_forceprior{args.flex_measured_force_prior_weight:g}' if args.flex_measured_force_prior_weight else '')+
                ('_fixture' if args.releasable_fixture else '')+
+               ('_fixtureloadgate' if args.gate_fixture_release_on_loaded_pinch else '')+
                (f'_release{args.fixture_release_s:g}s' if args.fixture_release_s is not None else '')+
                (f'_pinchclosure{args.pinch_closure_mm:g}mm' if args.pinch_closure_mm else '')+
                (f'_palmweight{args.b_right_palm_weight:g}' if args.b_right_palm_weight!=1000. else '')+
