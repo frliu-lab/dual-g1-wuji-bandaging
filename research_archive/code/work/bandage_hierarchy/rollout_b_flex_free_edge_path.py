@@ -27,6 +27,7 @@ parser.add_argument('--measured-tip-force-n',type=float,default=None)
 parser.add_argument('--pinch-bias-preset',choices=('balanced_a','balanced_b'),default=None)
 parser.add_argument('--pinch-bias-until-s',type=float,default=None)
 parser.add_argument('--one-step-hand-search',action='store_true')
+parser.add_argument('--one-step-hand-search-until-s',type=float,default=None)
 parser.add_argument('--hand-search-horizon-s',type=float,default=.02)
 parser.add_argument('--hand-search-edge-weight',type=float,default=.3)
 parser.add_argument('--hand-search-penetration-weight',type=float,default=10.)
@@ -92,6 +93,10 @@ if args.pinch_bias_until_s is not None and (args.pinch_bias_preset is None or ar
     parser.error('--pinch-bias-until-s requires a preset and nonnegative time')
 if args.one_step_hand_search and (not args.extended_tab or args.pinch_bias_preset or args.measured_tip_force_n):
     parser.error('--one-step-hand-search requires --extended-tab and excludes other hand corrections')
+if args.one_step_hand_search_until_s is not None and (
+        not args.one_step_hand_search or args.one_step_hand_search_until_s<=0 or
+        not np.isfinite(args.one_step_hand_search_until_s)):
+    parser.error('--one-step-hand-search-until-s requires hand search and must be positive and finite')
 if args.hand_search_horizon_s<.02 or args.hand_search_horizon_s>.1:
     parser.error('--hand-search-horizon-s must be between 0.02 and 0.1')
 if args.hand_search_edge_weight<0 or not np.isfinite(args.hand_search_edge_weight):
@@ -537,7 +542,7 @@ try:
             mujoco.mj_forward(m,d)
         selected_hand_candidate='baseline'
         predicted_hand_score=None
-        if args.one_step_hand_search:
+        if args.one_step_hand_search and (args.one_step_hand_search_until_s is None or d.time<args.one_step_hand_search_until_s):
             candidate_biases=[('baseline',{})]
             candidate_biases += [(f'{m.actuator(i).name}_{sign:+g}',{i:sign})
                                  for i in pinch_actuators for sign in (-.05,.05)]
@@ -880,6 +885,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'pinch_bias_preset':args.pinch_bias_preset,
           'pinch_bias_until_s':args.pinch_bias_until_s,
           'one_step_hand_search':args.one_step_hand_search,
+          'one_step_hand_search_until_s':args.one_step_hand_search_until_s,
           'hand_search_horizon_s':args.hand_search_horizon_s if args.one_step_hand_search else None,
           'hand_search_edge_weight':args.hand_search_edge_weight if args.one_step_hand_search else None,
           'hand_search_penetration_weight':args.hand_search_penetration_weight if args.one_step_hand_search else None,
@@ -1021,6 +1027,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_pinchbias{args.pinch_bias_preset}' if args.pinch_bias_preset else '')+
                (f'_biasuntil{args.pinch_bias_until_s:g}s' if args.pinch_bias_until_s is not None else '')+
                ('_onestephandsearch' if args.one_step_hand_search else '')+
+               (f'_handsearchuntil{args.one_step_hand_search_until_s:g}s' if args.one_step_hand_search_until_s is not None else '')+
                (f'_horizon{args.hand_search_horizon_s:g}s' if args.one_step_hand_search and args.hand_search_horizon_s!=.02 else '')+
                (f'_edgeweight{args.hand_search_edge_weight:g}' if args.one_step_hand_search and args.hand_search_edge_weight!=.3 else '')+
                (f'_penweight{args.hand_search_penetration_weight:g}' if args.one_step_hand_search and args.hand_search_penetration_weight!=10. else '')+
