@@ -31,6 +31,7 @@ parser.add_argument('--one-step-hand-search',action='store_true')
 parser.add_argument('--one-step-hand-search-until-s',type=float,default=None)
 parser.add_argument('--hand-search-horizon-s',type=float,default=.02)
 parser.add_argument('--hand-search-edge-weight',type=float,default=.3)
+parser.add_argument('--hand-search-force-weight',type=float,default=0.)
 parser.add_argument('--hand-search-penetration-weight',type=float,default=10.)
 parser.add_argument('--hand-accel-cap',type=float,default=200.)
 parser.add_argument('--wbc-constraint-tolerance',type=float,default=2e-5)
@@ -583,7 +584,20 @@ try:
                     weights@scratch.flexvert_xpos[verts]-initial_material_offsets[name]))
                     for name,(verts,weights,_) in material_targets.items())
                 drift=float(np.linalg.norm(scratch.flexvert_xpos[list(fixture_vertices)].mean(axis=0)-initial_edge))
-                score=slip+args.hand_search_edge_weight*drift+args.hand_search_penetration_weight*max(0.,candidate_max_penetration-.003)
+                tip_forces={'thumb':0.,'index':0.}
+                for ci,c in enumerate(scratch.contact):
+                    if not any(f>=0 for f in c.flex):
+                        continue
+                    bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
+                    for digit,tip in zip(('thumb','index'),tip_names):
+                        if tip in bodies:
+                            wrench=np.zeros(6)
+                            mujoco.mj_contactForce(m,scratch,ci,wrench)
+                            tip_forces[digit]+=max(0.,float(wrench[0]))
+                force_deficit=sum(max(0.,.5-force) for force in tip_forces.values())
+                score=(slip+args.hand_search_edge_weight*drift+
+                       args.hand_search_penetration_weight*max(0.,candidate_max_penetration-.003)+
+                       args.hand_search_force_weight*force_deficit)
                 scores.append((score,label,bias))
                 m.geom_contype[stage_geom_id],m.geom_conaffinity[stage_geom_id]=stage_contact_backup
                 m.geom_contype[tray_geom_id],m.geom_conaffinity[tray_geom_id]=tray_contact_backup
@@ -901,6 +915,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'one_step_hand_search_until_s':args.one_step_hand_search_until_s,
           'hand_search_horizon_s':args.hand_search_horizon_s if args.one_step_hand_search else None,
           'hand_search_edge_weight':args.hand_search_edge_weight if args.one_step_hand_search else None,
+          'hand_search_force_weight':args.hand_search_force_weight if args.one_step_hand_search else None,
           'hand_search_penetration_weight':args.hand_search_penetration_weight if args.one_step_hand_search else None,
           'hand_acceleration_cap_rad_s2':args.hand_accel_cap,
           'wbc_constraint_tolerance':args.wbc_constraint_tolerance,
@@ -1046,6 +1061,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_handsearchuntil{args.one_step_hand_search_until_s:g}s' if args.one_step_hand_search_until_s is not None else '')+
                (f'_horizon{args.hand_search_horizon_s:g}s' if args.one_step_hand_search and args.hand_search_horizon_s!=.02 else '')+
                (f'_edgeweight{args.hand_search_edge_weight:g}' if args.one_step_hand_search and args.hand_search_edge_weight!=.3 else '')+
+               (f'_forceweight{args.hand_search_force_weight:g}' if args.one_step_hand_search and args.hand_search_force_weight else '')+
                (f'_penweight{args.hand_search_penetration_weight:g}' if args.one_step_hand_search and args.hand_search_penetration_weight!=10. else '')+
                (f'_handaccelcap{args.hand_accel_cap:g}' if args.hand_accel_cap!=200. else '')+
                (f'_wbctol{args.wbc_constraint_tolerance:g}' if args.wbc_constraint_tolerance!=2e-5 else '')+
