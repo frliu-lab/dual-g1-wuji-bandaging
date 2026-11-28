@@ -26,6 +26,10 @@ parser.add_argument('--b-right-force-digits',choices=('both','thumb','index'),de
 parser.add_argument('--b-right-position-control',action='store_true')
 parser.add_argument('--b-right-loaded-pinch-seed',action='store_true')
 parser.add_argument('--b-right-loaded-pinch-seed-rank',type=int,default=-1)
+parser.add_argument('--reinforced-hem',action='store_true')
+parser.add_argument('--b-right-hem-seed-rank',type=int,default=0)
+parser.add_argument('--hem-force-n',type=float,default=None)
+parser.add_argument('--hem-radius-mm',type=float,default=2.5)
 parser.add_argument('--b-right-digit-material-anchor',action='store_true')
 parser.add_argument('--flex-contact-radius-mm',type=float,default=1.)
 parser.add_argument('--b-right-initial-index-pip-offset-rad',type=float,default=0.)
@@ -110,7 +114,19 @@ if args.b_right_loaded_pinch_seed_rank < -2 or args.b_right_loaded_pinch_seed_ra
         args.b_right_loaded_pinch_seed_rank != -1 and not args.b_right_loaded_pinch_seed):
     parser.error('--b-right-loaded-pinch-seed-rank requires loaded seed and rank -2 or 0..29')
 if args.b_right_digit_material_anchor and (not args.b_right_loaded_pinch_seed or args.material_tip_follow):
-    parser.error('--b-right-digit-material-anchor requires loaded seed and excludes tip following')
+    if not args.reinforced_hem or args.material_tip_follow:
+        parser.error('--b-right-digit-material-anchor requires a loaded or hem seed and excludes tip following')
+if args.reinforced_hem and (not args.extended_tab or not args.releasable_fixture or
+                            not args.b_right_digit_material_anchor or args.b_right_loaded_pinch_seed):
+    parser.error('--reinforced-hem requires extended tab, releasable fixture and digit anchor; excludes loaded flex seed')
+if not 0<=args.b_right_hem_seed_rank<=29:
+    parser.error('--b-right-hem-seed-rank must be in [0,29]')
+if args.hem_force_n is not None and (not args.reinforced_hem or args.hem_force_n<=0 or
+                                     not np.isfinite(args.hem_force_n)):
+    parser.error('--hem-force-n requires reinforced hem and a positive finite target')
+if not np.isfinite(args.hem_radius_mm) or not 1.5<=args.hem_radius_mm<=2.5 or (
+        not args.reinforced_hem and args.hem_radius_mm!=2.5):
+    parser.error('--hem-radius-mm requires reinforced hem and must be in [1.5,2.5]')
 if args.flex_friction is not None and (not np.isfinite(args.flex_friction) or args.flex_friction<=0):
     parser.error('--flex-friction must be positive and finite')
 if args.pinch_bias_until_s is not None and (args.pinch_bias_preset is None or args.pinch_bias_until_s<0):
@@ -207,9 +223,17 @@ SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if ar
              f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5_pinchtab_bulged.xml'
              if args.pinchtab else
              f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5{suffix}.xml')
+if args.reinforced_hem:
+    SCENE=OUT/'joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml'
 PATH = OUT/('joint_b_pinchtab_rrt_path.npz' if args.pinchtab else
             'joint_b_flex_free_edge_rrt_path.npz')
 m = mujoco.MjModel.from_xml_path(str(SCENE))
+hem_body_id=m.body('bandage_reinforced_hem').id if args.reinforced_hem else None
+if args.reinforced_hem:
+    m.geom_size[m.geom('bandage_reinforced_hem_grasp').id,0]=args.hem_radius_mm/1000
+def bandage_contact(c):
+    return any(f>=0 for f in c.flex) or (args.reinforced_hem and any(
+        g>=0 and m.geom(int(g)).name=='bandage_reinforced_hem_grasp' for g in c.geom))
 m.flex_radius[:]=args.flex_contact_radius_mm/1000
 elbow_jid=m.joint('training_elbow_hinge').id
 if args.training_elbow_stiffness is not None:
@@ -264,6 +288,15 @@ if args.b_right_loaded_pinch_seed:
         d.qpos[adr]=np.clip(d.qpos[adr]+.5,lo+.01,hi-.01)
     for name,value in zip(candidate['joint_names'],hand_seed['joint_targets_rad']):
         d.qpos[m.joint(name).qposadr[0]]=value
+if args.reinforced_hem:
+    candidate=json.loads((OUT/'joint_b_reinforced_hem_static_grasp_screen.json').read_text())
+    hand_seed=candidate['top_passing'][args.b_right_hem_seed_rank]
+    for name in ('g1_b/wuji_right/r_middle_finger_mcp_flex',
+                 'g1_b/wuji_right/r_middle_finger_pip',
+                 'g1_b/wuji_right/r_middle_finger_dip'):
+        d.qpos[m.joint(name).qposadr[0]]+=.5
+    for name,value in zip(candidate['joint_names'],hand_seed['joint_targets_rad']):
+        d.qpos[m.joint(name).qposadr[0]]=value
 mujoco.mj_forward(m, d)
 tip_names = ('g1_b/wuji_right/r_thumb_tip_sensor_frame',
              'g1_b/wuji_right/r_index_finger_tip_sensor_frame')
@@ -299,6 +332,7 @@ if args.training_elbow_wbc_weight is not None:
 if args.training_elbow_wbc_kp is not None:
     wbc.kp[m.jnt_dofadr[elbow_jid]]=args.training_elbow_wbc_kp
 wbc.flex_tip_normal_goal_n=args.flex_tip_force_n
+wbc.hem_contact_normal_goal_n=args.hem_force_n
 wbc.dressing_contact_normal_goal_n=args.a_pad_normal_goal_n
 wbc.spool_contact_normal_goal_n=args.b_spool_normal_goal_n
 spool_pinch_actuators=[i for i in range(m.nu) if m.actuator(i).name.startswith('g1_b/wuji_left/l_') and
@@ -391,6 +425,8 @@ if args.track_edge:
     wbc.tip_position_weight = 1000.
 material_targets={}
 initial_material_offsets={}
+def material_point(data,verts,weights):
+    return data.xpos[hem_body_id] if verts is None else weights@data.flexvert_xpos[verts]
 if args.material_tip_follow and not args.start_at_goal:
     parser.error('Material-point fingertip following currently requires --start-at-goal')
 if args.material_tip_follow:
@@ -399,14 +435,19 @@ if args.pinchtab and args.start_at_goal:
     for digit,tip_name in [('thumb',tip_names[0]),('index',tip_names[1])]:
         contacts=[]
         for ci,c in enumerate(d.contact):
-            if not any(f>=0 for f in c.flex) or c.dist>=.003:continue
+            hem_contact=(args.reinforced_hem and any(g>=0 and
+                m.geom(int(g)).name=='bandage_reinforced_hem_grasp' for g in c.geom))
+            if not (hem_contact or any(f>=0 for f in c.flex)) or c.dist>=.003:continue
             bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
             candidates=([b for b in bodies if b.startswith(f'g1_b/wuji_right/r_{digit}_')]
                         if args.b_right_digit_material_anchor else [b for b in bodies if b==tip_name])
             if not candidates:continue
-            side=0 if c.flex[0]>=0 else 1
-            _,_,verts,weights=flex_contact_jacobian(m,d,c,side)
-            point=weights@d.flexvert_xpos[verts]
+            if hem_contact:
+                verts,weights,point=None,None,d.xpos[hem_body_id].copy()
+            else:
+                side=0 if c.flex[0]>=0 else 1
+                _,_,verts,weights=flex_contact_jacobian(m,d,c,side)
+                point=weights@d.flexvert_xpos[verts]
             wrench=np.zeros(6);mujoco.mj_contactForce(m,d,ci,wrench)
             contacts.append((max(0.,float(wrench[0])),float(c.dist),candidates[0],verts,weights,point))
         if not contacts:
@@ -540,7 +581,7 @@ try:
                 tip_names[1]: tip_target[1] + d.flexvert_xpos[56:58].mean(axis=0)-initial_row28,
             }
         if args.material_tip_follow:
-            wbc.tip_position_targets={name:weights@d.flexvert_xpos[verts]+offset
+            wbc.tip_position_targets={name:material_point(d,verts,weights)+offset
                                       for name,(verts,weights,offset) in material_targets.items()}
         ctrl, meta, _ = wbc.solve(d)
         d.ctrl[:] = ctrl
@@ -556,7 +597,7 @@ try:
             def measured_tip_forces():
                 forces=np.zeros(2)
                 for ci,c in enumerate(d.contact):
-                    if not any(f>=0 for f in c.flex):continue
+                    if not bandage_contact(c):continue
                     bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
                     for digit,body in enumerate(tip_names):
                         if body in bodies:
@@ -635,7 +676,7 @@ try:
                     if args.hand_search_trajectory_force_weight:
                         predicted_forces={'thumb':0.,'index':0.}
                         for ci,c in enumerate(scratch.contact):
-                            if not any(f>=0 for f in c.flex):continue
+                            if not bandage_contact(c):continue
                             bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
                             for digit,tip in zip(('thumb','index'),tip_names):
                                 contacted=(any(b.startswith(f'g1_b/wuji_right/r_{digit}_') for b in bodies)
@@ -646,12 +687,12 @@ try:
                         candidate_force_deficit_sum+=sum(max(0.,.5-force) for force in predicted_forces.values())
                         candidate_force_steps+=1
                 slip=max(float(np.linalg.norm(scratch.xpos[m.body(name).id]-
-                    weights@scratch.flexvert_xpos[verts]-initial_material_offsets[name]))
+                    material_point(scratch,verts,weights)-initial_material_offsets[name]))
                     for name,(verts,weights,_) in material_targets.items())
                 drift=float(np.linalg.norm(scratch.flexvert_xpos[list(fixture_vertices)].mean(axis=0)-initial_edge))
                 tip_forces={'thumb':0.,'index':0.}
                 for ci,c in enumerate(scratch.contact):
-                    if not any(f>=0 for f in c.flex):
+                    if not bandage_contact(c):
                         continue
                     bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
                     for digit in ('thumb','index'):
@@ -749,7 +790,7 @@ try:
             if args.gate_fixture_release_on_loaded_pinch and post_release_offsets is None:
                 release_forces={'thumb':0.,'index':0.}
                 for ci,c in enumerate(d.contact):
-                    if not any(f>=0 for f in c.flex):continue
+                    if not bandage_contact(c):continue
                     bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
                     for digit,tip in zip(('thumb','index'),tip_names):
                         contacted=(any(b.startswith(f'g1_b/wuji_right/r_{digit}_') for b in bodies)
@@ -769,7 +810,7 @@ try:
             if args.fixture_release_s is not None and d.time>=args.fixture_release_s and release_ready:
                 if post_release_offsets is None:
                     actual_fixture_release_s=float(d.time)
-                    post_release_offsets={name:d.xpos[m.body(name).id]-weights@d.flexvert_xpos[verts]
+                    post_release_offsets={name:d.xpos[m.body(name).id]-material_point(d,verts,weights)
                                           for name,(verts,weights,_) in material_targets.items()}
                     post_release_edge=d.flexvert_xpos[list(fixture_vertices)].mean(axis=0).copy()
                 d.eq_active[fixture_ids]=0
@@ -792,7 +833,7 @@ try:
                      if m.actuator(int(i)).name.startswith('g1_a/wuji_right/')),default=0.))
             if post_release_offsets is not None:
                 max_post_release_material_slip=max(max_post_release_material_slip,
-                    max(float(np.linalg.norm(d.xpos[m.body(name).id]-weights@d.flexvert_xpos[verts]-post_release_offsets[name]))
+                    max(float(np.linalg.norm(d.xpos[m.body(name).id]-material_point(d,verts,weights)-post_release_offsets[name]))
                         for name,(verts,weights,_) in material_targets.items()))
                 max_post_release_edge_drift=max(max_post_release_edge_drift,float(np.linalg.norm(
                     d.flexvert_xpos[list(fixture_vertices)].mean(axis=0)-post_release_edge)))
@@ -856,7 +897,7 @@ try:
                 if stage_release_pad_position is not None and 'dressing_pad' in bodies and 'world' in bodies and c.dist<.003:
                     pad_world_contact_after_release_count+=1
                     pad_world_contact_geoms_after_release.update(name for name in names if name!='dressing_pad_contact')
-                if flex and c.dist<.003:
+                if bandage_contact(c) and c.dist<.003:
                     for digit in ('thumb','index'):
                         if any(b.startswith(f'g1_b/wuji_right/r_{digit}_') for b in bodies):
                             wrench=np.zeros(6);mujoco.mj_contactForce(m,d,ci,wrench)
@@ -932,10 +973,10 @@ try:
         tip_displacements=[float(np.linalg.norm(d.xpos[bid]-initial_tip_positions[i]))
                            for i,bid in enumerate(tip_ids)]
         material_relative_shifts={name:float(np.linalg.norm(
-            d.xpos[m.body(name).id]-(weights@d.flexvert_xpos[verts])-initial_material_offsets[name]))
+            d.xpos[m.body(name).id]-material_point(d,verts,weights)-initial_material_offsets[name]))
             for name,(verts,weights,_) in material_targets.items()}
         material_relative_shift_vectors={name:(d.xpos[m.body(name).id]-
-            (weights@d.flexvert_xpos[verts])-initial_material_offsets[name]).tolist()
+            material_point(d,verts,weights)-initial_material_offsets[name]).tolist()
             for name,(verts,weights,_) in material_targets.items()}
         max_tip_error = max(max_tip_error, tip_error)
         trace.append({'time_s': float(d.time), 'path_progress': float(smooth),
@@ -1012,6 +1053,10 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_right_loaded_pinch_seed_rank':args.b_right_loaded_pinch_seed_rank,
           'b_right_digit_material_anchor':args.b_right_digit_material_anchor,
           'b_right_material_anchor_bodies':list(material_targets),
+          'reinforced_hem_material_hypothesis':args.reinforced_hem,
+          'b_right_hem_seed_rank':args.b_right_hem_seed_rank if args.reinforced_hem else None,
+          'hem_contact_normal_goal_n':args.hem_force_n,
+          'hem_radius_mm':args.hem_radius_mm if args.reinforced_hem else None,
           'flex_contact_radius_mm':args.flex_contact_radius_mm,
           'b_right_initial_index_pip_offset_rad':args.b_right_initial_index_pip_offset_rad,
           'measured_tip_force_goal_n':args.measured_tip_force_n,
@@ -1168,6 +1213,10 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                ('_brightloadedpinchseed' if args.b_right_loaded_pinch_seed else '')+
                (f'_brightseedrank{args.b_right_loaded_pinch_seed_rank}' if args.b_right_loaded_pinch_seed_rank!=-1 else '')+
                ('_brightdigitanchor' if args.b_right_digit_material_anchor else '')+
+               ('_reinforcedhem' if args.reinforced_hem else '')+
+               (f'_hemseedrank{args.b_right_hem_seed_rank}' if args.reinforced_hem else '')+
+               (f'_hemforce{args.hem_force_n:g}' if args.hem_force_n is not None else '')+
+               (f'_hemradius{args.hem_radius_mm:g}mm' if args.reinforced_hem and args.hem_radius_mm!=2.5 else '')+
                (f'_flexradius{args.flex_contact_radius_mm:g}mm' if args.flex_contact_radius_mm!=1 else '')+
                (f'_brightinitialpip{args.b_right_initial_index_pip_offset_rad:g}' if args.b_right_initial_index_pip_offset_rad else '')+
                (f'_measuredforce{args.measured_tip_force_n:g}' if args.measured_tip_force_n is not None else '')+
