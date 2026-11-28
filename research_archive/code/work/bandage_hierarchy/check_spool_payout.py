@@ -6,7 +6,7 @@ import mujoco
 from build_spool_payout import build, OUT
 
 def trial(force):
-    spool = build().find(".//body[@name='bandage_spool']")
+    spool = build(world_frame=False).find(".//body[@name='bandage_spool']")
     spool.remove(spool.find('freejoint'))
     root = ET.Element('mujoco')
     ET.SubElement(root,'option',timestep='.001',gravity='0 0 0',integrator='implicitfast')

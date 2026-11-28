@@ -9,7 +9,7 @@ SOURCE = OUT / 'joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml'
 TARGET = OUT / 'joint_dual_g1_wound_spool.xml'
 
 
-def build():
+def build(world_frame=True):
     root = ET.parse(SOURCE).getroot()
     world = root.find('worldbody')
     spool = world.find("body[@name='bandage_spool']")
@@ -44,6 +44,16 @@ def build():
     strip.find('edge').attrib.update(solref='.003 1', solimp='.99 .999 .0001')
     # Two inner vertices are fixed to the drum by the flexcomp parent.
     assert strip.find('pin').get('id') == '0 1'
+    if world_frame:
+        drum.remove(strip)
+        world.append(strip)
+        strip.remove(strip.find('pin'))
+        translated = np.array(points) + np.fromstring(spool.get('pos'),sep=' ')
+        strip.set('point',' '.join(f'{v:.8f}' for v in translated.flat))
+        eq = ET.SubElement(root,'equality')
+        for vertex in (0,1):
+            ET.SubElement(eq,'connect',body1=f'joint_bandage_strip_{vertex}',body2='payout_drum',
+                          anchor='0 0 0',solref='.003 1',solimp='.99 .999 .0001')
     return root
 
 

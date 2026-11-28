@@ -435,6 +435,7 @@ SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').gl
 SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_right_loaded_pinch_static_refine_*.json'))]
 SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_loaded_pinchtab_passive_release_*.json'))]
 SELECTED += ['bandage_v0/joint_dual_g1_wound_spool.xml','bandage_v0/spool_payout_bench.json',
+             'bandage_v0/spool_orbit_world_frame_bench.json',
              'bandage_v0/spool_orbit_bench.json','bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml',
              'bandage_v0/joint_bandage_reinforced_hem_build.json',
              'bandage_v0/joint_b_reinforced_hem_static_grasp_screen.json']

@@ -5,7 +5,7 @@ import mujoco
 import numpy as np
 from build_spool_payout import build, OUT
 
-spool = build().find(".//body[@name='bandage_spool']")
+spool = build(world_frame=False).find(".//body[@name='bandage_spool']")
 spool.remove(spool.find('freejoint'))
 spool.set('pos','0 0 0')
 root = ET.Element('mujoco')
@@ -19,6 +19,14 @@ center = tail[:2]+[.049,0.]
 ET.SubElement(world,'geom',name='mandrel',type='cylinder',
               pos=f'{center[0]} {center[1]} 0',size='.048 .04')
 eq = ET.SubElement(root,'equality')
+strip = spool.find('.//flexcomp')
+drum = spool.find("body[@name='payout_drum']")
+drum.remove(strip)
+world.append(strip)
+strip.remove(strip.find('pin'))
+for vertex in (0,1):
+    ET.SubElement(eq,'connect',body1=f'joint_bandage_strip_{vertex}',body2='payout_drum',
+                  anchor='0 0 0',solref='.003 1',solimp='.99 .999 .0001')
 for vertex in (len(points)-2,len(points)-1):
     ET.SubElement(eq,'connect',body1=f'joint_bandage_strip_{vertex}',anchor='0 0 0',
                   solref='.003 1',solimp='.99 .999 .0001')
@@ -41,7 +49,7 @@ for step in range(3000):
         turns = float((theta[-1]-theta[0])/(2*np.pi)) if count>1 else 0.
         samples.append(dict(time_s=float(d.time), contiguous_turns=turns, contiguous_rows=count,
                             tail_error_mm=float(1000*np.linalg.norm(line[0]-tail))))
-report=dict(scope='Prescribed circular handle motion, fixed tail, zero gravity mandrel bench',
+report=dict(scope='World-frame cloth, prescribed circular handle motion, fixed tail, zero gravity mandrel bench',
             samples=samples,warnings=d.warning.number.tolist())
-(OUT/'spool_orbit_bench.json').write_text(json.dumps(report,indent=2)+'\n')
+(OUT/'spool_orbit_world_frame_bench.json').write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps(report))
