@@ -37,6 +37,7 @@ parser.add_argument('--one-step-hand-search-until-s',type=float,default=None)
 parser.add_argument('--hand-search-horizon-s',type=float,default=.02)
 parser.add_argument('--hand-search-edge-weight',type=float,default=.3)
 parser.add_argument('--hand-search-force-weight',type=float,default=0.)
+parser.add_argument('--hand-search-trajectory-force-weight',type=float,default=0.)
 parser.add_argument('--hand-search-penetration-weight',type=float,default=10.)
 parser.add_argument('--hand-accel-cap',type=float,default=200.)
 parser.add_argument('--wbc-constraint-tolerance',type=float,default=2e-5)
@@ -124,6 +125,8 @@ if args.hand_search_horizon_s<.02 or args.hand_search_horizon_s>.1:
     parser.error('--hand-search-horizon-s must be between 0.02 and 0.1')
 if args.hand_search_edge_weight<0 or not np.isfinite(args.hand_search_edge_weight):
     parser.error('--hand-search-edge-weight must be finite and nonnegative')
+if args.hand_search_trajectory_force_weight<0 or not np.isfinite(args.hand_search_trajectory_force_weight):
+    parser.error('--hand-search-trajectory-force-weight must be finite and nonnegative')
 if args.hand_search_penetration_weight<0 or not np.isfinite(args.hand_search_penetration_weight):
     parser.error('--hand-search-penetration-weight must be finite and nonnegative')
 if args.hand_accel_cap<200 or args.hand_accel_cap>1000 or not np.isfinite(args.hand_accel_cap):
@@ -613,6 +616,8 @@ try:
                 for i,amount in bias.items():
                     scratch.ctrl[i]=np.clip(scratch.ctrl[i]+amount,*m.actuator_ctrlrange[i])
                 candidate_max_penetration=0.
+                candidate_force_deficit_sum=0.
+                candidate_force_steps=0
                 for _ in range(round(args.hand_search_horizon_s/m.opt.timestep)):
                     if args.stage_release_s is not None and scratch.time>=args.stage_release_s:
                         m.geom_contype[stage_geom_id]=0;m.geom_conaffinity[stage_geom_id]=0
@@ -627,6 +632,19 @@ try:
                         max((max(0.,-float(c.dist)) for c in scratch.contact
                              if any(g>=0 and m.body(m.geom_bodyid[g]).name.startswith(('g1_a/','g1_b/')) for g in c.geom)
                              and not any(g>=0 and m.geom(g).name=='floor' for g in c.geom)),default=0.))
+                    if args.hand_search_trajectory_force_weight:
+                        predicted_forces={'thumb':0.,'index':0.}
+                        for ci,c in enumerate(scratch.contact):
+                            if not any(f>=0 for f in c.flex):continue
+                            bodies=[m.body(m.geom_bodyid[int(g)]).name for g in c.geom if g>=0]
+                            for digit,tip in zip(('thumb','index'),tip_names):
+                                contacted=(any(b.startswith(f'g1_b/wuji_right/r_{digit}_') for b in bodies)
+                                           if args.b_right_digit_material_anchor else tip in bodies)
+                                if contacted:
+                                    wrench=np.zeros(6);mujoco.mj_contactForce(m,scratch,ci,wrench)
+                                    predicted_forces[digit]+=max(0.,float(wrench[0]))
+                        candidate_force_deficit_sum+=sum(max(0.,.5-force) for force in predicted_forces.values())
+                        candidate_force_steps+=1
                 slip=max(float(np.linalg.norm(scratch.xpos[m.body(name).id]-
                     weights@scratch.flexvert_xpos[verts]-initial_material_offsets[name]))
                     for name,(verts,weights,_) in material_targets.items())
@@ -644,7 +662,8 @@ try:
                 force_deficit=sum(max(0.,.5-force) for force in tip_forces.values())
                 score=(slip+args.hand_search_edge_weight*drift+
                        args.hand_search_penetration_weight*max(0.,candidate_max_penetration-.003)+
-                       args.hand_search_force_weight*force_deficit)
+                       args.hand_search_force_weight*force_deficit+
+                       args.hand_search_trajectory_force_weight*candidate_force_deficit_sum/max(1,candidate_force_steps))
                 scores.append((score,label,bias))
                 m.geom_contype[stage_geom_id],m.geom_conaffinity[stage_geom_id]=stage_contact_backup
                 m.geom_contype[tray_geom_id],m.geom_conaffinity[tray_geom_id]=tray_contact_backup
@@ -1003,6 +1022,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'hand_search_horizon_s':args.hand_search_horizon_s if args.one_step_hand_search else None,
           'hand_search_edge_weight':args.hand_search_edge_weight if args.one_step_hand_search else None,
           'hand_search_force_weight':args.hand_search_force_weight if args.one_step_hand_search else None,
+          'hand_search_trajectory_force_weight':args.hand_search_trajectory_force_weight if args.one_step_hand_search else None,
           'hand_search_penetration_weight':args.hand_search_penetration_weight if args.one_step_hand_search else None,
           'hand_acceleration_cap_rad_s2':args.hand_accel_cap,
           'wbc_constraint_tolerance':args.wbc_constraint_tolerance,
@@ -1158,6 +1178,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_horizon{args.hand_search_horizon_s:g}s' if args.one_step_hand_search and args.hand_search_horizon_s!=.02 else '')+
                (f'_edgeweight{args.hand_search_edge_weight:g}' if args.one_step_hand_search and args.hand_search_edge_weight!=.3 else '')+
                (f'_forceweight{args.hand_search_force_weight:g}' if args.one_step_hand_search and args.hand_search_force_weight else '')+
+               (f'_trajectoryforceweight{args.hand_search_trajectory_force_weight:g}' if args.one_step_hand_search and args.hand_search_trajectory_force_weight else '')+
                (f'_penweight{args.hand_search_penetration_weight:g}' if args.one_step_hand_search and args.hand_search_penetration_weight!=10. else '')+
                (f'_handaccelcap{args.hand_accel_cap:g}' if args.hand_accel_cap!=200. else '')+
                (f'_wbctol{args.wbc_constraint_tolerance:g}' if args.wbc_constraint_tolerance!=2e-5 else '')+
