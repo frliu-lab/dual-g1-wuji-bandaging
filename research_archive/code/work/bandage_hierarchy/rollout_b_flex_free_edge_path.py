@@ -40,6 +40,7 @@ parser.add_argument('--measured-tip-force-n',type=float,default=None)
 parser.add_argument('--pinch-bias-preset',choices=('balanced_a','balanced_b'),default=None)
 parser.add_argument('--pinch-bias-until-s',type=float,default=None)
 parser.add_argument('--one-step-hand-search',action='store_true')
+parser.add_argument('--load-triggered-hand-search', action='store_true')
 parser.add_argument('--one-step-hand-search-until-s',type=float,default=None)
 parser.add_argument('--hand-search-horizon-s',type=float,default=.02)
 parser.add_argument('--hand-search-edge-weight',type=float,default=.3)
@@ -100,6 +101,8 @@ parser.add_argument('--fixture-release-s',type=float,default=None)
 parser.add_argument('--pinch-closure-mm',type=float,default=0.)
 parser.add_argument('--b-right-palm-weight',type=float,default=1000.)
 args = parser.parse_args()
+if args.load_triggered_hand_search and (not args.one_step_hand_search or not args.gate_fixture_release_on_loaded_pinch or args.one_step_hand_search_until_s is not None):
+    parser.error('Load-triggered search requires gated release and hand search without a timed cutoff')
 if args.relative_grasp_jacobian and not args.forearm_grasp_hold_weight:
     parser.error('Relative grasp Jacobian requires a forearm grasp hold weight')
 if not np.isfinite(args.forearm_grasp_hold_weight) or args.forearm_grasp_hold_weight < 0:
@@ -555,6 +558,8 @@ tip_normal_impulse_ns={'thumb':0.,'index':0.}
 tip_loaded_ge0p5n_steps=0
 digit_loaded_ge0p5n_steps=0
 digit_normal_impulse_ns={'thumb':0.,'index':0.}
+first_unload_after_release = {}
+hand_search_active = True
 tip_peak_single_contact_normal_force_n={'thumb':0.,'index':0.}
 tip_shear_impulse_ns={'thumb':0.,'index':0.}
 edge_drift = 0.0
@@ -700,7 +705,13 @@ try:
             mujoco.mj_forward(m,d)
         selected_hand_candidate='baseline'
         predicted_hand_score=None
-        if args.one_step_hand_search and (args.one_step_hand_search_until_s is None or d.time<args.one_step_hand_search_until_s):
+        if args.load_triggered_hand_search and actual_fixture_release_s is not None:
+            weaker_load = min(digit_step_normal_force_n.values())
+            if weaker_load < .8 or not digit_opposed_here:
+                hand_search_active = True
+            elif weaker_load >= 1.0:
+                hand_search_active = False
+        if args.one_step_hand_search and hand_search_active and (args.one_step_hand_search_until_s is None or d.time<args.one_step_hand_search_until_s):
             candidate_biases=[('baseline',{})]
             candidate_biases += [(f'{m.actuator(i).name}_{sign:+g}',{i:sign})
                                  for i in pinch_actuators for sign in (-.05,.05)]
@@ -1003,6 +1014,10 @@ try:
                                    for b in digit_normals['index'])
             digit_loaded_ge0p5n_steps += (digit_opposed_here and all(
                 force>=.5 for force in digit_step_normal_force_n.values()))
+            if actual_fixture_release_s is not None:
+                for digit, force in digit_step_normal_force_n.items():
+                    if force < .5 and digit not in first_unload_after_release:
+                        first_unload_after_release[digit] = dict(time_s=float(d.time), normal_n=force)
             a_pad_tip_pair_count += all(a_pad_tips.values())
             a_pad_segment_pair_count += all(a_pad_segment_normals.values())
             a_pad_opposed_segment_count += any(float(a@b)<-.5 for a in a_pad_segment_normals['thumb']
@@ -1044,6 +1059,7 @@ try:
             for name,(verts,weights,_) in material_targets.items()}
         max_tip_error = max(max_tip_error, tip_error)
         trace.append({'time_s': float(d.time), 'path_progress': float(smooth),
+                      'digit_normal_force_n':digit_step_normal_force_n.copy(),
                       'predicted_tip_contact_force_n':{name:float(wbc.last_flex_tip_predicted_force_n.get(tip_names[i],0.)) for i,name in enumerate(('thumb','index'))},
                       'local_tip_force_correction_norm':local_tip_force_correction_norm,
                       'one_step_hand_candidate':selected_hand_candidate,
@@ -1359,6 +1375,10 @@ if args.reinforced_hem:
     report['hem_seam_first_body_anchor_m'] = m.eq_data[seam,:3].tolist()
     if np.linalg.norm(m.eq_data[seam,:3]) < .02:
         report_name = report_name[:-5] + '_localseam.json'
+report['first_digit_unload_after_release'] = first_unload_after_release
+if args.load_triggered_hand_search:
+    report['load_triggered_hand_search_thresholds_n'] = [.8, 1.]
+    report_name = report_name[:-5] + '_loadtrigger.json'
 report['run_label']=report_name
 if args.relative_grasp_jacobian:
     report['relative_grasp_jacobian'] = True
