@@ -459,6 +459,8 @@ fixture_ids=([mujoco.mj_name2id(m,mujoco.mjtObj.mjOBJ_EQUALITY,f'bandage_tab_fix
              if args.releasable_fixture else [])
 duration = args.duration_s
 initial_edge = d.flexvert_xpos[list(fixture_vertices)].mean(axis=0).copy()
+grasp_bodies = ['g1_b/wuji_right/r_wrist', *(['bandage_reinforced_hem'] if args.reinforced_hem else [])]
+grasp_origins = {name: d.body(name).xpos.copy() for name in grasp_bodies}
 edge_forearm_bid=m.body('training_forearm_dynamic').id
 initial_edge_forearm_local=(d.xmat[edge_forearm_bid].reshape(3,3).T @
     (initial_edge-d.xpos[edge_forearm_bid]))
@@ -1051,6 +1053,9 @@ try:
                       'max_joint_tracking_error_rad': tip_error,
                       'thumb_index_surface_gap_m':thumb_index_surface_gap,
                       'tip_displacement_m':tip_displacements,
+                      'grasp_body_displacement_m':{name:(d.body(name).xpos-origin).tolist()
+                                                   for name,origin in grasp_origins.items()},
+                      'edge_displacement_m':(edge_now-initial_edge).tolist(),
                       'tip_to_material_relative_shift_m':material_relative_shifts,
                       'tip_to_material_relative_shift_vector_m':material_relative_shift_vectors,
                       'worst_joint_name':joint_names[int(np.argmax(np.abs(d.qpos[qa]-wbc.qref[qa])))],
@@ -1101,7 +1106,7 @@ if error and hasattr(wbc,'last_numeric'):
                                           'acc_hi':float(numeric['acc_hi'][i])}
                                          for i in np.flatnonzero(gaps>1e-9)]}
 
-steps = max(1, solves*interval)
+steps = max(1, round(float(d.time) / m.opt.timestep))
 report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free tab; no force-closed grasp or completed wrap',
           'track_edge_tip_targets': args.track_edge,
           'pinchtab':args.pinchtab,
@@ -1349,6 +1354,11 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
 if args.forearm_grasp_hold_weight:
     report['forearm_grasp_hold_weight'] = args.forearm_grasp_hold_weight
     report_name = report_name[:-5] + f'_forearmhold{args.forearm_grasp_hold_weight:g}.json'
+if args.reinforced_hem:
+    seam = m.equality('bandage_hem_seam_72').id
+    report['hem_seam_first_body_anchor_m'] = m.eq_data[seam,:3].tolist()
+    if np.linalg.norm(m.eq_data[seam,:3]) < .02:
+        report_name = report_name[:-5] + '_localseam.json'
 report['run_label']=report_name
 if args.relative_grasp_jacobian:
     report['relative_grasp_jacobian'] = True

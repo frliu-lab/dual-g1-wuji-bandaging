@@ -14,10 +14,8 @@ root=ET.parse(source).getroot()
 world=root.find('worldbody')
 equality=root.find('equality')
 contact=root.find('contact')
-vertices=[]
-for i in (72,73):
-    fixture=next(x for x in equality if x.get('name')==f'bandage_tab_fixture_{i}')
-    vertices.append(np.fromstring(fixture.get('anchor'),sep=' '))
+strip=root.find(".//flexcomp[@name='joint_bandage_strip']")
+vertices=np.fromstring(strip.get('point'),sep=' ').reshape(-1,3)[[72,73]]
 center=np.mean(vertices,axis=0)
 hem_center=center+np.array([0.,.004,0.])
 axis=vertices[1]-vertices[0]
@@ -34,13 +32,19 @@ ET.SubElement(hem,'geom',{'name':'bandage_reinforced_hem_grasp',
 for i,point in zip((72,73),vertices):
     ET.SubElement(equality,'connect',{'name':f'bandage_hem_seam_{i}',
         'body1':'bandage_reinforced_hem','body2':f'joint_bandage_strip_{i}',
-        'anchor':' '.join(f'{x:.8f}' for x in point),'solref':'.005 1'})
+        'anchor':' '.join(f'{x:.8f}' for x in point-hem_center),'solref':'.005 1'})
 for i in (70,71,72,73):
     ET.SubElement(contact,'exclude',{'name':f'bandage_hem_internal_{i}',
         'body1':'bandage_reinforced_hem','body2':f'joint_bandage_strip_{i}'})
 ET.ElementTree(root).write(target,encoding='utf-8',xml_declaration=True)
 m=mujoco.MjModel.from_xml_path(str(target))
 d=mujoco.MjData(m);mujoco.mj_forward(m,d)
+for vertex, point in zip((72,73),vertices):
+    seam=m.equality(f'bandage_hem_seam_{vertex}').id
+    for body,local in zip((m.eq_obj1id[seam],m.eq_obj2id[seam]),
+                          m.eq_data[seam,:6].reshape(2,3)):
+        np.testing.assert_allclose(d.xpos[body]+d.xmat[body].reshape(3,3)@local,
+                                   point,atol=1.e-7,rtol=0.)
 report={'scope':'Alternative physical material hypothesis: thin 5 mm diameter reinforced end hem, 4 g, sewn to two flex-end vertices; not measured hardware',
         'source_scene':source.name,'scene':target.name,
         'hem_center_world_m':hem_center.tolist(),'hem_endpoint_world_m':[x.tolist() for x in vertices],
