@@ -434,7 +434,8 @@ SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').gl
 SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_right_loaded_pinch_static_screen_*.json'))]
 SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_right_loaded_pinch_static_refine_*.json'))]
 SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_loaded_pinchtab_passive_release_*.json'))]
-SELECTED += ['bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml',
+SELECTED += ['bandage_v0/joint_dual_g1_wound_spool.xml','bandage_v0/spool_payout_bench.json',
+             'bandage_v0/spool_orbit_bench.json','bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml',
              'bandage_v0/joint_bandage_reinforced_hem_build.json',
              'bandage_v0/joint_b_reinforced_hem_static_grasp_screen.json']
 SELECTED += ['bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem_forearm_anchor.xml',
@@ -585,6 +586,9 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/refine_b_right_loaded_pinch_static.py',
     'work/bandage_hierarchy/diagnose_loaded_pinchtab_passive_release.py',
     'work/bandage_hierarchy/build_reinforced_bandage_tab.py',
+    'work/bandage_hierarchy/build_spool_payout.py',
+    'work/bandage_hierarchy/check_spool_payout.py',
+    'work/bandage_hierarchy/check_spool_orbit.py',
     'work/bandage_hierarchy/screen_reinforced_hem_grasp.py',
     'work/bandage_hierarchy/build_forearm_anchored_bandage.py',
     'work/bandage_hierarchy/build_body_parented_bandage.py',
