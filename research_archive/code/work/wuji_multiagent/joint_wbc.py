@@ -24,6 +24,7 @@ class JointWBC:
   self.dressing_up_force_goal_n=None
   self.dressing_lateral_force_target_n=None
   self.tip_position_targets={}
+  self.tip_reference_body_ids = {}
   self.palm_world_position_targets={}
   self.tip_position_weight=1000.
   self.spool_contact_normal_goal_n=None
@@ -341,6 +342,14 @@ class JointWBC:
    jp=np.zeros((3,m.nv));jr=np.zeros_like(jp);jdp=np.zeros_like(jp);jdr=np.zeros_like(jp)
    mujoco.mj_jacBody(m,d,jp,jr,bid)
    mujoco.mj_jacDot(m,d,jdp,jdr,d.xpos[bid],bid)
+   if name in self.tip_reference_body_ids:
+    reference_body = self.tip_reference_body_ids[name]
+    reference_jac = np.zeros_like(jp)
+    reference_jac_dot = np.zeros_like(jp)
+    mujoco.mj_jac(m, d, reference_jac, None, desired_tip, reference_body)
+    mujoco.mj_jacDot(m, d, reference_jac_dot, None, desired_tip, reference_body)
+    jp -= reference_jac
+    jdp -= reference_jac_dot
    taskJs.append(jp)
    taskTargets.append(80*(desired_tip-d.xpos[bid])-18*(jp@d.qvel)-jdp@d.qvel)
   taskJ=np.concatenate(taskJs);tasktarget=np.concatenate(taskTargets)

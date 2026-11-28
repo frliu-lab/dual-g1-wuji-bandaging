@@ -89,6 +89,8 @@ parser.add_argument('--local-physics-correction',action='store_true')
 parser.add_argument('--stabilize-other-digits',action='store_true')
 parser.add_argument('--stabilize-all-digits',action='store_true')
 parser.add_argument('--material-tip-follow',action='store_true')
+parser.add_argument('--forearm-grasp-hold-weight', type=float, default=0.)
+parser.add_argument('--relative-grasp-jacobian', action='store_true')
 parser.add_argument('--tip-closure-mm',type=float,default=0.)
 parser.add_argument('--tip-weight',type=float,default=1000.)
 parser.add_argument('--flex-measured-force-prior-weight',type=float,default=0.)
@@ -98,6 +100,12 @@ parser.add_argument('--fixture-release-s',type=float,default=None)
 parser.add_argument('--pinch-closure-mm',type=float,default=0.)
 parser.add_argument('--b-right-palm-weight',type=float,default=1000.)
 args = parser.parse_args()
+if args.relative_grasp_jacobian and not args.forearm_grasp_hold_weight:
+    parser.error('Relative grasp Jacobian requires a forearm grasp hold weight')
+if not np.isfinite(args.forearm_grasp_hold_weight) or args.forearm_grasp_hold_weight < 0:
+    parser.error('Forearm grasp hold weight must be finite and nonnegative')
+if args.forearm_grasp_hold_weight and (not args.b_right_digit_material_anchor or args.track_edge or args.material_tip_follow):
+    parser.error('Forearm grasp hold needs digit anchors and exclusive control of their position targets')
 if args.extended_tab and (not args.pinchtab or not args.start_at_goal):
     parser.error('--extended-tab requires --pinchtab --start-at-goal; the existing path has a different flex state')
 if args.fixture_release_s is not None and not args.releasable_fixture:
@@ -494,6 +502,15 @@ if args.pinchtab and args.start_at_goal:
         initial_material_offsets[anchor_name]=offset.copy()
         target_offset=offset*max(0.,1.-args.tip_closure_mm/1000/max(np.linalg.norm(offset),1e-9))
         material_targets[anchor_name]=(verts,weights,target_offset)
+if args.forearm_grasp_hold_weight:
+    forearm_rotation = d.xmat[edge_forearm_bid].reshape(3, 3)
+    grasp_local = {name: forearm_rotation.T @ (d.xpos[m.body(name).id] - d.xpos[edge_forearm_bid])
+                   for name in material_targets}
+    if len(grasp_local) != 2:
+        raise ValueError('Forearm grasp hold requires two distinct digit anchors')
+    wbc.tip_position_weight = args.forearm_grasp_hold_weight
+    if args.relative_grasp_jacobian:
+        wbc.tip_reference_body_ids = dict.fromkeys(grasp_local, edge_forearm_bid)
 max_pen = 0.0
 max_a_pen=0.0
 worst_b_contact=None
@@ -620,6 +637,10 @@ try:
         if args.material_tip_follow:
             wbc.tip_position_targets={name:material_point(d,verts,weights)+offset
                                       for name,(verts,weights,offset) in material_targets.items()}
+        if args.forearm_grasp_hold_weight:
+            rotation = d.xmat[edge_forearm_bid].reshape(3, 3)
+            wbc.tip_position_targets = {name: d.xpos[edge_forearm_bid] + rotation @ local
+                                        for name, local in grasp_local.items()}
         ctrl, meta, _ = wbc.solve(d)
         d.ctrl[:] = ctrl
         if args.pinch_bias_preset and (args.pinch_bias_until_s is None or d.time<args.pinch_bias_until_s):
@@ -1325,7 +1346,14 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_pinchclosure{args.pinch_closure_mm:g}mm' if args.pinch_closure_mm else '')+
                (f'_palmweight{args.b_right_palm_weight:g}' if args.b_right_palm_weight!=1000. else '')+
                suffix+'.json')
+if args.forearm_grasp_hold_weight:
+    report['forearm_grasp_hold_weight'] = args.forearm_grasp_hold_weight
+    report_name = report_name[:-5] + f'_forearmhold{args.forearm_grasp_hold_weight:g}.json'
 report['run_label']=report_name
+if args.relative_grasp_jacobian:
+    report['relative_grasp_jacobian'] = True
+    report_name = report_name[:-5] + '_relativejac.json'
+    report['run_label'] = report_name
 if len(report_name)>150:
     report_name=report_name[:115].rstrip('_')+'_'+hashlib.sha256(report_name.encode()).hexdigest()[:12]+'.json'
 (OUT/report_name).write_text(json.dumps(report, indent=2)+'\n')
