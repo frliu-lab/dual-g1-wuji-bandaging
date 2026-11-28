@@ -437,6 +437,12 @@ SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').gl
 SELECTED += ['bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml',
              'bandage_v0/joint_bandage_reinforced_hem_build.json',
              'bandage_v0/joint_b_reinforced_hem_static_grasp_screen.json']
+SELECTED += ['bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem_forearm_anchor.xml',
+             'bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem_body_parented.xml',
+             'bandage_v0/joint_dual_g1_pinchtab_extended20mm_reinforced_hem_body_parented_refaligned.xml',
+             'bandage_v0/joint_bandage_forearm_anchor_build.json',
+             'bandage_v0/joint_bandage_body_parented_build.json',
+             'bandage_v0/joint_bandage_body_parented_refaligned_build.json']
 SELECTED += [
     'bandage_v0/joint_b_flex_a_right_pose_transfer_static_audit.json',
     'bandage_v0/joint_b_flex_a_thumb_side_contact_search.json',
@@ -580,6 +586,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/diagnose_loaded_pinchtab_passive_release.py',
     'work/bandage_hierarchy/build_reinforced_bandage_tab.py',
     'work/bandage_hierarchy/screen_reinforced_hem_grasp.py',
+    'work/bandage_hierarchy/build_forearm_anchored_bandage.py',
+    'work/bandage_hierarchy/build_body_parented_bandage.py',
     'work/wuji_multiagent/flex_contact_jac.py',
     'work/wuji_multiagent/check_flex_contact_jac.py',
     'work/wuji_multiagent/probe_joint_flex_wbc.py',

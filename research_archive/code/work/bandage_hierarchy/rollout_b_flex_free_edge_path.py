@@ -27,6 +27,9 @@ parser.add_argument('--b-right-position-control',action='store_true')
 parser.add_argument('--b-right-loaded-pinch-seed',action='store_true')
 parser.add_argument('--b-right-loaded-pinch-seed-rank',type=int,default=-1)
 parser.add_argument('--reinforced-hem',action='store_true')
+parser.add_argument('--forearm-anchored-bandage',action='store_true')
+parser.add_argument('--body-parented-bandage',action='store_true')
+parser.add_argument('--body-parented-refaligned-bandage',action='store_true')
 parser.add_argument('--b-right-hem-seed-rank',type=int,default=0)
 parser.add_argument('--hem-force-n',type=float,default=None)
 parser.add_argument('--hem-radius-mm',type=float,default=2.5)
@@ -79,6 +82,7 @@ parser.add_argument('--training-elbow-stiffness',type=float,default=None)
 parser.add_argument('--training-elbow-damping',type=float,default=None)
 parser.add_argument('--training-elbow-wbc-weight',type=float,default=None)
 parser.add_argument('--training-elbow-wbc-kp',type=float,default=None)
+parser.add_argument('--training-elbow-range-rad',type=float,default=.35)
 parser.add_argument('--flex-friction',type=float,default=None)
 parser.add_argument('--wrist-weight',type=float,default=None)
 parser.add_argument('--local-physics-correction',action='store_true')
@@ -119,6 +123,12 @@ if args.b_right_digit_material_anchor and (not args.b_right_loaded_pinch_seed or
 if args.reinforced_hem and (not args.extended_tab or not args.releasable_fixture or
                             not args.b_right_digit_material_anchor or args.b_right_loaded_pinch_seed):
     parser.error('--reinforced-hem requires extended tab, releasable fixture and digit anchor; excludes loaded flex seed')
+if args.forearm_anchored_bandage and not args.reinforced_hem:
+    parser.error('--forearm-anchored-bandage requires reinforced hem')
+if args.body_parented_bandage and (not args.reinforced_hem or args.forearm_anchored_bandage):
+    parser.error('--body-parented-bandage requires reinforced hem and excludes equality forearm anchor')
+if args.body_parented_refaligned_bandage and (not args.reinforced_hem or args.forearm_anchored_bandage or args.body_parented_bandage):
+    parser.error('--body-parented-refaligned-bandage requires reinforced hem and excludes other forearm anchors')
 if not 0<=args.b_right_hem_seed_rank<=29:
     parser.error('--b-right-hem-seed-rank must be in [0,29]')
 if args.hem_force_n is not None and (not args.reinforced_hem or args.hem_force_n<=0 or
@@ -213,6 +223,8 @@ for value,name in ((args.training_elbow_stiffness,'--training-elbow-stiffness'),
                    (args.training_elbow_damping,'--training-elbow-damping')):
     if value is not None and (value<0 or not np.isfinite(value)):
         parser.error(f'{name} must be finite and nonnegative')
+if not np.isfinite(args.training_elbow_range_rad) or not .35<=args.training_elbow_range_rad<=1.:
+    parser.error('--training-elbow-range-rad must be finite and in [0.35,1]')
 for value,name in ((args.training_elbow_wbc_weight,'--training-elbow-wbc-weight'),
                    (args.training_elbow_wbc_kp,'--training-elbow-wbc-kp')):
     if value is not None and (value<=0 or not np.isfinite(value)):
@@ -224,7 +236,13 @@ SCENE = OUT/(('joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml' if ar
              if args.pinchtab else
              f'joint_dual_g1_prewrapped_flex_scene_world_anchored_radius49mm_phase225deg_thickness1mm_tab1.5{suffix}.xml')
 if args.reinforced_hem:
-    SCENE=OUT/'joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml'
+    SCENE=OUT/('joint_dual_g1_pinchtab_extended20mm_reinforced_hem_body_parented_refaligned.xml'
+               if args.body_parented_refaligned_bandage else
+               'joint_dual_g1_pinchtab_extended20mm_reinforced_hem_body_parented.xml'
+               if args.body_parented_bandage else
+               'joint_dual_g1_pinchtab_extended20mm_reinforced_hem_forearm_anchor.xml'
+               if args.forearm_anchored_bandage else
+               'joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml')
 PATH = OUT/('joint_b_pinchtab_rrt_path.npz' if args.pinchtab else
             'joint_b_flex_free_edge_rrt_path.npz')
 m = mujoco.MjModel.from_xml_path(str(SCENE))
@@ -236,6 +254,7 @@ def bandage_contact(c):
         g>=0 and m.geom(int(g)).name=='bandage_reinforced_hem_grasp' for g in c.geom))
 m.flex_radius[:]=args.flex_contact_radius_mm/1000
 elbow_jid=m.joint('training_elbow_hinge').id
+m.jnt_range[elbow_jid]=[-args.training_elbow_range_rad,args.training_elbow_range_rad]
 if args.training_elbow_stiffness is not None:
     m.jnt_stiffness[elbow_jid]=args.training_elbow_stiffness
 if args.training_elbow_damping is not None:
@@ -256,7 +275,19 @@ va = np.array([m.joint(s).dofadr[0] for s in joint_names])
 wrist_joint=m.joint('g1_b/right_wrist_roll_joint').id
 wrist_qadr=int(m.jnt_qposadr[wrist_joint]);wrist_vadr=int(m.jnt_dofadr[wrist_joint])
 wrist_actuator=int(np.flatnonzero(m.actuator_trnid[:,0]==wrist_joint)[0])
-if args.extended_tab:
+source_model=(mujoco.MjModel.from_xml_path(str(OUT/'joint_dual_g1_pinchtab_extended20mm_reinforced_hem.xml'))
+              if args.body_parented_bandage or args.body_parented_refaligned_bandage else None)
+if args.extended_tab and source_model is not None:
+    source_state=source_model.qpos0.copy();source_state[:167]=waypoints[-1,:167]
+    for j in range(source_model.njnt):
+        name=source_model.joint(j).name
+        old_adr=int(source_model.jnt_qposadr[j])
+        if not name or old_adr>=167:continue
+        width=(7 if source_model.jnt_type[j]==mujoco.mjtJoint.mjJNT_FREE else
+               4 if source_model.jnt_type[j]==mujoco.mjtJoint.mjJNT_BALL else 1)
+        adr=int(m.joint(name).qposadr[0])
+        d.qpos[adr:adr+width]=source_state[old_adr:old_adr+width]
+elif args.extended_tab:
     d.qpos[:167] = waypoints[-1,:167]
 else:
     d.qpos[:] = waypoints[-1 if args.start_at_goal else 0]
@@ -264,7 +295,9 @@ if args.a_pad_side_grasp_seed:
     seed=np.load(OUT/'joint_b_flex_a_thumb_side_contact_candidates.npz')['qpos'][0]
     for j in range(m.njnt):
         if m.joint(j).name.startswith(('g1_a/wuji_right/r_thumb_','g1_a/wuji_right/r_index_finger_')):
-            adr=int(m.jnt_qposadr[j]);d.qpos[adr]=seed[adr]
+            adr=int(m.jnt_qposadr[j])
+            old_adr=int(source_model.joint(m.joint(j).name).qposadr[0]) if source_model is not None else adr
+            d.qpos[adr]=seed[old_adr]
 if args.a_left_near_elbow_seed or args.a_left_palm_only_seed:
     seed_name=('joint_a_left_near_elbow_support_palm_only_candidate.npz' if args.a_left_palm_only_seed
                else 'joint_a_left_near_elbow_support_candidate.npz')
@@ -418,6 +451,9 @@ fixture_ids=([mujoco.mj_name2id(m,mujoco.mjtObj.mjOBJ_EQUALITY,f'bandage_tab_fix
              if args.releasable_fixture else [])
 duration = args.duration_s
 initial_edge = d.flexvert_xpos[list(fixture_vertices)].mean(axis=0).copy()
+edge_forearm_bid=m.body('training_forearm_dynamic').id
+initial_edge_forearm_local=(d.xmat[edge_forearm_bid].reshape(3,3).T @
+    (initial_edge-d.xpos[edge_forearm_bid]))
 initial_row28 = d.flexvert_xpos[56:58].mean(axis=0).copy()
 screen = json.loads((OUT/'joint_b_flex_free_edge_reach_screen_all_digits_staged_tab1.5_indexrow28_offset20p0_cap2p5.json').read_text())
 tip_target = np.array(screen['results'][0]['target_m'])
@@ -503,6 +539,7 @@ digit_normal_impulse_ns={'thumb':0.,'index':0.}
 tip_peak_single_contact_normal_force_n={'thumb':0.,'index':0.}
 tip_shear_impulse_ns={'thumb':0.,'index':0.}
 edge_drift = 0.0
+edge_forearm_relative_drift=0.
 max_hand_joint_speed=0.
 post_release_offsets=None
 loaded_pinch_continuous_s=0.
@@ -967,6 +1004,10 @@ try:
             max_spool_displacement=max(max_spool_displacement,float(np.linalg.norm(d.xpos[spool_body_id]-initial_spool_position)))
             interval_opposed += opposed_here
             edge_drift = max(edge_drift, float(np.linalg.norm(d.flexvert_xpos[list(fixture_vertices)].mean(axis=0)-initial_edge)))
+            edge_now=d.flexvert_xpos[list(fixture_vertices)].mean(axis=0)
+            edge_local=d.xmat[edge_forearm_bid].reshape(3,3).T @ (edge_now-d.xpos[edge_forearm_bid])
+            edge_forearm_relative_drift=max(edge_forearm_relative_drift,
+                float(np.linalg.norm(edge_local-initial_edge_forearm_local)))
         tip_error = float(np.max(np.abs(d.qpos[qa]-wbc.qref[qa])))
         thumb_index_surface_gap=min(float(mujoco.mj_geomDistance(m,d,a,b,.2,np.zeros(6)))
                                     for a in thumb_tip_geoms for b in index_tip_geoms)
@@ -1054,6 +1095,9 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'b_right_digit_material_anchor':args.b_right_digit_material_anchor,
           'b_right_material_anchor_bodies':list(material_targets),
           'reinforced_hem_material_hypothesis':args.reinforced_hem,
+          'forearm_anchored_bandage_hypothesis':args.forearm_anchored_bandage,
+          'body_parented_bandage_hypothesis':args.body_parented_bandage,
+          'body_parented_refaligned_bandage_hypothesis':args.body_parented_refaligned_bandage,
           'b_right_hem_seed_rank':args.b_right_hem_seed_rank if args.reinforced_hem else None,
           'hem_contact_normal_goal_n':args.hem_force_n,
           'hem_radius_mm':args.hem_radius_mm if args.reinforced_hem else None,
@@ -1105,6 +1149,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'training_elbow_damping_nms_rad':float(m.dof_damping[m.jnt_dofadr[elbow_jid]]),
           'training_elbow_wbc_weight':args.training_elbow_wbc_weight,
           'training_elbow_wbc_kp':args.training_elbow_wbc_kp,
+          'training_elbow_range_rad':args.training_elbow_range_rad,
           'flex_sliding_friction':float(m.flex_friction[0,0]),
           'b_right_wrist_roll_acceleration_weight':args.wrist_weight,
           'local_physics_correction':args.local_physics_correction,
@@ -1156,6 +1201,7 @@ report = {'scope': 'Dynamic WBC tracking of a static path toward a flexible free
           'worst_b_contact':worst_b_contact,
           'worst_a_contact':worst_a_contact,
           'max_free_edge_drift_m': edge_drift,
+          'max_free_edge_forearm_relative_drift_m':edge_forearm_relative_drift,
           'max_hand_joint_speed_rad_s':max_hand_joint_speed,
           'max_post_release_material_slip_m':max_post_release_material_slip if post_release_offsets is not None else None,
           'max_post_release_edge_drift_m':max_post_release_edge_drift if post_release_edge is not None else None,
@@ -1214,6 +1260,9 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_brightseedrank{args.b_right_loaded_pinch_seed_rank}' if args.b_right_loaded_pinch_seed_rank!=-1 else '')+
                ('_brightdigitanchor' if args.b_right_digit_material_anchor else '')+
                ('_reinforcedhem' if args.reinforced_hem else '')+
+               ('_forearmanchor' if args.forearm_anchored_bandage else '')+
+               ('_bodyparented' if args.body_parented_bandage else '')+
+               ('_bodyparentedrefaligned' if args.body_parented_refaligned_bandage else '')+
                (f'_hemseedrank{args.b_right_hem_seed_rank}' if args.reinforced_hem else '')+
                (f'_hemforce{args.hem_force_n:g}' if args.hem_force_n is not None else '')+
                (f'_hemradius{args.hem_radius_mm:g}mm' if args.reinforced_hem and args.hem_radius_mm!=2.5 else '')+
@@ -1260,6 +1309,7 @@ report_name = (('joint_b_pinchtab_dynamic_path_rollout' if args.pinchtab else
                (f'_elbowd{args.training_elbow_damping:g}' if args.training_elbow_damping is not None else '')+
                (f'_elbowwbcweight{args.training_elbow_wbc_weight:g}' if args.training_elbow_wbc_weight is not None else '')+
                (f'_elbowwbckp{args.training_elbow_wbc_kp:g}' if args.training_elbow_wbc_kp is not None else '')+
+               (f'_elbowrange{args.training_elbow_range_rad:g}' if args.training_elbow_range_rad!=.35 else '')+
                (f'_friction{args.flex_friction:g}' if args.flex_friction is not None else '')+
                (f'_wristweight{args.wrist_weight:g}' if args.wrist_weight is not None else '')+
                ('_localphysics' if args.local_physics_correction else '')+
