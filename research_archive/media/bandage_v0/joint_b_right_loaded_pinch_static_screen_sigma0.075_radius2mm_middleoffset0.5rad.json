@@ -1,0 +1,551 @@
+{
+  "scope": "Fixed-state posture screen only; contact force is a MuJoCo instantaneous estimate, not a stable grasp or robot motion",
+  "scene": "joint_dual_g1_pinchtab_extended20mm_releasable_fixture.xml",
+  "samples": 1001,
+  "joint_names": [
+    "g1_b/wuji_right/r_thumb_cmc_flex",
+    "g1_b/wuji_right/r_thumb_cmc_abd",
+    "g1_b/wuji_right/r_thumb_mcp",
+    "g1_b/wuji_right/r_thumb_ip",
+    "g1_b/wuji_right/r_index_finger_mcp_flex",
+    "g1_b/wuji_right/r_index_finger_mcp_abd",
+    "g1_b/wuji_right/r_index_finger_pip",
+    "g1_b/wuji_right/r_index_finger_dip"
+  ],
+  "sigma_rad": 0.075,
+  "flex_contact_radius_mm": 2.0,
+  "middle_flex_offset_rad": 0.5,
+  "static_screen_pass_count": 0,
+  "safe_opposed_count": 15,
+  "best_safe_opposed": {
+    "trial": 210,
+    "min_tip_normal_force_n": 0.1858529909636292,
+    "tip_normal_force_n": {
+      "thumb": 0.19331915176335285,
+      "index": 0.1858529909636292
+    },
+    "opposed": true,
+    "max_b_nonfloor_penetration_m": 0.002935218107051992,
+    "max_hand_joint_offset_rad": 0.08769963958507099,
+    "joint_targets_rad": [
+      0.8319260342728599,
+      0.029411049968979967,
+      0.5126813664570419,
+      0.5472436506388548,
+      0.36566904770532976,
+      -0.026840859814973868,
+      1.3245134646094445,
+      0.441200782567683
+    ],
+    "static_screen_pass": false
+  },
+  "loaded_opposed_count": 59,
+  "least_penetrating_loaded_opposed": {
+    "trial": 877,
+    "min_tip_normal_force_n": 0.6886997690362429,
+    "tip_normal_force_n": {
+      "thumb": 1.09144675652705,
+      "index": 0.6886997690362429
+    },
+    "opposed": true,
+    "max_b_nonfloor_penetration_m": 0.006506538598849302,
+    "max_hand_joint_offset_rad": 0.10651053107026486,
+    "joint_targets_rad": [
+      0.8204200573039233,
+      -0.10651053107026486,
+      0.49633550112479285,
+      0.48040617232164057,
+      0.3189472595419247,
+      0.0636204135886658,
+      1.3522085150252494,
+      0.5349188147903521
+    ],
+    "static_screen_pass": false
+  },
+  "baseline": {
+    "trial": 0,
+    "min_tip_normal_force_n": 0.07369428959305149,
+    "tip_normal_force_n": {
+      "thumb": 0.07369428959305149,
+      "index": 0.13593973161617506
+    },
+    "opposed": true,
+    "max_b_nonfloor_penetration_m": 0.0032991854456770014,
+    "max_hand_joint_offset_rad": 0.0,
+    "joint_targets_rad": [
+      0.8593034784444161,
+      0.0,
+      0.5363468614056519,
+      0.45954401105378384,
+      0.3301713451666893,
+      0.0,
+      1.3442972434090736,
+      0.48772835622172667
+    ],
+    "static_screen_pass": false
+  },
+  "best": {
+    "trial": 210,
+    "min_tip_normal_force_n": 0.1858529909636292,
+    "tip_normal_force_n": {
+      "thumb": 0.19331915176335285,
+      "index": 0.1858529909636292
+    },
+    "opposed": true,
+    "max_b_nonfloor_penetration_m": 0.002935218107051992,
+    "max_hand_joint_offset_rad": 0.08769963958507099,
+    "joint_targets_rad": [
+      0.8319260342728599,
+      0.029411049968979967,
+      0.5126813664570419,
+      0.5472436506388548,
+      0.36566904770532976,
+      -0.026840859814973868,
+      1.3245134646094445,
+      0.441200782567683
+    ],
+    "static_screen_pass": false
+  },
+  "top_candidates": [
+    {
+      "trial": 210,
+      "min_tip_normal_force_n": 0.1858529909636292,
+      "tip_normal_force_n": {
+        "thumb": 0.19331915176335285,
+        "index": 0.1858529909636292
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002935218107051992,
+      "max_hand_joint_offset_rad": 0.08769963958507099,
+      "joint_targets_rad": [
+        0.8319260342728599,
+        0.029411049968979967,
+        0.5126813664570419,
+        0.5472436506388548,
+        0.36566904770532976,
+        -0.026840859814973868,
+        1.3245134646094445,
+        0.441200782567683
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 849,
+      "min_tip_normal_force_n": 0.18495412026282798,
+      "tip_normal_force_n": {
+        "thumb": 0.18495412026282798,
+        "index": 0.32480387516155856
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002711363808949044,
+      "max_hand_joint_offset_rad": 0.07156823885120406,
+      "joint_targets_rad": [
+        0.8498674456090856,
+        -0.040963260403982016,
+        0.58373076803028,
+        0.4253720291354739,
+        0.3462174652130834,
+        -0.05883267001539206,
+        1.3561382393254056,
+        0.4161601173705226
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 58,
+      "min_tip_normal_force_n": 0.1474727867104486,
+      "tip_normal_force_n": {
+        "thumb": 0.16513286061918864,
+        "index": 0.1474727867104486
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002486811777421837,
+      "max_hand_joint_offset_rad": 0.0474659218539869,
+      "joint_targets_rad": [
+        0.8814848579791922,
+        0.00746386154373942,
+        0.5069779098905696,
+        0.5070099329077707,
+        0.3716935916161892,
+        -0.028326001348347403,
+        1.3089128132057717,
+        0.45371346739754015
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 653,
+      "min_tip_normal_force_n": 0.12711721928060546,
+      "tip_normal_force_n": {
+        "thumb": 0.16632768583644042,
+        "index": 0.12711721928060546
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0026725781623358398,
+      "max_hand_joint_offset_rad": 0.12047738924595136,
+      "joint_targets_rad": [
+        0.8826321669150934,
+        0.045769083400351636,
+        0.49334966091049465,
+        0.5366649975359448,
+        0.2908123503584395,
+        -0.004926421817296555,
+        1.3998878254155749,
+        0.3672509669757753
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 748,
+      "min_tip_normal_force_n": 0.065248206991125,
+      "tip_normal_force_n": {
+        "thumb": 0.065248206991125,
+        "index": 0.07100128331628751
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0024831382432796045,
+      "max_hand_joint_offset_rad": 0.1366821462330009,
+      "joint_targets_rad": [
+        0.8920071248893271,
+        0.09188263509922177,
+        0.44734784323945537,
+        0.5962261572867847,
+        0.33363655777685686,
+        -0.05695298977587622,
+        1.3388912569679967,
+        0.5578270370603631
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 434,
+      "min_tip_normal_force_n": 0.05747101392460818,
+      "tip_normal_force_n": {
+        "thumb": 0.05747101392460818,
+        "index": 0.17228838896300444
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002077587134363368,
+      "max_hand_joint_offset_rad": 0.1033132115951001,
+      "joint_targets_rad": [
+        0.8164748658644287,
+        0.01442209071813617,
+        0.6059212283049831,
+        0.42878307127734394,
+        0.22685813357158918,
+        -0.04502331292241755,
+        1.4239570894646092,
+        0.48416402851187557
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 79,
+      "min_tip_normal_force_n": 0.048430562370309786,
+      "tip_normal_force_n": {
+        "thumb": 0.048430562370309786,
+        "index": 0.27000297735976936
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0027213196534191723,
+      "max_hand_joint_offset_rad": 0.11778323915741747,
+      "joint_targets_rad": [
+        0.8798775765434576,
+        -0.11778323915741747,
+        0.5377066241906061,
+        0.5524285512029516,
+        0.3015340143986281,
+        -0.02117593985264068,
+        1.3767041917719136,
+        0.5080132699556192
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 568,
+      "min_tip_normal_force_n": 0.04443259749387071,
+      "tip_normal_force_n": {
+        "thumb": 0.04443259749387071,
+        "index": 0.14218143179215798
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0028957407038068942,
+      "max_hand_joint_offset_rad": 0.08754126639978088,
+      "joint_targets_rad": [
+        0.8939842448326072,
+        -0.027165327312808397,
+        0.50386982501448,
+        0.5470852774535647,
+        0.34266373515662507,
+        -0.04563651080253145,
+        1.348362350867616,
+        0.4406588263311054
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 896,
+      "min_tip_normal_force_n": 0.04055627081164125,
+      "tip_normal_force_n": {
+        "thumb": 0.04055627081164125,
+        "index": 0.10783113895073279
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002582085176023162,
+      "max_hand_joint_offset_rad": 0.15313224227686878,
+      "joint_targets_rad": [
+        0.8194778758795822,
+        -0.043034224431520274,
+        0.5314723506365845,
+        0.586952034674917,
+        0.32430595853946387,
+        -0.08044898215336052,
+        1.3016310676319474,
+        0.6408605984985954
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 842,
+      "min_tip_normal_force_n": 0.03020111501763922,
+      "tip_normal_force_n": {
+        "thumb": 0.245493866524242,
+        "index": 0.03020111501763922
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002992652797317329,
+      "max_hand_joint_offset_rad": 0.21413754072888566,
+      "joint_targets_rad": [
+        0.7665438938045777,
+        0.21413754072888566,
+        0.5064335124030095,
+        0.4931288439257361,
+        0.3495316134807666,
+        -0.023042146824917415,
+        1.316618548872564,
+        0.5495046398422795
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 430,
+      "min_tip_normal_force_n": 0.01843500809030172,
+      "tip_normal_force_n": {
+        "thumb": 0.05414871130699263,
+        "index": 0.01843500809030172
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0021376506320985307,
+      "max_hand_joint_offset_rad": 0.12170345652747172,
+      "joint_targets_rad": [
+        0.8604707349323905,
+        0.07472326356183792,
+        0.4719468309292915,
+        0.5812474675812556,
+        0.37966808149752596,
+        -0.03536050975130209,
+        1.2593036925924463,
+        0.48146871693010235
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 200,
+      "min_tip_normal_force_n": 0.007739336380100536,
+      "tip_normal_force_n": {
+        "thumb": 0.026616666204225467,
+        "index": 0.007739336380100536
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0029232966082609,
+      "max_hand_joint_offset_rad": 0.09072917435904958,
+      "joint_targets_rad": [
+        0.8933176082263082,
+        0.07380417202359363,
+        0.5264140365442624,
+        0.39460530523795956,
+        0.3200335115330626,
+        -0.09072917435904958,
+        1.3651836481698663,
+        0.40066486649947985
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 931,
+      "min_tip_normal_force_n": 0.005968036362554525,
+      "tip_normal_force_n": {
+        "thumb": 0.010075485427159601,
+        "index": 0.005968036362554525
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0020871462918550837,
+      "max_hand_joint_offset_rad": 0.179082676196909,
+      "joint_targets_rad": [
+        0.8287969990592463,
+        -0.06345409770778836,
+        0.6273122988032066,
+        0.4097943210070696,
+        0.41790287315318386,
+        -0.179082676196909,
+        1.3095263523235576,
+        0.3975359932716448
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 656,
+      "min_tip_normal_force_n": 0.0017978469092741534,
+      "tip_normal_force_n": {
+        "thumb": 0.024199025559174723,
+        "index": 0.0017978469092741534
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.0017100075042486753,
+      "max_hand_joint_offset_rad": 0.0886066033692996,
+      "joint_targets_rad": [
+        0.8153428305967071,
+        0.0886066033692996,
+        0.5548617426726635,
+        0.49290114041667754,
+        0.3347170328186785,
+        -0.07357466121806067,
+        1.3149401909598954,
+        0.5135989277628151
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 216,
+      "min_tip_normal_force_n": 0.0,
+      "tip_normal_force_n": {
+        "thumb": 0.05810708288979163,
+        "index": 0.0
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.002578752772679888,
+      "max_hand_joint_offset_rad": 0.11241591364078891,
+      "joint_targets_rad": [
+        0.8680540932171622,
+        0.11241591364078891,
+        0.5262629317812435,
+        0.42041452883640645,
+        0.36842877307623173,
+        -0.07910701931189053,
+        1.2688875398456168,
+        0.5336570879609315
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 785,
+      "min_tip_normal_force_n": 1.7661605337088466,
+      "tip_normal_force_n": {
+        "thumb": 1.7661605337088466,
+        "index": 2.6584751961323816
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.009263944686433549,
+      "max_hand_joint_offset_rad": 0.18799914386148875,
+      "joint_targets_rad": [
+        0.8302099647417536,
+        -0.038661125962522164,
+        0.3928952329430265,
+        0.48219813186745997,
+        0.30606655072987166,
+        0.09509489929690039,
+        1.5322963872705624,
+        0.36115039765125123
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 905,
+      "min_tip_normal_force_n": 1.7570015102578576,
+      "tip_normal_force_n": {
+        "thumb": 1.7570015102578576,
+        "index": 2.2814624026476875
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.009792886047098211,
+      "max_hand_joint_offset_rad": 0.11931590802258751,
+      "joint_targets_rad": [
+        0.7788564517399775,
+        -0.06595990093122095,
+        0.48914181932203304,
+        0.3402281030311963,
+        0.41478085864847325,
+        0.02312113048818083,
+        1.449707756374401,
+        0.5087458400787158
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 808,
+      "min_tip_normal_force_n": 1.7120411026601194,
+      "tip_normal_force_n": {
+        "thumb": 1.7120411026601194,
+        "index": 2.054175091097888
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.00900558792943973,
+      "max_hand_joint_offset_rad": 0.17658060359996375,
+      "joint_targets_rad": [
+        0.7978596078712021,
+        -0.008243930471755126,
+        0.4831190199413781,
+        0.2829634074538201,
+        0.4379856113819038,
+        0.026958394107367747,
+        1.419408415083686,
+        0.49614631378960755
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 673,
+      "min_tip_normal_force_n": 1.6487734001547112,
+      "tip_normal_force_n": {
+        "thumb": 1.6487734001547112,
+        "index": 1.7750460259792926
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.010431484045614356,
+      "max_hand_joint_offset_rad": 0.1190279350647932,
+      "joint_targets_rad": [
+        0.8365502155178844,
+        -0.10777617873322738,
+        0.48924826248696274,
+        0.3740032172933021,
+        0.4491992802314825,
+        -0.040610212521609027,
+        1.4120257622772665,
+        0.4863896703846293
+      ],
+      "static_screen_pass": false
+    },
+    {
+      "trial": 426,
+      "min_tip_normal_force_n": 1.6023933804508348,
+      "tip_normal_force_n": {
+        "thumb": 1.7087997306505096,
+        "index": 1.6023933804508348
+      },
+      "opposed": true,
+      "max_b_nonfloor_penetration_m": 0.009820490549545941,
+      "max_hand_joint_offset_rad": 0.14273720775421267,
+      "joint_targets_rad": [
+        0.8279652383283677,
+        -0.018765914808140688,
+        0.4008457353951434,
+        0.4871565464203919,
+        0.41262500694422277,
+        0.14273720775421267,
+        1.4271763405778886,
+        0.3707387492362204
+      ],
+      "static_screen_pass": false
+    }
+  ]
+}

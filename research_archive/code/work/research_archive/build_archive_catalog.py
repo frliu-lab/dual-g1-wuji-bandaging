@@ -431,6 +431,8 @@ SELECTED = [
     'bandage_v0/joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm_flexforce1_onestephandsearch_horizon0.06s_edgeweight1_padsolref0.1_stabilizedigits_fixture_release0.2s.json',
 ]
 SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_pinchtab_dynamic_path_rollout_goal_hold_extended20mm*.json'))]
+SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_right_loaded_pinch_static_screen_*.json'))]
+SELECTED += [p.relative_to(OUT).as_posix() for p in sorted((OUT/'bandage_v0').glob('joint_b_right_loaded_pinch_static_refine_*.json'))]
 SELECTED += [
     'bandage_v0/joint_b_flex_a_right_pose_transfer_static_audit.json',
     'bandage_v0/joint_b_flex_a_thumb_side_contact_search.json',
@@ -569,6 +571,8 @@ SOURCE_CODE = [
     'work/bandage_hierarchy/audit_b_flex_free_edge_path.py',
     'work/bandage_hierarchy/plan_b_flex_free_edge_path.py',
     'work/bandage_hierarchy/rollout_b_flex_free_edge_path.py',
+    'work/bandage_hierarchy/screen_b_right_loaded_pinch_static.py',
+    'work/bandage_hierarchy/refine_b_right_loaded_pinch_static.py',
     'work/wuji_multiagent/flex_contact_jac.py',
     'work/wuji_multiagent/check_flex_contact_jac.py',
     'work/wuji_multiagent/probe_joint_flex_wbc.py',
